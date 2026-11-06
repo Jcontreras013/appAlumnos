@@ -1,0 +1,49 @@
+# Despliegue manual a AWS (Actions → "Desplegar en AWS" → Run workflow).
+# Requiere, una sola vez: `cdk bootstrap`, un rol IAM para GitHub (OIDC) guardado en el secreto
+# AWS_DEPLOY_ROLE_ARN y la variable JWT_SECRET_ARN. Ver README → Despliegue en AWS.
+name: Desplegar en AWS
+
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: Ambiente
+        type: choice
+        options: [dev, prod]
+        default: dev
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-${{ inputs.stage }}
+  cancel-in-progress: false
+
+jobs:
+  desplegar:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.stage }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+      - name: cdk deploy
+        env:
+          STAGE: ${{ inputs.stage }}
+          JWT_SECRET_ARN: ${{ vars.JWT_SECRET_ARN }}
+          CERTIFICATE_ARN: ${{ vars.CERTIFICATE_ARN }}
+        run: |
+          ARGS=(-c "stage=$STAGE" -c "jwtSecretArn=$JWT_SECRET_ARN")
+          if [ -n "$CERTIFICATE_ARN" ]; then ARGS+=(-c "certificateArn=$CERTIFICATE_ARN"); fi
+          pnpm --filter @escolar/infra exec cdk deploy --all --require-approval never "${ARGS[@]}"

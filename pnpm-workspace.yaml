@@ -1,0 +1,11 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "services/*"
+  - "infra"
+
+onlyBuiltDependencies:
+  - "@biomejs/biome"
+  - "@node-rs/argon2"
+  - esbuild
+  - sharp

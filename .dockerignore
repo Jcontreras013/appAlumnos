@@ -1,0 +1,11 @@
+**/node_modules
+**/.next
+**/dist
+**/.turbo
+**/coverage
+**/*.tsbuildinfo
+**/.env
+**/.env.*
+infra/cdk.out
+.git
+.github

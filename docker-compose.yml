@@ -1,0 +1,50 @@
+# Desarrollo local.
+#   docker compose up -d                 -> solo Postgres (los servicios corren con `pnpm dev`)
+#   docker compose --profile full up     -> todo en contenedores, como en AWS
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: escolar
+      POSTGRES_PASSWORD: escolar
+      POSTGRES_DB: escolar_identity
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U escolar -d escolar_identity"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  identity:
+    profiles: ["full"]
+    build:
+      context: .
+      dockerfile: services/identity/Dockerfile
+    env_file: services/identity/.env
+    environment:
+      DATABASE_URL: postgres://escolar:escolar@db:5432/escolar_identity
+    ports:
+      - "3001:3001"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    profiles: ["full"]
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    environment:
+      IDENTITY_URL: http://identity:3001
+      COOKIE_SECURE: "false"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - identity
+
+volumes:
+  pgdata:
