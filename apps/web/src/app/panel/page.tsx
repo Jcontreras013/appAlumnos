@@ -46,17 +46,38 @@ export default async function PanelHome() {
       <section>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Módulos</h2>
         <div className="grid gap-4 sm:grid-cols-2">
-          {modules.map((m) => (
-            <article key={m.key} className="card p-5">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <h3 className="font-semibold text-slate-900">{m.label}</h3>
-                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-                  Fase {m.phase}
-                </span>
-              </div>
-              <p className="text-sm text-slate-600">{m.description}</p>
-            </article>
-          ))}
+          {modules.map((m) => {
+            const body = (
+              <>
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <h3 className="font-semibold text-slate-900">{m.label}</h3>
+                  {m.href ? (
+                    <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
+                      Disponible
+                    </span>
+                  ) : (
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                      Fase {m.phase}
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-slate-600">{m.description}</p>
+              </>
+            );
+            return m.href ? (
+              <Link
+                key={m.key}
+                href={m.href}
+                className="card block p-5 transition hover:border-brand-500 hover:shadow-md"
+              >
+                {body}
+              </Link>
+            ) : (
+              <article key={m.key} className="card p-5 opacity-80">
+                {body}
+              </article>
+            );
+          })}
         </div>
       </section>
     </div>

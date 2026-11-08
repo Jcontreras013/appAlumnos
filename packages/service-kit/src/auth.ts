@@ -17,6 +17,8 @@ export const JWT_ALGORITHM = "EdDSA";
 
 export interface AccessClaims {
   userId: string;
+  /** Nombre para mostrar (historiales, "aprobado por"). Puede quedar desactualizado hasta 15 minutos. */
+  name: string;
   /** null solo para superadmin de la plataforma. */
   schoolId: string | null;
   role: Role;
@@ -54,7 +56,8 @@ export async function createAccessTokenVerifier(source: VerifierKeySource): Prom
       ) {
         throw unauthorized();
       }
-      return { userId: payload.sub, schoolId, role: payload.role };
+      const name = typeof payload.name === "string" ? payload.name : "";
+      return { userId: payload.sub, name, schoolId, role: payload.role };
     } catch {
       throw unauthorized();
     }

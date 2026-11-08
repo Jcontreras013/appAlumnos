@@ -24,3 +24,26 @@ export function fromServiceError(err: unknown): FormState {
 export function formValues(formData: FormData, keys: readonly string[]): Record<string, string> {
   return Object.fromEntries(keys.map((key) => [key, String(formData.get(key) ?? "")]));
 }
+
+/**
+ * Ejecuta una server action estándar: valida con Zod, llama al servicio y devuelve el estado del
+ * formulario (mensaje de éxito, errores por campo o el error del servicio).
+ */
+export async function runFormAction<S extends import("zod").ZodType>(
+  formData: FormData,
+  options: {
+    schema: S;
+    fields: readonly string[];
+    build?: (values: Record<string, string>) => unknown;
+    submit: (data: import("zod").output<S>) => Promise<string>;
+  },
+): Promise<FormState> {
+  const values = formValues(formData, options.fields);
+  const parsed = options.schema.safeParse(options.build ? options.build(values) : values);
+  if (!parsed.success) return { ...fromZodError(parsed.error), values };
+  try {
+    return { ok: true, message: await options.submit(parsed.data) };
+  } catch (err) {
+    return { ...fromServiceError(err), values };
+  }
+}

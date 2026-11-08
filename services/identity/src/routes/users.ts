@@ -1,5 +1,5 @@
 import { badRequest, notFound, parseOrThrow, requireRole, tenantOf } from "@escolar/service-kit";
-import { createUserInputSchema, type UserDto } from "@escolar/shared";
+import { createUserInputSchema, SCHOOL_ROLES, type UserDto } from "@escolar/shared";
 import { and, asc, eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
@@ -10,6 +10,7 @@ import { insertUser, toUserDto } from "../lib/users";
 
 const idParams = z.object({ id: z.uuid() });
 const statusBody = z.object({ active: z.boolean() });
+const listQuery = z.object({ role: z.enum(SCHOOL_ROLES).optional() });
 
 /**
  * Usuarios del colegio. Todas las consultas filtran por el colegio del token (`tenantOf`):
@@ -17,11 +18,30 @@ const statusBody = z.object({ active: z.boolean() });
  */
 export async function userRoutes(app: FastifyInstance, { db, tokens }: IdentityDeps) {
   const guard = { preHandler: [app.authenticate, requireRole("admin")] };
+  // Lectura: coordinación y secretaría necesitan ver al personal (p. ej. asignar docentes a materias).
+  const readGuard = { preHandler: [app.authenticate, requireRole("admin", "coordinador", "secretaria")] };
 
-  app.get("/users", guard, async (request): Promise<UserDto[]> => {
+  app.get("/users", readGuard, async (request): Promise<UserDto[]> => {
     const schoolId = tenantOf(request);
-    const rows = await db.select().from(users).where(eq(users.schoolId, schoolId)).orderBy(asc(users.name));
+    const { role } = parseOrThrow(listQuery, request.query);
+    const rows = await db
+      .select()
+      .from(users)
+      .where(and(eq(users.schoolId, schoolId), role ? eq(users.role, role) : undefined))
+      .orderBy(asc(users.name));
     return rows.map(toUserDto);
+  });
+
+  /** Lo usan otros servicios (con el token del usuario) para validar que un id es de su colegio. */
+  app.get("/users/:id", readGuard, async (request): Promise<UserDto> => {
+    const schoolId = tenantOf(request);
+    const { id } = parseOrThrow(idParams, request.params);
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(and(eq(users.id, id), eq(users.schoolId, schoolId)));
+    if (!user) throw notFound("Usuario no encontrado");
+    return toUserDto(user);
   });
 
   app.post("/users", guard, async (request, reply) => {

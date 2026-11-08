@@ -3,12 +3,21 @@
  * - superadmin: equipo de la plataforma; no pertenece a ningún colegio.
  * - El resto siempre pertenece a exactamente un colegio (tenant).
  */
-export const ROLES = ["superadmin", "admin", "finanzas", "secretaria", "docente", "padre"] as const;
+export const ROLES = [
+  "superadmin",
+  "admin",
+  "coordinador",
+  "finanzas",
+  "secretaria",
+  "docente",
+  "padre",
+] as const;
 
 export type Role = (typeof ROLES)[number];
 
 export const SCHOOL_ROLES = [
   "admin",
+  "coordinador",
   "finanzas",
   "secretaria",
   "docente",
@@ -20,6 +29,7 @@ export type SchoolRole = (typeof SCHOOL_ROLES)[number];
 export const ROLE_LABELS: Record<Role, string> = {
   superadmin: "Superadmin de la plataforma",
   admin: "Administrador del colegio",
+  coordinador: "Coordinación académica",
   finanzas: "Finanzas",
   secretaria: "Secretaría",
   docente: "Docente",

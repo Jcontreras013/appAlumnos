@@ -33,6 +33,22 @@ services:
       db:
         condition: service_healthy
 
+  academic:
+    profiles: ["full"]
+    build:
+      context: .
+      dockerfile: services/academic/Dockerfile
+    environment:
+      DATABASE_URL: postgres://escolar:escolar@db:5432/escolar_academic
+      IDENTITY_URL: http://identity:3001
+    ports:
+      - "3002:3002"
+    depends_on:
+      db:
+        condition: service_healthy
+      identity:
+        condition: service_started
+
   web:
     profiles: ["full"]
     build:
@@ -40,11 +56,13 @@ services:
       dockerfile: apps/web/Dockerfile
     environment:
       IDENTITY_URL: http://identity:3001
+      ACADEMIC_URL: http://academic:3002
       COOKIE_SECURE: "false"
     ports:
       - "3000:3000"
     depends_on:
       - identity
+      - academic
 
 volumes:
   pgdata:

@@ -178,3 +178,26 @@ describe("desactivación", () => {
     expect(res.statusCode).toBe(400);
   });
 });
+
+describe("lectura de usuarios para coordinación", () => {
+  it("coordinación lista docentes de su colegio pero no puede crear usuarios", async () => {
+    await createUser(schoolA.adminToken, "coordinacion@colegio-a.hn", "coordinador");
+    const coordToken = await ctx.tokenFor("coordinacion@colegio-a.hn");
+
+    const res = await ctx.app.inject({ url: "/users?role=docente", headers: ctx.auth(coordToken) });
+    expect(res.statusCode).toBe(200);
+    const list = res.json() as UserDto[];
+    expect(list.length).toBeGreaterThan(0);
+    expect(list.every((u) => u.role === "docente" && u.schoolId === schoolA.schoolId)).toBe(true);
+
+    expect((await createUser(coordToken, "nuevo@colegio-a.hn")).statusCode).toBe(403);
+  });
+
+  it("consultar un usuario de otro colegio por id da 404", async () => {
+    const otro = (await createUser(schoolB.adminToken, "docente-x@colegio-b.hn")).json() as UserDto;
+    const res = await ctx.app.inject({ url: `/users/${otro.id}`, headers: ctx.auth(schoolA.adminToken) });
+    expect(res.statusCode).toBe(404);
+    const own = await ctx.app.inject({ url: `/users/${otro.id}`, headers: ctx.auth(schoolB.adminToken) });
+    expect(own.json()).toMatchObject({ id: otro.id, role: "docente" });
+  });
+});

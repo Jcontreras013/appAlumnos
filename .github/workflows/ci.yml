@@ -46,6 +46,8 @@ jobs:
         include:
           - name: identity
             dockerfile: services/identity/Dockerfile
+          - name: academic
+            dockerfile: services/academic/Dockerfile
           - name: web
             dockerfile: apps/web/Dockerfile
     steps:

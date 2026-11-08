@@ -16,3 +16,9 @@ const DATE_FORMAT = new Intl.DateTimeFormat("es-HN", {
 export function formatDate(iso: string): string {
   return DATE_FORMAT.format(new Date(iso));
 }
+
+/** Fecha de calendario AAAA-MM-DD => "08 de nov de 2026" (sin desfase por zona horaria). */
+export function formatDay(isoDate: string | null | undefined): string {
+  if (!isoDate) return "—";
+  return formatDate(`${isoDate}T12:00:00Z`);
+}

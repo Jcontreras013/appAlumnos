@@ -26,18 +26,19 @@ describe("seguridad de la infraestructura", () => {
     });
   });
 
-  it("Postgres solo acepta conexiones del servicio identity", () => {
+  it("Postgres solo acepta conexiones de los microservicios (identity y academic)", () => {
     const [dbSgId] = Object.keys(template.findResources("AWS::EC2::SecurityGroup")).filter((id) =>
       id.startsWith("PostgresSecurityGroup"),
     );
     const rules = Object.values(template.findResources("AWS::EC2::SecurityGroupIngress")).filter((r) =>
       JSON.stringify((r as { Properties: { GroupId: unknown } }).Properties.GroupId).includes(`"${dbSgId}"`),
     ) as Array<{ Properties: Record<string, unknown> }>;
-    expect(rules).toHaveLength(1);
-    expect(JSON.stringify(rules[0]?.Properties.SourceSecurityGroupId)).toContain(
-      "IdentityServiceSecurityGroup",
-    );
-    expect(rules[0]?.Properties.CidrIp).toBeUndefined();
+    const sources = rules.map((r) => JSON.stringify(r.Properties.SourceSecurityGroupId));
+    expect(sources).toHaveLength(2);
+    expect(sources.some((src) => src.includes("IdentityServiceSecurityGroup"))).toBe(true);
+    expect(sources.some((src) => src.includes("AcademicServiceSecurityGroup"))).toBe(true);
+    expect(sources.some((src) => src.includes("Web"))).toBe(false);
+    expect(rules.every((r) => r.Properties.CidrIp === undefined)).toBe(true);
     // Y sin reglas abiertas a internet dentro del propio security group de la base
     const dbSg = template.findResources("AWS::EC2::SecurityGroup")[dbSgId ?? ""] as {
       Properties: { SecurityGroupIngress?: unknown[] };
@@ -70,6 +71,37 @@ describe("seguridad de la infraestructura", () => {
     expect(secretNames).toEqual(expect.arrayContaining(["DB_PASSWORD", "JWT_PRIVATE_KEY"]));
     expect(container.Environment.map((e) => e.Name)).not.toContain("DB_PASSWORD");
     expect(container.Environment.map((e) => e.Name)).not.toContain("JWT_PRIVATE_KEY");
+  });
+
+  it("academic no recibe la llave privada JWT: solo verifica con el JWKS de identity", () => {
+    const taskDefs = Object.values(template.findResources("AWS::ECS::TaskDefinition"));
+    const academic = taskDefs.find((td) => JSON.stringify(td).includes('"Name":"academic"')) as {
+      Properties: {
+        ContainerDefinitions: Array<{
+          Secrets: Array<{ Name: string }>;
+          Environment: Array<{ Name: string; Value: string }>;
+        }>;
+      };
+    };
+    const container = academic.Properties.ContainerDefinitions[0];
+    expect(container?.Secrets.map((s) => s.Name)).not.toContain("JWT_PRIVATE_KEY");
+    expect(container?.Environment).toEqual(
+      expect.arrayContaining([
+        { Name: "IDENTITY_URL", Value: "http://identity:3001" },
+        { Name: "DB_NAME", Value: "escolar_academic" },
+      ]),
+    );
+  });
+
+  it("academic solo acepta tráfico de web y puede consultar a identity", () => {
+    const rules = Object.values(template.findResources("AWS::EC2::SecurityGroupIngress")) as Array<{
+      Properties: { FromPort: unknown; CidrIp?: string; Description?: string };
+    }>;
+    const academicRules = rules.filter((r) => r.Properties.FromPort === 3002);
+    expect(academicRules.map((r) => r.Properties.Description)).toEqual(["web -> academic"]);
+    expect(academicRules.every((r) => r.Properties.CidrIp === undefined)).toBe(true);
+    expect(rules.map((r) => r.Properties.Description)).toContain("academic -> identity");
+    expect(rules.map((r) => r.Properties.Description)).toContain("academic -> Postgres");
   });
 
   it("los despliegues fallidos se revierten solos", () => {

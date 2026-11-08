@@ -1,4 +1,4 @@
-import { ROLE_LABELS } from "@escolar/shared";
+import { ROLE_LABELS, type Role } from "@escolar/shared";
 import type { ReactNode } from "react";
 import { Nav, type NavItem } from "@/components/nav";
 import { APP_NAME } from "@/lib/brand";
@@ -10,9 +10,13 @@ export default async function PanelLayout({ children }: { children: ReactNode })
   const { user, school } = await getSession();
 
   const items: NavItem[] = [{ href: "/panel", label: "Inicio" }];
-  if (user.role === "superadmin") items.push({ href: "/panel/colegios", label: "Colegios" });
-  if (user.role === "admin") items.push({ href: "/panel/usuarios", label: "Usuarios" });
-  const upcoming = MODULES.filter((m) => m.roles.includes(user.role)).map((m) => ({
+  const is = (...roles: Role[]) => roles.includes(user.role);
+  if (is("superadmin")) items.push({ href: "/panel/colegios", label: "Colegios" });
+  if (is("admin", "secretaria", "coordinador")) items.push({ href: "/panel/alumnos", label: "Alumnos" });
+  if (is("admin", "coordinador", "secretaria"))
+    items.push({ href: "/panel/estructura", label: "Estructura académica" });
+  if (is("admin")) items.push({ href: "/panel/usuarios", label: "Usuarios" });
+  const upcoming = MODULES.filter((m) => !m.href && m.roles.includes(user.role)).map((m) => ({
     label: m.label,
     phase: m.phase,
   }));

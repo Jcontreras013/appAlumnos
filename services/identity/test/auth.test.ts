@@ -76,6 +76,7 @@ describe("tokens", () => {
     const verify = await createAccessTokenVerifier({ publicKey: ctx.keys.publicKey });
     expect(await verify(body.accessToken)).toEqual({
       userId: body.user.id,
+      name: "Root",
       schoolId: null,
       role: "superadmin",
     });

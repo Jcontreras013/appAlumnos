@@ -15,6 +15,7 @@
     "format": "biome check --write .",
     "db:migrate": "turbo run db:migrate",
     "db:seed": "pnpm --filter @escolar/identity db:seed",
+    "db:seed:demo": "pnpm --filter @escolar/academic db:seed",
     "keys:generate": "pnpm --filter @escolar/identity keys:generate"
   },
   "devDependencies": {

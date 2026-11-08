@@ -38,9 +38,10 @@ export interface EscolarStackProps extends StackProps {
 }
 
 /**
- * Arquitectura de la fase 0:
+ * Arquitectura:
  *
- *   Internet ─▶ ALB ─▶ web (Next.js, Fargate) ──Service Connect──▶ identity (Fastify, Fargate) ─▶ RDS Postgres
+ *   Internet ─▶ ALB ─▶ web (Next.js) ──Service Connect──▶ identity ─┬─▶ RDS Postgres
+ *                                                      └──────────▶ academic ─┘   (una base por servicio)
  *
  * - Solo el ALB recibe tráfico de internet. identity solo acepta conexiones de web; RDS solo de identity.
  * - RDS vive en subredes aisladas (sin salida a internet), cifrado y con backups automáticos.
@@ -96,66 +97,92 @@ export class EscolarStack extends Stack {
 
     const jwtSecret = secretsmanager.Secret.fromSecretCompleteArn(this, "JwtSecret", props.jwtSecretArn);
 
-    // ───────────────────────────── Servicio identity ─────────────────────────────
-    const identityTask = new ecs.FargateTaskDefinition(this, "IdentityTask", {
-      cpu: 256,
-      memoryLimitMiB: 512,
-      runtimePlatform: {
-        cpuArchitecture: ecs.CpuArchitecture.X86_64,
-        operatingSystemFamily: ecs.OperatingSystemFamily.LINUX,
-      },
-    });
-    identityTask.addContainer("identity", {
-      image: ecs.ContainerImage.fromAsset(REPO_ROOT, {
-        file: "services/identity/Dockerfile",
-        exclude: ASSET_EXCLUDE,
-      }),
-      portMappings: [{ name: "identity", containerPort: 3001 }],
-      logging: ecs.LogDrivers.awsLogs({
-        streamPrefix: "identity",
-        logRetention: isProd ? logs.RetentionDays.SIX_MONTHS : logs.RetentionDays.ONE_MONTH,
-      }),
-      environment: {
-        PORT: "3001",
-        LOG_LEVEL: "info",
-        RUN_MIGRATIONS: "true",
-        DB_NAME: "escolar_identity",
-        DB_SSLMODE: "require",
-      },
+    // ───────────────────────────── Microservicios ─────────────────────────────
+    /**
+     * Un microservicio interno: Fargate, sin entrada desde internet, publicado por Service Connect
+     * como http://<nombre>:<puerto>, con su propia base de datos dentro del mismo RDS
+     * (el servicio la crea al arrancar si no existe) y rollback automático si no arranca sano.
+     */
+    const backendService = (
+      name: string,
+      options: { port: number; environment?: Record<string, string>; secrets?: Record<string, ecs.Secret> },
+    ) => {
+      const id = name.charAt(0).toUpperCase() + name.slice(1);
+      const task = new ecs.FargateTaskDefinition(this, `${id}Task`, {
+        cpu: 256,
+        memoryLimitMiB: 512,
+        runtimePlatform: {
+          cpuArchitecture: ecs.CpuArchitecture.X86_64,
+          operatingSystemFamily: ecs.OperatingSystemFamily.LINUX,
+        },
+      });
+      task.addContainer(name, {
+        image: ecs.ContainerImage.fromAsset(REPO_ROOT, {
+          file: `services/${name}/Dockerfile`,
+          exclude: ASSET_EXCLUDE,
+        }),
+        portMappings: [{ name, containerPort: options.port }],
+        logging: ecs.LogDrivers.awsLogs({
+          streamPrefix: name,
+          logRetention: isProd ? logs.RetentionDays.SIX_MONTHS : logs.RetentionDays.ONE_MONTH,
+        }),
+        environment: {
+          PORT: String(options.port),
+          LOG_LEVEL: "info",
+          RUN_MIGRATIONS: "true",
+          DB_NAME: `escolar_${name}`,
+          DB_SSLMODE: "require",
+          ...options.environment,
+        },
+        secrets: {
+          DB_HOST: ecs.Secret.fromSecretsManager(dbSecret, "host"),
+          DB_PORT: ecs.Secret.fromSecretsManager(dbSecret, "port"),
+          DB_USER: ecs.Secret.fromSecretsManager(dbSecret, "username"),
+          DB_PASSWORD: ecs.Secret.fromSecretsManager(dbSecret, "password"),
+          ...options.secrets,
+        },
+        healthCheck: {
+          command: [
+            "CMD-SHELL",
+            `node -e "fetch('http://localhost:${options.port}/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"`,
+          ],
+          interval: Duration.seconds(30),
+          startPeriod: Duration.seconds(60),
+        },
+      });
+      const service = new ecs.FargateService(this, `${id}Service`, {
+        cluster,
+        taskDefinition: task,
+        desiredCount: isProd ? 2 : 1,
+        assignPublicIp: true,
+        vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
+        minHealthyPercent: 100,
+        maxHealthyPercent: 200,
+        circuitBreaker: { enable: true, rollback: true },
+        serviceConnectConfiguration: {
+          services: [{ portMappingName: name, dnsName: name, port: options.port }],
+        },
+      });
+      database.connections.allowDefaultPortFrom(service, `${name} -> Postgres`);
+      return { task, service };
+    };
+
+    const identity = backendService("identity", {
+      port: 3001,
       secrets: {
-        DB_HOST: ecs.Secret.fromSecretsManager(dbSecret, "host"),
-        DB_PORT: ecs.Secret.fromSecretsManager(dbSecret, "port"),
-        DB_USER: ecs.Secret.fromSecretsManager(dbSecret, "username"),
-        DB_PASSWORD: ecs.Secret.fromSecretsManager(dbSecret, "password"),
         JWT_KEY_ID: ecs.Secret.fromSecretsManager(jwtSecret, "JWT_KEY_ID"),
         JWT_PRIVATE_KEY: ecs.Secret.fromSecretsManager(jwtSecret, "JWT_PRIVATE_KEY"),
         JWT_PUBLIC_KEY: ecs.Secret.fromSecretsManager(jwtSecret, "JWT_PUBLIC_KEY"),
       },
-      healthCheck: {
-        command: [
-          "CMD-SHELL",
-          "node -e \"fetch('http://localhost:3001/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
-        ],
-        interval: Duration.seconds(30),
-        startPeriod: Duration.seconds(60),
-      },
     });
+    const identityService = identity.service;
 
-    const identityService = new ecs.FargateService(this, "IdentityService", {
-      cluster,
-      taskDefinition: identityTask,
-      desiredCount: isProd ? 2 : 1,
-      assignPublicIp: true,
-      vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
-      minHealthyPercent: 100,
-      maxHealthyPercent: 200,
-      // Si una versión nueva no arranca sana, ECS vuelve sola a la anterior.
-      circuitBreaker: { enable: true, rollback: true },
-      serviceConnectConfiguration: {
-        services: [{ portMappingName: "identity", dnsName: "identity", port: 3001 }],
-      },
+    // academic no tiene la llave privada: verifica tokens con el JWKS público de identity.
+    const academic = backendService("academic", {
+      port: 3002,
+      environment: { IDENTITY_URL: "http://identity:3001" },
     });
-    database.connections.allowDefaultPortFrom(identityService, "identity -> Postgres");
+    identityService.connections.allowFrom(academic.service, ec2.Port.tcp(3001), "academic -> identity");
 
     // ───────────────────────────── Frontend web ─────────────────────────────
     const certificate = props.certificateArn
@@ -189,6 +216,7 @@ export class EscolarStack extends Stack {
         }),
         environment: {
           IDENTITY_URL: "http://identity:3001",
+          ACADEMIC_URL: "http://academic:3002",
           COOKIE_SECURE: certificate ? "true" : "false",
         },
         logDriver: ecs.LogDrivers.awsLogs({
@@ -201,13 +229,14 @@ export class EscolarStack extends Stack {
     // web es cliente de Service Connect (resuelve "identity") pero no publica ningún endpoint interno.
     web.service.enableServiceConnect();
     identityService.connections.allowFrom(web.service, ec2.Port.tcp(3001), "web -> identity");
+    academic.service.connections.allowFrom(web.service, ec2.Port.tcp(3002), "web -> academic");
 
     // ───────────────────────────── Salidas ─────────────────────────────
     new CfnOutput(this, "UrlPanel", {
       value: `${certificate ? "https" : "http"}://${web.loadBalancer.loadBalancerDnsName}`,
     });
     new CfnOutput(this, "NombreCluster", { value: cluster.clusterName });
-    new CfnOutput(this, "IdentityTaskDefinition", { value: identityTask.family });
+    new CfnOutput(this, "IdentityTaskDefinition", { value: identity.task.family });
     new CfnOutput(this, "IdentitySecurityGroup", {
       value: identityService.connections.securityGroups.map((sg) => sg.securityGroupId).join(","),
     });

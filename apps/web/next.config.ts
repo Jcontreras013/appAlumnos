@@ -19,6 +19,10 @@ const nextConfig: NextConfig = {
   transpilePackages: ["@escolar/shared"],
   poweredByHeader: false,
   typedRoutes: true,
+  experimental: {
+    // Importación de alumnos desde Excel: archivos de hasta 4 MB (más el margen del multipart).
+    serverActions: { bodySizeLimit: "5mb" },
+  },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

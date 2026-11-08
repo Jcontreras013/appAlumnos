@@ -22,9 +22,9 @@ export class TokenService {
     private readonly settings: TokenSettings,
   ) {}
 
-  async signAccessToken(user: Pick<User, "id" | "schoolId" | "role">): Promise<string> {
+  async signAccessToken(user: Pick<User, "id" | "schoolId" | "role" | "name">): Promise<string> {
     const now = Math.floor(Date.now() / 1000);
-    return new SignJWT({ role: user.role, school_id: user.schoolId })
+    return new SignJWT({ role: user.role, school_id: user.schoolId, name: user.name })
       .setProtectedHeader({ alg: JWT_ALGORITHM, kid: this.keys.keyId })
       .setSubject(user.id)
       .setIssuer(ACCESS_TOKEN_ISSUER)
@@ -38,7 +38,7 @@ export class TokenService {
   /** Emite un access token y un refresh token nuevo. Sin `familyId` empieza una sesión nueva. */
   async issuePair(
     db: DbOrTx,
-    user: Pick<User, "id" | "schoolId" | "role">,
+    user: Pick<User, "id" | "schoolId" | "role" | "name">,
     familyId: string = randomUUID(),
   ): Promise<TokenPairDto & { refreshTokenId: string }> {
     const refreshToken = randomBytes(32).toString("base64url");

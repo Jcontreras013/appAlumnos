@@ -72,3 +72,84 @@ export function FormAlert({ state }: { state: FormState }) {
   }
   return null;
 }
+
+export function SelectField({
+  name,
+  label,
+  state,
+  options,
+  placeholder,
+  defaultValue,
+  ...select
+}: {
+  name: string;
+  label: string;
+  state: FormState;
+  options: Array<{ value: string; label: string }>;
+  placeholder?: string;
+} & React.SelectHTMLAttributes<HTMLSelectElement>) {
+  const error = state.fields?.[name];
+  const id = `campo-${name}`;
+  const value = state.values?.[name] ?? (defaultValue as string | undefined) ?? "";
+  return (
+    <div>
+      <label htmlFor={id} className="label">
+        {label}
+      </label>
+      {/* La key vuelve a montar el select con el valor elegido cuando hay un error (React reinicia el form). */}
+      <select
+        key={value || "vacio"}
+        id={id}
+        name={name}
+        className="input"
+        defaultValue={value}
+        aria-invalid={Boolean(error)}
+        {...select}
+      >
+        {placeholder !== undefined && <option value="">{placeholder}</option>}
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+    </div>
+  );
+}
+
+export function TextAreaField({
+  name,
+  label,
+  state,
+  hint,
+  ...textarea
+}: {
+  name: string;
+  label: string;
+  state: FormState;
+  hint?: string;
+} & React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+  const error = state.fields?.[name];
+  const id = `campo-${name}`;
+  return (
+    <div>
+      <label htmlFor={id} className="label">
+        {label}
+      </label>
+      <textarea
+        id={id}
+        name={name}
+        className="input min-h-20"
+        aria-invalid={Boolean(error)}
+        defaultValue={state.values?.[name]}
+        {...textarea}
+      />
+      {error ? (
+        <p className="mt-1 text-xs text-red-600">{error}</p>
+      ) : hint ? (
+        <p className="mt-1 text-xs text-slate-500">{hint}</p>
+      ) : null}
+    </div>
+  );
+}
