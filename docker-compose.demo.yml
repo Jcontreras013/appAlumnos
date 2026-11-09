@@ -1,0 +1,159 @@
+# Demo para presentar en cualquier computadora con Docker Desktop (no hace falta Node ni nada más):
+#
+#   docker compose -f docker-compose.demo.yml up --build
+#
+# y abrir http://localhost:3000 cuando aparezca "Demo lista". Para dejar la demo como nueva (las
+# fechas de asistencia y notas se calculan desde el día en que se carga):
+#
+#   docker compose -f docker-compose.demo.yml down -v
+#
+# Todo es ficticio y solo para mostrar en la propia computadora: las contraseñas son públicas y las
+# cookies no exigen HTTPS. Nunca se usa así con datos reales.
+name: escolar-demo
+
+x-tools: &tools
+  # La etapa de compilación de la imagen de identity tiene el monorepo completo con sus dependencias:
+  # sirve para generar las llaves y cargar la demo sin instalar nada en la computadora.
+  build:
+    context: .
+    dockerfile: services/identity/Dockerfile
+    target: build
+  image: escolar-demo-tools
+  working_dir: /repo
+
+x-healthcheck: &healthcheck
+  interval: 2s
+  timeout: 3s
+  retries: 60
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: escolar
+      POSTGRES_PASSWORD: escolar
+      POSTGRES_DB: escolar_identity
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      <<: *healthcheck
+      test: ["CMD-SHELL", "pg_isready -U escolar -d escolar_identity"]
+
+  # Llaves para firmar las sesiones: se generan una sola vez y se guardan en un volumen.
+  keys:
+    <<: *tools
+    volumes:
+      - keys:/keys
+    command:
+      - sh
+      - -c
+      - >-
+        test -s /keys/identity.env ||
+        (cd services/identity && ./node_modules/.bin/tsx src/scripts/generate-keys.ts > /keys/identity.env.tmp
+        && mv /keys/identity.env.tmp /keys/identity.env && echo "Llaves generadas")
+
+  identity:
+    build:
+      context: .
+      dockerfile: services/identity/Dockerfile
+    environment:
+      DATABASE_URL: postgres://escolar:escolar@db:5432/escolar_identity
+    volumes:
+      - keys:/keys:ro
+    command: ["sh", "-c", "set -a && . /keys/identity.env && exec node dist/index.js"]
+    healthcheck:
+      <<: *healthcheck
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:3001/health').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))",
+        ]
+    depends_on:
+      db:
+        condition: service_healthy
+      keys:
+        condition: service_completed_successfully
+
+  academic:
+    build:
+      context: .
+      dockerfile: services/academic/Dockerfile
+    environment:
+      DATABASE_URL: postgres://escolar:escolar@db:5432/escolar_academic
+      IDENTITY_URL: http://identity:3001
+    healthcheck:
+      <<: *healthcheck
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:3002/health').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))",
+        ]
+    depends_on:
+      db:
+        condition: service_healthy
+      identity:
+        condition: service_healthy
+
+  # Carga la demo de la departamental de Islas de la Bahía (si ya está cargada, no hace nada).
+  seed:
+    <<: *tools
+    environment:
+      DATABASE_URL: postgres://escolar:escolar@db:5432/escolar_identity
+      IDENTITY_URL: http://identity:3001
+      ACADEMIC_URL: http://academic:3002
+      SEED_SUPERADMIN_EMAIL: superadmin@escolar.local
+      SEED_SUPERADMIN_PASSWORD: Demo-superadmin-2026
+      SEED_DEMO: "false"
+      SEED_DEMO_PASSWORD: Demo-colegio-2026
+    command:
+      - sh
+      - -c
+      - >-
+        cd services/identity && ./node_modules/.bin/tsx src/scripts/seed.ts
+        && cd ../academic && ./node_modules/.bin/tsx src/scripts/seed-region.ts
+    depends_on:
+      identity:
+        condition: service_healthy
+      academic:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    environment:
+      IDENTITY_URL: http://identity:3001
+      ACADEMIC_URL: http://academic:3002
+      # Solo para la demo en la propia computadora (http://localhost).
+      COOKIE_SECURE: "false"
+    ports:
+      - "3000:3000"
+    healthcheck:
+      <<: *healthcheck
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:3000/api/health').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))",
+        ]
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+
+  # Avisa cuando todo está listo para abrir el navegador.
+  ready:
+    image: postgres:16-alpine
+    command: ["echo", "Demo lista: abre http://localhost:3000 (contraseña de las cuentas: Demo-colegio-2026)"]
+    depends_on:
+      web:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  keys:

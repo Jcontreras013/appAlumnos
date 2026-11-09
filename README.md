@@ -119,6 +119,39 @@ SACE): cubre lo que pasa _antes_ de que las notas lleguen ahí.
 - **Logs JSON con datos sensibles ocultos** (`authorization`, cookies, contraseñas, tokens) y un id
   de petición que viaja entre servicios y aparece en los errores que ve el usuario.
 
+## Mostrar la demo en una computadora (solo Docker)
+
+Para presentarla no hace falta instalar Node ni nada más que
+[Docker Desktop](https://www.docker.com/products/docker-desktop/). Descarga el repositorio (en GitHub:
+**Code → Download ZIP**, y descomprímelo) y, en una terminal dentro de esa carpeta:
+
+```bash
+docker compose -f docker-compose.demo.yml up --build
+```
+
+La primera vez tarda unos minutos (construye las imágenes y carga la demo). Cuando aparezca
+**"Demo lista"**, abre http://localhost:3000. Todas las cuentas usan la contraseña
+`Demo-colegio-2026`:
+
+| Cuenta                         | Para mostrar                                                         |
+| ------------------------------ | -------------------------------------------------------------------- |
+| `departamental@demo-ihb.hn`    | Tablero de los 7 centros: clases sin maestro, asistencia, riesgo     |
+| `distrital.roatan@demo-ihb.hn` | Lo mismo, solo los centros del distrito de Roatán                    |
+| `director@demo-oak-ridge.hn`   | Licencia sin sustituto: asignarlo y ver que la alerta desaparece     |
+| `director@demo-west-end.hn`    | Seguimiento: notas atrasadas, alumnos en riesgo, cuadro para el SACE |
+| `maestro4@demo-west-end.hn`    | Mi cuaderno: asistencia de hoy y notas (también sin internet)        |
+| `shanice.bodden@demo-ihb.hn`   | Maestra en dos escuelas: «Cambiar de centro»                         |
+
+Para apagarla, `Ctrl+C` (o `docker compose -f docker-compose.demo.yml stop`). Las fechas de la demo se
+calculan desde el día en que se carga; para dejarla como nueva antes de una presentación:
+
+```bash
+docker compose -f docker-compose.demo.yml down -v
+```
+
+y se vuelve a levantar con el primer comando. Es solo para mostrar en la propia computadora: las
+contraseñas son públicas y no usa HTTPS.
+
 ## Desarrollo local
 
 Requisitos: Node 22+, pnpm 10 (`corepack enable`) y Docker (o un Postgres 16 propio).

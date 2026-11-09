@@ -497,4 +497,5 @@ console.log("  departamental@demo-ihb.hn       Dirección departamental");
 console.log("  distrital.roatan@demo-ihb.hn    Dirección distrital de Roatán");
 console.log("  director@demo-oak-ridge.hn      Dirección de escuela (tiene una clase sin maestro)");
 console.log("  shanice.bodden@demo-ihb.hn      Maestra en dos escuelas");
-console.log("  maestro1@demo-west-end.hn       Maestro con su cuaderno (escuela atrasada con las notas)");
+console.log("  director@demo-west-end.hn       Dirección de escuela (atrasada con las notas)");
+console.log("  maestro4@demo-west-end.hn       Maestra con su cuaderno (asistencia de hoy pendiente)");
