@@ -17,7 +17,12 @@ export async function createUserAction(_prev: FormState, formData: FormData): Pr
   try {
     const user = await identity.createUser(session.accessToken, parsed.data);
     revalidatePath("/panel/usuarios");
-    return { ok: true, message: `Se creó la cuenta de ${user.name} (${ROLE_LABELS[user.role]}).` };
+    return {
+      ok: true,
+      message: user.linkedExisting
+        ? `${user.name} ya tenía cuenta (trabaja en otro centro): se le dio acceso a este como ${ROLE_LABELS[user.role]}, con su misma contraseña.`
+        : `Se creó la cuenta de ${user.name} (${ROLE_LABELS[user.role]}).`,
+    };
   } catch (err) {
     return { ...fromServiceError(err), values };
   }

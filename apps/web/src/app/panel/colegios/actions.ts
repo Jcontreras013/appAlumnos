@@ -8,7 +8,7 @@ import type { FormState } from "@/lib/form-state";
 import { formValues, fromServiceError, fromZodError } from "@/lib/forms";
 import { identity } from "@/lib/identity";
 
-const FIELDS = ["name", "slug", "rtn", "admin.name", "admin.email"] as const;
+const FIELDS = ["name", "slug", "rtn", "code", "sector", "districtId", "admin.name", "admin.email"] as const;
 
 export async function createSchoolAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const session = await requireRole("superadmin");
@@ -17,6 +17,9 @@ export async function createSchoolAction(_prev: FormState, formData: FormData): 
     name: values.name,
     slug: values.slug,
     rtn: values.rtn || undefined,
+    code: values.code || undefined,
+    sector: values.sector || "privado",
+    districtId: values.districtId || undefined,
     admin: {
       name: values["admin.name"],
       email: values["admin.email"],

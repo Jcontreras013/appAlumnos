@@ -1,11 +1,11 @@
 "use client";
 
 import { useActionState } from "react";
-import { Field, FormAlert, SubmitButton } from "@/components/form-controls";
+import { Field, FormAlert, SelectField, SubmitButton } from "@/components/form-controls";
 import { initialFormState } from "@/lib/form-state";
 import { createSchoolAction } from "./actions";
 
-export function CreateSchoolForm() {
+export function CreateSchoolForm({ districts }: { districts: Array<{ value: string; label: string }> }) {
   const [state, action] = useActionState(createSchoolAction, initialFormState);
 
   return (
@@ -25,6 +25,29 @@ export function CreateSchoolForm() {
         label="RTN (opcional)"
         placeholder="0801-1990-123456"
         inputMode="numeric"
+        state={state}
+      />
+
+      <div className="grid grid-cols-2 gap-3">
+        <SelectField
+          name="sector"
+          label="Sector"
+          defaultValue="publico"
+          options={[
+            { value: "publico", label: "Público" },
+            { value: "privado", label: "Privado" },
+          ]}
+          state={state}
+        />
+        <Field name="code" label="Código del centro" placeholder="Código SACE" state={state} />
+      </div>
+      <SelectField
+        name="districtId"
+        label="Distrito"
+        placeholder={
+          districts.length ? "Sin distrito (privado independiente)" : "Crea distritos en Departamentos"
+        }
+        options={districts}
         state={state}
       />
 

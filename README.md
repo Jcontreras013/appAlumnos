@@ -1,23 +1,28 @@
 # Plataforma Escolar
 
-Plataforma para colegios de Honduras con tres productos sobre una misma base:
+Plataforma para centros educativos de Honduras, pensada para presentarse a una **Dirección
+Departamental de Educación**:
 
-1. **Matrícula y notas:** alumnos, familias, grados y secciones, calificaciones y boletas.
-2. **Facturación escolar:** colegiaturas, facturas con CAI (SAR), pagos, mora y estados de cuenta.
-3. **Wallet escolar:** saldo prepagado del alumno para la cafetería o tienda del colegio.
+- La **dirección departamental** (y la distrital) ve en un tablero cómo van todos sus centros:
+  alumnos, maestros, licencias y, sobre todo, **clases que se quedaron sin maestro**.
+- Cada **dirección de escuela** entra con el logo de su centro, gestiona alumnos y maestros y, cuando
+  alguien sale de vacaciones o se enferma, **asigna sustitutos** a sus clases.
+- Los **maestros** tienen una sola cuenta aunque trabajen en dos escuelas (matutina y vespertina).
+
+Para colegios privados quedan además facturación (con CAI) y wallet de cafetería.
 
 > Nombre provisional. Se cambia en `apps/web/src/lib/brand.ts`.
 
 ## Estado
 
-| Fase | Contenido                                                                              | Estado    |
-| ---- | -------------------------------------------------------------------------------------- | --------- |
-| 0    | Monorepo, CI, login, colegios (multi-tenant), usuarios y roles, infraestructura en AWS | ✅ Listo  |
-| 1    | Matrícula: estructura académica, alumnos, familias, cupos, importación desde Excel     | ✅ Listo  |
-| 2    | Planificación semanal de docentes con revisión de coordinación                         | Siguiente |
-| 3    | Facturación de colegiatura con CAI, pagos en línea y recordatorios                     | Pendiente |
-| 4    | Wallet de cafetería (ledger de partida doble)                                          | Pendiente |
-| 5    | Notas y boletas en PDF                                                                 | Pendiente |
+| Fase | Contenido                                                                                                   | Estado    |
+| ---- | ----------------------------------------------------------------------------------------------------------- | --------- |
+| 0    | Monorepo, CI, login, colegios (multi-tenant), usuarios y roles, infraestructura en AWS                      | ✅ Listo  |
+| 1    | Matrícula: estructura académica, alumnos, familias, cupos, importación desde Excel                          | ✅ Listo  |
+| 2    | Departamento → distrito → centro, maestros en varios centros, licencias y sustitutos, tablero departamental | ✅ Listo  |
+| 3    | Planificación semanal de docentes con revisión de coordinación                                              | Siguiente |
+| 4    | Asistencia y notas, boletas en PDF                                                                          | Pendiente |
+| —    | Para colegios privados: facturación con CAI y wallet de cafetería                                           | Después   |
 
 ## Arquitectura
 
@@ -62,6 +67,14 @@ RDS en AWS) y nunca lee la base de otro: se comunican por API (y, desde facturac
 - **Refresh tokens con rotación y detección de robo.** Si un token ya usado se vuelve a presentar
   fuera de la ventana de gracia (30 s, para peticiones paralelas del navegador), se revoca toda la
   sesión.
+- **Una persona, una cuenta, varios accesos.** Las membresías dan a cada persona un rol en un centro,
+  distrito o departamento; un `CHECK` en Postgres impide que un rol quede con el ámbito equivocado.
+  La sesión trabaja con un acceso y se cambia de centro sin volver a escribir la contraseña.
+- **Quién ve qué centros lo decide identity.** El tablero regional de academic pide a identity
+  (reenviando el token de la sesión) la lista de centros visibles; academic nunca lo decide solo.
+- **Licencias y sustituciones con fechas.** Al terminar la licencia, la clase vuelve sola a su titular.
+  No se cruzan licencias del mismo maestro (bloqueo por maestro) ni se puede poner de sustituto a
+  alguien que también está de licencia.
 - **Aislamiento entre colegios también en la base de datos.** En `academic` las llaves foráneas son
   compuestas `(school_id, id)`: aunque la API tuviera un bug, Postgres rechaza una sección colgada de
   un grado de otro colegio o una matrícula en una sección ajena.
@@ -123,6 +136,18 @@ materias, docentes y 10 alumnos con hermanos). Se carga **a través de las APIs*
 ```bash
 pnpm db:seed:demo
 ```
+
+Para una **presentación a una departamental**, carga además el departamento de demostración
+"Islas de la Bahía": 4 distritos, 7 escuelas públicas **ficticias** con logo, maestros (una en dos
+escuelas), unos 340 alumnos y licencias con y sin sustituto:
+
+```bash
+pnpm db:seed:region
+```
+
+Cuentas de la demo (contraseña `SEED_DEMO_PASSWORD`): `departamental@demo-ihb.hn`,
+`distrital.roatan@demo-ihb.hn`, `director@demo-oak-ridge.hn` (tiene clases sin maestro) y
+`shanice.bodden@demo-ihb.hn` (maestra en dos escuelas).
 
 - Panel: http://localhost:3000. Identity: http://localhost:3001. Academic: http://localhost:3002.
 - Usuarios de prueba (con `SEED_DEMO=true`): `superadmin@escolar.local` con `SEED_SUPERADMIN_PASSWORD`,

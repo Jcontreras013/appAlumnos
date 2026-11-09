@@ -1,12 +1,24 @@
 import type { SchoolDto } from "@escolar/shared";
 
 /** Logo del colegio, o sus iniciales si todavía no subió uno. */
-export function SchoolLogo({ school, className = "size-10" }: { school: SchoolDto; className?: string }) {
+export function SchoolLogo({
+  school,
+  className = "size-10",
+  scoped = false,
+}: {
+  school: Pick<SchoolDto, "id" | "name" | "logoVersion">;
+  className?: string;
+  /** true: logo de otro centro visto desde la departamental o distrital (no el de la sesión). */
+  scoped?: boolean;
+}) {
   if (school.logoVersion) {
+    const src = scoped
+      ? `/panel/logo/${school.id}?v=${school.logoVersion}`
+      : `/panel/logo?v=${school.logoVersion}`;
     return (
       // biome-ignore lint/performance/noImgElement: imagen privada servida por /panel/logo (requiere sesión)
       <img
-        src={`/panel/logo?v=${school.logoVersion}`}
+        src={src}
         alt={`Logo de ${school.name}`}
         className={`${className} shrink-0 rounded-lg object-contain`}
       />

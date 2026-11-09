@@ -2,11 +2,16 @@ import "server-only";
 import type {
   AssignmentDto,
   AssignmentInput,
+  CoverageDto,
   CreateStudentInput,
   GradeDto,
   GradeInput,
   GuardianInput,
   ImportResultDto,
+  LeaveDto,
+  LeaveInput,
+  RegionalOverviewDto,
+  RegionalSchoolDetailDto,
   SchoolYearDto,
   SchoolYearInput,
   SectionDto,
@@ -15,6 +20,7 @@ import type {
   StudentFields,
   StudentListItemDto,
   SubjectDto,
+  SubstitutionInput,
 } from "@escolar/shared";
 import { serviceCall } from "./api";
 import { academicUrl } from "./config";
@@ -87,6 +93,26 @@ export const academic = {
       token,
       body: { sectionId },
     }),
+
+  // Licencias y sustituciones
+  listLeaves: (token: string, estado: "actuales" | "pasadas" | "canceladas" = "actuales") =>
+    call<LeaveDto[]>(`/leaves?estado=${estado}`, { token }),
+  createLeave: (token: string, input: LeaveInput) =>
+    call<LeaveDto>("/leaves", { method: "POST", token, body: input }),
+  cancelLeave: (token: string, id: string) =>
+    call<LeaveDto>(`/leaves/${id}/cancel`, { method: "POST", token }),
+  addSubstitution: (token: string, leaveId: string, input: SubstitutionInput) =>
+    call<LeaveDto>(`/leaves/${leaveId}/substitutions`, { method: "POST", token, body: input }),
+  cancelSubstitution: (token: string, id: string) =>
+    call<LeaveDto>(`/substitutions/${id}/cancel`, { method: "POST", token }),
+  coverage: (token: string, fecha?: string) =>
+    call<CoverageDto>(fecha ? `/coverage?fecha=${fecha}` : "/coverage", { token }),
+
+  // Tablero departamental / distrital
+  regionalOverview: (token: string, fecha?: string) =>
+    call<RegionalOverviewDto>(fecha ? `/regional/overview?fecha=${fecha}` : "/regional/overview", { token }),
+  regionalSchool: (token: string, id: string, fecha?: string) =>
+    call<RegionalSchoolDetailDto>(`/regional/schools/${id}${fecha ? `?fecha=${fecha}` : ""}`, { token }),
 
   importStudents: (token: string, rows: Record<string, string>[], dryRun: boolean) =>
     call<ImportResultDto>("/students/import", { method: "POST", token, body: { rows, dryRun } }),

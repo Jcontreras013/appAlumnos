@@ -1,6 +1,7 @@
-import { formatRtn, ROLE_LABELS } from "@escolar/shared";
+import { formatRtn, isRegionalRole, ROLE_LABELS } from "@escolar/shared";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { SchoolLogo } from "@/components/school-logo";
 import { getSession } from "@/lib/dal";
 import { identity } from "@/lib/identity";
@@ -10,6 +11,8 @@ export const metadata: Metadata = { title: "Inicio" };
 
 export default async function PanelHome() {
   const { user, school, accessToken } = await getSession();
+  // Las direcciones departamental y distrital empiezan en su tablero de centros.
+  if (isRegionalRole(user.role)) redirect("/panel/region");
   const firstName = user.name.split(" ")[0];
 
   if (user.role === "superadmin") {

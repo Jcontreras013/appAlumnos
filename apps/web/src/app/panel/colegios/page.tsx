@@ -9,7 +9,13 @@ export const metadata: Metadata = { title: "Colegios" };
 
 export default async function SchoolsPage() {
   const session = await requireRole("superadmin");
-  const schools = await identity.listSchools(session.accessToken);
+  const [schools, departments] = await Promise.all([
+    identity.listSchools(session.accessToken),
+    identity.listDepartments(session.accessToken),
+  ]);
+  const districts = departments.flatMap((d) =>
+    d.districts.map((x) => ({ value: x.id, label: `${x.name} (${d.name})` })),
+  );
 
   return (
     <div className="space-y-6">
@@ -80,7 +86,7 @@ export default async function SchoolsPage() {
 
         <section className="card h-fit p-5">
           <h2 className="mb-4 font-semibold text-slate-900">Nuevo colegio</h2>
-          <CreateSchoolForm />
+          <CreateSchoolForm districts={districts} />
         </section>
       </div>
     </div>

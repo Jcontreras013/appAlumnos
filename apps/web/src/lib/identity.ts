@@ -1,11 +1,15 @@
 import "server-only";
 import type {
+  CreatedUserDto,
   CreateSchoolInput,
   CreateUserInput,
+  DepartmentDto,
   LoginResponseDto,
   MeResponseDto,
+  RegionalUserInput,
   SchoolDto,
   SchoolRole,
+  ScopedSchoolDto,
   TokenPairDto,
   UserDto,
 } from "@escolar/shared";
@@ -28,7 +32,7 @@ export const identity = {
   listUsers: (token: string, role?: SchoolRole) =>
     call<UserDto[]>(role ? `/users?role=${role}` : "/users", { token }),
   createUser: (token: string, input: CreateUserInput) =>
-    call<UserDto>("/users", { method: "POST", token, body: input }),
+    call<CreatedUserDto>("/users", { method: "POST", token, body: input }),
   setUserActive: (token: string, id: string, active: boolean) =>
     call<UserDto>(`/users/${id}/status`, { method: "POST", token, body: { active } }),
 
@@ -49,6 +53,29 @@ export const identity = {
     });
     return res.ok ? res : null;
   },
+  switchMembership: (token: string, membershipId: string, refreshToken?: string) =>
+    call<LoginResponseDto>("/auth/switch", { method: "POST", token, body: { membershipId, refreshToken } }),
+
+  // Jerarquía (Secretaría de Educación)
+  listDepartments: (token: string) => call<DepartmentDto[]>("/departments", { token }),
+  createDepartment: (token: string, input: { code: string; name: string }) =>
+    call<DepartmentDto>("/departments", { method: "POST", token, body: input }),
+  createDistrict: (token: string, departmentId: string, name: string) =>
+    call<{ id: string }>(`/departments/${departmentId}/districts`, { method: "POST", token, body: { name } }),
+  createRegionalUser: (token: string, input: RegionalUserInput) =>
+    call<CreatedUserDto>("/regional-users", { method: "POST", token, body: input }),
+  scopeSchools: (token: string) => call<ScopedSchoolDto[]>("/scope/schools", { token }),
+  fetchScopedLogo: async (token: string, schoolId: string): Promise<Response | null> => {
+    const res = await fetch(`${identityUrl()}/scope/schools/${schoolId}/logo`, {
+      headers: { authorization: `Bearer ${token}` },
+      cache: "no-store",
+      signal: AbortSignal.timeout(8_000),
+    }).catch(() => {
+      throw new ServiceError(503, "service_unavailable", "No se pudo cargar el logo");
+    });
+    return res.ok ? res : null;
+  },
+
   setSchoolActive: (token: string, id: string, active: boolean) =>
     call<SchoolDto>(`/schools/${id}/status`, { method: "POST", token, body: { active } }),
 };
