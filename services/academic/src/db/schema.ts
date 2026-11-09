@@ -1,6 +1,8 @@
+import { LEAVE_TYPES } from "@escolar/shared";
 import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   date,
   foreignKey,
   index,
@@ -29,6 +31,7 @@ const schoolId = () => uuid("school_id").notNull();
 export const sexEnum = pgEnum("sex", ["F", "M"]);
 export const relationshipEnum = pgEnum("relationship", ["madre", "padre", "tutor", "abuelo", "otro"]);
 export const enrollmentStatusEnum = pgEnum("enrollment_status", ["activa", "retirada"]);
+export const leaveTypeEnum = pgEnum("leave_type", LEAVE_TYPES);
 
 // ───────────────────────────── Estructura académica ─────────────────────────────
 
@@ -258,6 +261,69 @@ export const enrollments = pgTable(
   ],
 );
 
+// ───────────────────────────── Licencias y sustituciones ─────────────────────────────
+
+/** Ausencia de un maestro (vacaciones, enfermedad, etc.). Cancelar no borra: queda el historial. */
+export const teacherLeaves = pgTable(
+  "teacher_leaves",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    schoolId: schoolId(),
+    teacherUserId: uuid("teacher_user_id").notNull(),
+    teacherName: text("teacher_name").notNull(),
+    type: leaveTypeEnum("type").notNull(),
+    startsOn: date("starts_on", { mode: "string" }).notNull(),
+    endsOn: date("ends_on", { mode: "string" }).notNull(),
+    notes: text("notes"),
+    createdByUserId: uuid("created_by_user_id").notNull(),
+    createdByName: text("created_by_name").notNull(),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique("teacher_leaves_tenant_key").on(t.schoolId, t.id),
+    index("teacher_leaves_teacher_idx").on(t.schoolId, t.teacherUserId),
+    check("teacher_leaves_dates", sql`${t.endsOn} >= ${t.startsOn}`),
+  ],
+);
+
+/** Quién da una clase mientras su maestro titular está de licencia. */
+export const substitutions = pgTable(
+  "substitutions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    schoolId: schoolId(),
+    leaveId: uuid("leave_id").notNull(),
+    assignmentId: uuid("assignment_id").notNull(),
+    substituteUserId: uuid("substitute_user_id").notNull(),
+    substituteName: text("substitute_name").notNull(),
+    startsOn: date("starts_on", { mode: "string" }).notNull(),
+    endsOn: date("ends_on", { mode: "string" }).notNull(),
+    createdByUserId: uuid("created_by_user_id").notNull(),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique("substitutions_tenant_key").on(t.schoolId, t.id),
+    // Una sola sustitución vigente por clase dentro de una licencia
+    uniqueIndex("substitutions_active_unique")
+      .on(t.leaveId, t.assignmentId)
+      .where(sql`${t.cancelledAt} is null`),
+    index("substitutions_substitute_idx").on(t.schoolId, t.substituteUserId),
+    check("substitutions_dates", sql`${t.endsOn} >= ${t.startsOn}`),
+    foreignKey({
+      name: "substitutions_leave_fk",
+      columns: [t.schoolId, t.leaveId],
+      foreignColumns: [teacherLeaves.schoolId, teacherLeaves.id],
+    }),
+    foreignKey({
+      name: "substitutions_assignment_fk",
+      columns: [t.schoolId, t.assignmentId],
+      foreignColumns: [teachingAssignments.schoolId, teachingAssignments.id],
+    }).onDelete("cascade"),
+  ],
+);
+
 /** Bitácora de cambios. Solo inserción. */
 export const auditEvents = pgTable(
   "audit_events",
@@ -284,3 +350,5 @@ export type Student = typeof students.$inferSelect;
 export type Guardian = typeof guardians.$inferSelect;
 export type StudentGuardian = typeof studentGuardians.$inferSelect;
 export type Enrollment = typeof enrollments.$inferSelect;
+export type TeacherLeave = typeof teacherLeaves.$inferSelect;
+export type Substitution = typeof substitutions.$inferSelect;

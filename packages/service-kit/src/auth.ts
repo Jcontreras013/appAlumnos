@@ -19,8 +19,12 @@ export interface AccessClaims {
   userId: string;
   /** Nombre para mostrar (historiales, "aprobado por"). Puede quedar desactualizado hasta 15 minutos. */
   name: string;
-  /** null solo para superadmin de la plataforma. */
+  /** Centro de la sesión (roles de centro). null para superadmin y direcciones regionales. */
   schoolId: string | null;
+  /** Solo dirección distrital. */
+  districtId: string | null;
+  /** Solo dirección departamental. */
+  departmentId: string | null;
   role: Role;
 }
 
@@ -48,16 +52,19 @@ export async function createAccessTokenVerifier(source: VerifierKeySource): Prom
         audience: ACCESS_TOKEN_AUDIENCE,
         algorithms: [JWT_ALGORITHM],
       });
-      const schoolId = payload.school_id;
-      if (
-        typeof payload.sub !== "string" ||
-        !isRole(payload.role) ||
-        !(schoolId === null || typeof schoolId === "string")
-      ) {
+      const optionalId = (value: unknown) => (typeof value === "string" ? value : null);
+      if (typeof payload.sub !== "string" || !isRole(payload.role)) {
         throw unauthorized();
       }
       const name = typeof payload.name === "string" ? payload.name : "";
-      return { userId: payload.sub, name, schoolId, role: payload.role };
+      return {
+        userId: payload.sub,
+        name,
+        schoolId: optionalId(payload.school_id),
+        districtId: optionalId(payload.district_id),
+        departmentId: optionalId(payload.department_id),
+        role: payload.role,
+      };
     } catch {
       throw unauthorized();
     }
@@ -108,4 +115,12 @@ export function tenantOf(request: FastifyRequest): string {
     throw forbidden("Esta acción solo está disponible para usuarios de un colegio");
   }
   return schoolId;
+}
+
+/** Ámbito regional de la sesión (direcciones departamental y distrital). */
+export function regionalScopeOf(request: FastifyRequest): { type: "departamento" | "distrito"; id: string } {
+  const { role, departmentId, districtId } = request.auth;
+  if (role === "director_departamental" && departmentId) return { type: "departamento", id: departmentId };
+  if (role === "director_distrital" && districtId) return { type: "distrito", id: districtId };
+  throw forbidden("Esta vista es solo para direcciones departamentales y distritales");
 }

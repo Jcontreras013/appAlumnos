@@ -78,6 +78,8 @@ describe("tokens", () => {
       userId: body.user.id,
       name: "Root",
       schoolId: null,
+      districtId: null,
+      departmentId: null,
       role: "superadmin",
     });
   });

@@ -5,10 +5,17 @@ import { and, eq, isNull } from "drizzle-orm";
 import { SignJWT } from "jose";
 import type { TokenSettings } from "../config";
 import type { Db, DbOrTx } from "../db/client";
-import { refreshTokens, schools, type User, users } from "../db/schema";
+import { type Membership, memberships, refreshTokens, type User, users } from "../db/schema";
+import { resolveMemberships } from "./access";
 import type { SigningKeys } from "./keys";
 
 const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
+
+/** Una sesión siempre trabaja con una persona y uno de sus accesos (rol + centro/distrito/departamento). */
+export interface SessionSubject {
+  user: Pick<User, "id" | "name">;
+  membership: Pick<Membership, "id" | "role" | "schoolId" | "districtId" | "departmentId">;
+}
 
 export type RotateResult =
   | { kind: "ok"; pair: TokenPairDto; user: User }
@@ -22,9 +29,16 @@ export class TokenService {
     private readonly settings: TokenSettings,
   ) {}
 
-  async signAccessToken(user: Pick<User, "id" | "schoolId" | "role" | "name">): Promise<string> {
+  async signAccessToken({ user, membership }: SessionSubject): Promise<string> {
     const now = Math.floor(Date.now() / 1000);
-    return new SignJWT({ role: user.role, school_id: user.schoolId, name: user.name })
+    return new SignJWT({
+      name: user.name,
+      role: membership.role,
+      school_id: membership.schoolId,
+      district_id: membership.districtId,
+      department_id: membership.departmentId,
+      mid: membership.id,
+    })
       .setProtectedHeader({ alg: JWT_ALGORITHM, kid: this.keys.keyId })
       .setSubject(user.id)
       .setIssuer(ACCESS_TOKEN_ISSUER)
@@ -38,14 +52,15 @@ export class TokenService {
   /** Emite un access token y un refresh token nuevo. Sin `familyId` empieza una sesión nueva. */
   async issuePair(
     db: DbOrTx,
-    user: Pick<User, "id" | "schoolId" | "role" | "name">,
+    subject: SessionSubject,
     familyId: string = randomUUID(),
   ): Promise<TokenPairDto & { refreshTokenId: string }> {
     const refreshToken = randomBytes(32).toString("base64url");
     const [row] = await db
       .insert(refreshTokens)
       .values({
-        userId: user.id,
+        userId: subject.user.id,
+        membershipId: subject.membership.id,
         familyId,
         tokenHash: hashToken(refreshToken),
         expiresAt: new Date(Date.now() + this.settings.refreshTokenTtlSeconds * 1000),
@@ -54,7 +69,7 @@ export class TokenService {
     if (!row) throw new Error("No se pudo crear el refresh token");
 
     return {
-      accessToken: await this.signAccessToken(user),
+      accessToken: await this.signAccessToken(subject),
       refreshToken,
       expiresIn: this.settings.accessTokenTtlSeconds,
       refreshExpiresIn: this.settings.refreshTokenTtlSeconds,
@@ -92,7 +107,13 @@ export class TokenService {
             .update(refreshTokens)
             .set({ revokedAt: new Date() })
             .where(and(eq(refreshTokens.familyId, row.familyId), isNull(refreshTokens.revokedAt)));
-          return { kind: "reuse_detected", userId: user.id, schoolId: user.schoolId, familyId: row.familyId };
+          const [m] = await tx.select().from(memberships).where(eq(memberships.id, row.membershipId));
+          return {
+            kind: "reuse_detected",
+            userId: user.id,
+            schoolId: m?.schoolId ?? null,
+            familyId: row.familyId,
+          };
         }
         // Dentro de la ventana de gracia solo se acepta si la sesión sigue viva.
         const [alive] = await tx
@@ -106,12 +127,13 @@ export class TokenService {
       }
 
       if (!user.active) return { kind: "invalid" };
-      if (user.schoolId) {
-        const [school] = await tx.select().from(schools).where(eq(schools.id, user.schoolId));
-        if (!school?.active) return { kind: "invalid" };
-      }
+      // El acceso de la sesión debe seguir activo (y su centro también).
+      const [membership] = await tx.select().from(memberships).where(eq(memberships.id, row.membershipId));
+      if (!membership) return { kind: "invalid" };
+      const [resolved] = await resolveMemberships(tx, [membership]);
+      if (!resolved?.usable) return { kind: "invalid" };
 
-      const { refreshTokenId, ...pair } = await this.issuePair(tx, user, row.familyId);
+      const { refreshTokenId, ...pair } = await this.issuePair(tx, { user, membership }, row.familyId);
       if (!row.revokedAt) {
         await tx
           .update(refreshTokens)
@@ -134,6 +156,14 @@ export class TokenService {
       .set({ revokedAt: new Date() })
       .where(and(eq(refreshTokens.familyId, row.familyId), isNull(refreshTokens.revokedAt)));
     return { userId: row.userId };
+  }
+
+  /** Revoca las sesiones abiertas con un acceso concreto (al quitarle el acceso a un centro). */
+  async revokeForMembership(db: DbOrTx, membershipId: string): Promise<void> {
+    await db
+      .update(refreshTokens)
+      .set({ revokedAt: new Date() })
+      .where(and(eq(refreshTokens.membershipId, membershipId), isNull(refreshTokens.revokedAt)));
   }
 
   /** Revoca todas las sesiones de un usuario (al desactivarlo o cambiar su contraseña). */

@@ -9,17 +9,17 @@ import type { SchoolRole } from "@escolar/shared";
 import { eq } from "drizzle-orm";
 import { createDb } from "../db/client";
 import { schools, users } from "../db/schema";
-import { insertUser } from "../lib/users";
+import { type AccountInput, grantAccess } from "../lib/users";
 
 const { db, pool } = createDb(databaseUrlFromEnv());
 
-async function ensureUser(input: Parameters<typeof insertUser>[1]) {
+async function ensureUser(input: AccountInput) {
   const [existing] = await db.select().from(users).where(eq(users.email, input.email));
   if (existing) {
     console.log(`  = ${input.email} ya existe`);
     return existing;
   }
-  const user = await insertUser(db, input);
+  const { user } = await grantAccess(db, input);
   console.log(`  + ${input.email} (${input.role})`);
   return user;
 }

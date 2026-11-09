@@ -14,7 +14,7 @@ const { db, pool } = createDb(url);
 const keys = await generateKeyPair(JWT_ALGORITHM);
 const app = await buildApp({
   db,
-  identity: { getUser: async () => null },
+  identity: { getUser: async () => null, getScopeSchools: async () => [] },
   verifier: await createAccessTokenVerifier({ publicKey: keys.publicKey }),
   today: () => "2026-11-09",
   logger: false,

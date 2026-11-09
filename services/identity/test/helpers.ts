@@ -7,7 +7,7 @@ import { DEFAULT_TOKEN_SETTINGS, type TokenSettings } from "../src/config";
 import { type Db, migrationsFolder } from "../src/db/client";
 import * as schema from "../src/db/schema";
 import { generateSigningKeys } from "../src/lib/keys";
-import { insertUser } from "../src/lib/users";
+import { grantAccess } from "../src/lib/users";
 
 export const SUPERADMIN = { email: "root@plataforma.test", password: "superadmin-segura-123" };
 export const PASSWORD = "contraseña-de-prueba-1";
@@ -28,7 +28,7 @@ export async function setupIdentity(settings: Partial<TokenSettings> = {}) {
     settings: { ...DEFAULT_TOKEN_SETTINGS, ...settings, loginRateLimitPerMinute: 1000 },
     logger: false,
   });
-  await insertUser(db, { schoolId: null, name: "Root", role: "superadmin", ...SUPERADMIN });
+  await grantAccess(db, { name: "Root", role: "superadmin", ...SUPERADMIN });
 
   async function login(email: string, password: string) {
     const res = await app.inject({ method: "POST", url: "/auth/login", payload: { email, password } });

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { SCHOOL_ROLES } from "./roles";
+import { REGIONAL_ROLES, SCHOOL_ROLES } from "./roles";
 
 /** Esquemas de validación compartidos entre el frontend (Next.js) y los servicios. */
 
@@ -55,6 +55,9 @@ export const createSchoolInputSchema = z.object({
   name: z.string().trim().min(3).max(200),
   slug: schoolSlugSchema,
   rtn: rtnSchema.optional(),
+  code: z.string().trim().min(3).max(30).optional(),
+  sector: z.enum(["publico", "privado"]).default("privado"),
+  districtId: z.uuid().optional(),
   admin: z.object({
     name: personNameSchema,
     email: emailSchema,
@@ -74,4 +77,41 @@ export const logoInputSchema = z.object({
     .string()
     .max(Math.ceil((LOGO_MAX_BYTES * 4) / 3) + 100, { error: "El logo pesa más de 300 KB" })
     .transform((v) => v.replace(/^data:[^;]+;base64,/, "")),
+});
+
+// ───────────────────────────── Jerarquía (Secretaría de Educación) ─────────────────────────────
+
+export const departmentInputSchema = z.object({
+  /** Código oficial del departamento (01 a 18). */
+  code: z
+    .string()
+    .trim()
+    .regex(/^\d{2}$/, { error: "El código tiene 2 dígitos (ej. 11)" }),
+  name: z.string().trim().min(3).max(80),
+});
+
+export const districtInputSchema = z.object({ name: z.string().trim().min(3).max(80) });
+
+export const regionalUserInputSchema = z
+  .object({
+    name: personNameSchema,
+    email: emailSchema,
+    password: passwordSchema,
+    role: z.enum(REGIONAL_ROLES, { error: "Rol inválido" }),
+    departmentId: z.uuid().optional(),
+    districtId: z.uuid().optional(),
+  })
+  .refine(
+    (v) =>
+      v.role === "director_departamental" ? v.departmentId && !v.districtId : v.districtId && !v.departmentId,
+    {
+      error: "La dirección departamental va con un departamento y la distrital con un distrito",
+      path: ["role"],
+    },
+  );
+export type RegionalUserInput = z.infer<typeof regionalUserInputSchema>;
+
+export const switchMembershipInputSchema = z.object({
+  membershipId: z.uuid(),
+  refreshToken: z.string().min(20).max(200).optional(),
 });

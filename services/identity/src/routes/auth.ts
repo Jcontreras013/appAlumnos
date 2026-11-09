@@ -1,21 +1,46 @@
-import { forbidden, parseOrThrow, unauthorized } from "@escolar/service-kit";
+import { forbidden, notFound, parseOrThrow, unauthorized } from "@escolar/service-kit";
 import {
   type LoginResponseDto,
   loginInputSchema,
   type MeResponseDto,
   refreshInputSchema,
+  switchMembershipInputSchema,
   type TokenPairDto,
 } from "@escolar/shared";
 import { eq } from "drizzle-orm";
-import type { FastifyInstance } from "fastify";
-import { schools, users } from "../db/schema";
+import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { Tx } from "../db/client";
+import { schools, type User, users } from "../db/schema";
 import type { IdentityDeps } from "../deps";
+import { type ResolvedMembership, usableMemberships } from "../lib/access";
 import { audit } from "../lib/audit";
 import { publicJwks } from "../lib/keys";
 import { verifyPassword } from "../lib/passwords";
+import type { TokenService } from "../lib/tokens";
 import { toSchoolDto, toUserDto } from "../lib/users";
 
 const INVALID_CREDENTIALS = "Correo o contraseña incorrectos";
+
+/** Abre una sesión con un acceso concreto y lo recuerda para el próximo inicio de sesión. */
+async function openSession(
+  tx: Tx,
+  tokens: TokenService,
+  request: FastifyRequest,
+  user: User,
+  chosen: ResolvedMembership,
+  action: string,
+): Promise<LoginResponseDto> {
+  const { refreshTokenId: _, ...pair } = await tokens.issuePair(tx, { user, membership: chosen.membership });
+  await tx.update(users).set({ lastMembershipId: chosen.membership.id }).where(eq(users.id, user.id));
+  await audit(tx, request, {
+    action,
+    schoolId: chosen.membership.schoolId,
+    actorUserId: user.id,
+    entityType: "membership",
+    entityId: chosen.membership.id,
+  });
+  return { ...pair, user: toUserDto(user, chosen.membership) };
+}
 
 export async function authRoutes(app: FastifyInstance, { db, keys, tokens, settings }: IdentityDeps) {
   const jwks = await publicJwks(keys);
@@ -38,7 +63,6 @@ export async function authRoutes(app: FastifyInstance, { db, keys, tokens, setti
         if (user) {
           await audit(db, request, {
             action: "auth.login_failed",
-            schoolId: user.schoolId,
             actorUserId: user.id,
             entityType: "user",
             entityId: user.id,
@@ -50,28 +74,27 @@ export async function authRoutes(app: FastifyInstance, { db, keys, tokens, setti
         throw unauthorized(INVALID_CREDENTIALS);
       }
 
-      let school = null;
-      if (user.schoolId) {
-        [school] = await db.select().from(schools).where(eq(schools.id, user.schoolId));
-        if (!school?.active) {
-          throw forbidden("El colegio está desactivado. Comunícate con soporte.");
-        }
+      const options = await usableMemberships(db, user.id);
+      if (options.length === 0) {
+        throw forbidden("Tu cuenta no tiene acceso activo a ningún centro. Comunícate con la dirección.");
       }
-
-      const { refreshTokenId: _, ...pair } = await db.transaction(async (tx) => {
-        const issued = await tokens.issuePair(tx, user);
-        await audit(tx, request, {
-          action: "auth.login",
-          schoolId: user.schoolId,
-          actorUserId: user.id,
-          entityType: "user",
-          entityId: user.id,
-        });
-        return issued;
-      });
-      return { ...pair, user: toUserDto(user) };
+      // Se entra directo al último centro usado; desde el panel se puede cambiar.
+      const chosen = options.find((o) => o.membership.id === user.lastMembershipId) ?? options[0];
+      if (!chosen) throw forbidden();
+      return db.transaction((tx) => openSession(tx, tokens, request, user, chosen, "auth.login"));
     },
   );
+
+  /** Cambiar de centro (o de rol) sin volver a escribir la contraseña. */
+  app.post("/auth/switch", { preHandler: app.authenticate }, async (request): Promise<LoginResponseDto> => {
+    const input = parseOrThrow(switchMembershipInputSchema, request.body);
+    const [user] = await db.select().from(users).where(eq(users.id, request.auth.userId));
+    if (!user?.active) throw unauthorized();
+    const target = (await usableMemberships(db, user.id)).find((o) => o.membership.id === input.membershipId);
+    if (!target) throw notFound("No tienes ese acceso o está desactivado");
+    if (input.refreshToken) await tokens.revokeFamilyOf(input.refreshToken);
+    return db.transaction((tx) => openSession(tx, tokens, request, user, target, "auth.switch"));
+  });
 
   app.post(
     "/auth/refresh",
@@ -111,9 +134,23 @@ export async function authRoutes(app: FastifyInstance, { db, keys, tokens, setti
   app.get("/me", { preHandler: app.authenticate }, async (request): Promise<MeResponseDto> => {
     const [user] = await db.select().from(users).where(eq(users.id, request.auth.userId));
     if (!user?.active) throw unauthorized();
-    const [school] = user.schoolId
-      ? await db.select().from(schools).where(eq(schools.id, user.schoolId))
-      : [];
-    return { user: toUserDto(user), school: school ? toSchoolDto(school) : null };
+    const options = await usableMemberships(db, user.id);
+    // El acceso de esta sesión es el que coincide con el token (rol + ámbito).
+    const { role, schoolId, districtId, departmentId } = request.auth;
+    const current = options.find(
+      (o) =>
+        o.membership.role === role &&
+        o.membership.schoolId === schoolId &&
+        o.membership.districtId === districtId &&
+        o.membership.departmentId === departmentId,
+    );
+    if (!current) throw unauthorized("Ese acceso ya no está activo");
+    const [school] = schoolId ? await db.select().from(schools).where(eq(schools.id, schoolId)) : [];
+    return {
+      user: toUserDto(user, current.membership),
+      school: school ? toSchoolDto(school) : null,
+      current: current.dto,
+      memberships: options.map((o) => o.dto),
+    };
   });
 }

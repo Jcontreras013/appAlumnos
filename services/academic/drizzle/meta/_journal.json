@@ -15,6 +15,13 @@
       "when": 1794165737298,
       "tag": "0001_audit_append_only",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794188228421,
+      "tag": "0002_licencias_y_sustituciones",
+      "breakpoints": true
     }
   ]
 }

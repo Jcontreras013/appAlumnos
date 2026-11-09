@@ -44,21 +44,24 @@ describe("colegios (solo superadmin)", () => {
     expect(res.statusCode).toBe(409);
   });
 
-  it("si falla la creación del admin no queda un colegio huérfano (transacción)", async () => {
+  it("una misma persona puede dirigir dos centros con una sola cuenta", async () => {
     const token = await ctx.tokenFor(SUPERADMIN.email, SUPERADMIN.password);
     const res = await ctx.app.inject({
       method: "POST",
       url: "/schools",
       headers: ctx.auth(token),
       payload: {
-        name: "Colegio Huérfano",
-        slug: "colegio-huerfano",
-        admin: { name: "Admin", email: "admin@colegio-a.hn", password: PASSWORD }, // correo ya usado
+        name: "Escuela Vespertina",
+        slug: "escuela-vespertina",
+        admin: { name: "Admin", email: "admin@colegio-a.hn", password: "otra-clave-que-se-ignora" },
       },
     });
-    expect(res.statusCode).toBe(409);
-    const list = (await ctx.app.inject({ url: "/schools", headers: ctx.auth(token) })).json();
-    expect(list.map((s: { slug: string }) => s.slug)).not.toContain("colegio-huerfano");
+    expect(res.statusCode).toBe(201);
+    // Conserva su contraseña: la que se escribió al crear el segundo centro no la reemplaza
+    expect((await ctx.login("admin@colegio-a.hn", "otra-clave-que-se-ignora")).res.statusCode).toBe(401);
+    const { body } = await ctx.login("admin@colegio-a.hn", PASSWORD);
+    const me = (await ctx.app.inject({ url: "/me", headers: ctx.auth(body.accessToken) })).json();
+    expect(me.memberships).toHaveLength(2);
   });
 });
 
@@ -116,8 +119,8 @@ describe("aislamiento entre colegios", () => {
     expect((await createUser(parentToken, "otro@colegio-a.hn")).statusCode).toBe(403);
   });
 
-  it("un correo no se puede registrar dos veces", async () => {
-    const res = await createUser(schoolB.adminToken, "docente@colegio-a.hn");
+  it("dar dos veces el mismo acceso en el mismo centro da 409", async () => {
+    const res = await createUser(schoolA.adminToken, "docente@colegio-a.hn");
     expect(res.statusCode).toBe(409);
   });
 });
@@ -135,7 +138,8 @@ describe("desactivación", () => {
     });
     expect(res.statusCode).toBe(200);
 
-    expect((await ctx.login("temporal@colegio-a.hn", PASSWORD)).res.statusCode).toBe(401);
+    // Contraseña correcta pero sin ningún acceso activo: 403 con mensaje claro
+    expect((await ctx.login("temporal@colegio-a.hn", PASSWORD)).res.statusCode).toBe(403);
     const refresh = await ctx.app.inject({
       method: "POST",
       url: "/auth/refresh",

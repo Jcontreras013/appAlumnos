@@ -1,10 +1,15 @@
 /**
- * Roles de la plataforma.
- * - superadmin: equipo de la plataforma; no pertenece a ningún colegio.
- * - El resto siempre pertenece a exactamente un colegio (tenant).
+ * Roles de la plataforma. Una persona puede tener varios (membresías): por ejemplo, docente en una
+ * escuela por la mañana y en otra por la tarde. Cada sesión trabaja con uno a la vez.
+ *
+ * - superadmin: equipo de la plataforma.
+ * - director_departamental / director_distrital: ven todos los centros de su departamento o distrito.
+ * - El resto pertenece a un centro educativo (tenant).
  */
 export const ROLES = [
   "superadmin",
+  "director_departamental",
+  "director_distrital",
   "admin",
   "coordinador",
   "finanzas",
@@ -23,12 +28,19 @@ export const SCHOOL_ROLES = [
   "docente",
   "padre",
 ] as const satisfies readonly Role[];
-
 export type SchoolRole = (typeof SCHOOL_ROLES)[number];
+
+export const REGIONAL_ROLES = [
+  "director_departamental",
+  "director_distrital",
+] as const satisfies readonly Role[];
+export type RegionalRole = (typeof REGIONAL_ROLES)[number];
 
 export const ROLE_LABELS: Record<Role, string> = {
   superadmin: "Superadmin de la plataforma",
-  admin: "Administrador del colegio",
+  director_departamental: "Dirección departamental",
+  director_distrital: "Dirección distrital",
+  admin: "Dirección del centro",
   coordinador: "Coordinación académica",
   finanzas: "Finanzas",
   secretaria: "Secretaría",
@@ -38,4 +50,12 @@ export const ROLE_LABELS: Record<Role, string> = {
 
 export function isRole(value: unknown): value is Role {
   return typeof value === "string" && (ROLES as readonly string[]).includes(value);
+}
+
+export function isSchoolRole(role: Role): role is SchoolRole {
+  return (SCHOOL_ROLES as readonly string[]).includes(role);
+}
+
+export function isRegionalRole(role: Role): role is RegionalRole {
+  return (REGIONAL_ROLES as readonly string[]).includes(role);
 }

@@ -1,5 +1,4 @@
 import {
-  badRequest,
   conflict,
   isUniqueViolation,
   notFound,
@@ -35,6 +34,7 @@ import {
   toSchoolYearDto,
   toSubjectDto,
 } from "../lib/queries";
+import { requireTeacher } from "../lib/staff";
 
 const idParams = z.object({ id: z.uuid() });
 const yearQuery = z.object({ schoolYearId: z.uuid().optional() });
@@ -227,11 +227,7 @@ export async function structureRoutes(app: FastifyInstance, { db, identity }: Ac
 
     // El docente se valida en identity con el token de quien hace la petición: debe existir,
     // ser de este colegio y tener un rol que dé clases.
-    const bearer = (request.headers.authorization ?? "").slice("Bearer ".length);
-    const teacher = await identity.getUser(bearer, input.teacherUserId);
-    if (!teacher?.active || !["docente", "coordinador"].includes(teacher.role)) {
-      throw badRequest("El docente no existe en tu colegio o no está activo");
-    }
+    const teacher = await requireTeacher(identity, request, input.teacherUserId);
 
     const assignment = await db.transaction(async (tx) => {
       const [created] = await uniqueOr(
