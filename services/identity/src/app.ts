@@ -7,6 +7,7 @@ import type { IdentityDeps } from "./deps";
 import type { SigningKeys } from "./lib/keys";
 import { TokenService } from "./lib/tokens";
 import { authRoutes } from "./routes/auth";
+import { logoRoutes } from "./routes/logo";
 import { schoolRoutes } from "./routes/schools";
 import { userRoutes } from "./routes/users";
 
@@ -30,6 +31,7 @@ export async function buildApp({ db, keys, settings, logger }: BuildAppOptions) 
     await authRoutes(scope, deps);
     await schoolRoutes(scope, deps);
     await userRoutes(scope, deps);
+    await logoRoutes(scope, deps);
   });
 
   return app;

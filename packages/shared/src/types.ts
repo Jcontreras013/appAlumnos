@@ -8,6 +8,8 @@ export interface SchoolDto {
   name: string;
   rtn: string | null;
   active: boolean;
+  /** Versión del logo (marca de tiempo) o null si el colegio no tiene logo. */
+  logoVersion: number | null;
   createdAt: string;
 }
 

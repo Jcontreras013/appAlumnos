@@ -1,6 +1,7 @@
 import { ROLE_LABELS, type Role } from "@escolar/shared";
 import type { ReactNode } from "react";
 import { Nav, type NavItem } from "@/components/nav";
+import { SchoolLogo } from "@/components/school-logo";
 import { APP_NAME } from "@/lib/brand";
 import { getSession } from "@/lib/dal";
 import { MODULES } from "@/lib/modules";
@@ -16,6 +17,7 @@ export default async function PanelLayout({ children }: { children: ReactNode })
   if (is("admin", "coordinador", "secretaria"))
     items.push({ href: "/panel/estructura", label: "Estructura académica" });
   if (is("admin")) items.push({ href: "/panel/usuarios", label: "Usuarios" });
+  if (is("admin")) items.push({ href: "/panel/colegio", label: "Mi colegio" });
   const upcoming = MODULES.filter((m) => !m.href && m.roles.includes(user.role)).map((m) => ({
     label: m.label,
     phase: m.phase,
@@ -35,11 +37,14 @@ export default async function PanelLayout({ children }: { children: ReactNode })
 
       <div className="flex min-w-0 flex-col">
         <header className="flex items-center justify-between gap-4 border-b border-slate-200 bg-white px-4 py-3 sm:px-8">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-slate-900">{school?.name ?? "Plataforma"}</p>
-            <p className="truncate text-xs text-slate-500">
-              {user.name} · {ROLE_LABELS[user.role]}
-            </p>
+          <div className="flex min-w-0 items-center gap-3">
+            {school && <SchoolLogo school={school} className="size-10" />}
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-slate-900">{school?.name ?? "Plataforma"}</p>
+              <p className="truncate text-xs text-slate-500">
+                {user.name} · {ROLE_LABELS[user.role]}
+              </p>
+            </div>
           </div>
           <form action={logoutAction}>
             <button type="submit" className="btn-secondary px-3 py-1.5">

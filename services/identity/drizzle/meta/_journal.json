@@ -22,6 +22,13 @@
       "when": 1794164282148,
       "tag": "0002_rol_coordinador",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794187152145,
+      "tag": "0003_logo_colegio",
+      "breakpoints": true
     }
   ]
 }

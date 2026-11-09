@@ -1,6 +1,7 @@
 import { formatRtn, ROLE_LABELS } from "@escolar/shared";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { SchoolLogo } from "@/components/school-logo";
 import { getSession } from "@/lib/dal";
 import { identity } from "@/lib/identity";
 import { MODULES } from "@/lib/modules";
@@ -36,10 +37,13 @@ export default async function PanelHome() {
       <PageTitle title={`Hola, ${firstName}`} subtitle={ROLE_LABELS[user.role]} />
 
       {school && (
-        <section className="card grid gap-4 p-5 sm:grid-cols-3">
-          <Info label="Colegio" value={school.name} />
-          <Info label="RTN" value={formatRtn(school.rtn)} />
-          <Info label="Identificador" value={school.slug} mono />
+        <section className="card flex flex-wrap items-center gap-5 p-5">
+          <SchoolLogo school={school} className="size-16" />
+          <div className="grid min-w-0 flex-1 gap-4 sm:grid-cols-[2fr_1fr_1.3fr]">
+            <Info label="Colegio" value={school.name} wrap />
+            <Info label="RTN" value={formatRtn(school.rtn)} />
+            <Info label="Identificador" value={school.slug} mono />
+          </div>
         </section>
       )}
 
@@ -102,11 +106,25 @@ function Stat({ label, value }: { label: string; value: number }) {
   );
 }
 
-function Info({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+function Info({
+  label,
+  value,
+  mono = false,
+  wrap = false,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+  wrap?: boolean;
+}) {
   return (
     <div className="min-w-0">
       <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
-      <p className={`mt-1 truncate text-sm text-slate-900 ${mono ? "font-mono" : "font-medium"}`}>{value}</p>
+      <p
+        className={`mt-1 text-sm text-slate-900 ${wrap ? "" : "truncate"} ${mono ? "font-mono" : "font-medium"}`}
+      >
+        {value}
+      </p>
     </div>
   );
 }

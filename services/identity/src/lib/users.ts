@@ -23,6 +23,7 @@ export function toSchoolDto(school: School): SchoolDto {
     name: school.name,
     rtn: school.rtn,
     active: school.active,
+    logoVersion: school.logoUpdatedAt ? school.logoUpdatedAt.getTime() : null,
     createdAt: school.createdAt.toISOString(),
   };
 }

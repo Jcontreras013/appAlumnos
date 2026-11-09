@@ -1,6 +1,17 @@
 import { ROLES } from "@escolar/shared";
 import { sql } from "drizzle-orm";
-import { boolean, check, index, jsonb, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  check,
+  customType,
+  index,
+  jsonb,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+} from "drizzle-orm/pg-core";
 
 const createdAt = () => timestamp("created_at", { withTimezone: true }).notNull().defaultNow();
 
@@ -13,7 +24,25 @@ export const schools = pgTable("schools", {
   name: text("name").notNull(),
   rtn: text("rtn"),
   active: boolean("active").notNull().default(true),
+  /** Cuándo se cambió el logo por última vez (null = sin logo). Sirve para invalidar la caché del navegador. */
+  logoUpdatedAt: timestamp("logo_updated_at", { withTimezone: true }),
   createdAt: createdAt(),
+});
+
+/** node-postgres devuelve Buffer y PGlite Uint8Array: se normaliza a Buffer. */
+const bytea = customType<{ data: Buffer; driverData: Uint8Array }>({
+  dataType: () => "bytea",
+  fromDriver: (value) => Buffer.from(value),
+});
+
+/** Logo del colegio, en una tabla aparte para no leer la imagen en cada consulta de colegios. */
+export const schoolLogos = pgTable("school_logos", {
+  schoolId: uuid("school_id")
+    .primaryKey()
+    .references(() => schools.id, { onDelete: "cascade" }),
+  mimeType: text("mime_type").notNull(),
+  data: bytea("data").notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const users = pgTable(

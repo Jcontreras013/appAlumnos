@@ -62,3 +62,16 @@ export const createSchoolInputSchema = z.object({
   }),
 });
 export type CreateSchoolInput = z.infer<typeof createSchoolInputSchema>;
+
+/** Logo del colegio: PNG, JPG o WebP de hasta 300 KB. SVG no, porque puede contener código. */
+export const LOGO_MAX_BYTES = 300 * 1024;
+export const LOGO_MIME_TYPES = ["image/png", "image/jpeg", "image/webp"] as const;
+export type LogoMimeType = (typeof LOGO_MIME_TYPES)[number];
+
+export const logoInputSchema = z.object({
+  /** Imagen en base64 (con o sin el prefijo "data:image/...;base64,"). */
+  image: z
+    .string()
+    .max(Math.ceil((LOGO_MAX_BYTES * 4) / 3) + 100, { error: "El logo pesa más de 300 KB" })
+    .transform((v) => v.replace(/^data:[^;]+;base64,/, "")),
+});
