@@ -68,6 +68,30 @@ export default async function RegionSchoolPage({ params, searchParams }: PagePro
         />
       </section>
 
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+        <Kpi
+          label="Asistencia (7 días)"
+          value={summary.attendanceRate7d === null ? "—" : `${Math.round(summary.attendanceRate7d * 100)}%`}
+          hint={summary.attendanceRate7d === null ? "el centro no registra asistencia" : "de los alumnos"}
+        />
+        <Kpi
+          label="Alumnos en riesgo"
+          value={summary.studentsAtRisk}
+          tone={summary.studentsAtRisk > 0 ? "alert" : "ok"}
+          hint="por faltas o notas bajas"
+        />
+        <Kpi
+          label={`Notas ${summary.periodName ?? "del parcial"}`}
+          value={`${summary.gradeProgress.complete} / ${summary.gradeProgress.total}`}
+          tone={summary.behindOnGrades ? "alert" : "neutral"}
+          hint={
+            summary.periodClosesOn
+              ? `clases completas · cierre ${formatDay(summary.periodClosesOn)}`
+              : "clases completas"
+          }
+        />
+      </section>
+
       <section className="card overflow-hidden">
         <h2 className="border-b border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
           ¿Quién da cada clase?

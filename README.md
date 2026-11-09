@@ -7,7 +7,9 @@ Departamental de Educación**:
   alumnos, maestros, licencias y, sobre todo, **clases que se quedaron sin maestro**.
 - Cada **dirección de escuela** entra con el logo de su centro, gestiona alumnos y maestros y, cuando
   alguien sale de vacaciones o se enferma, **asigna sustitutos** a sus clases.
-- Los **maestros** tienen una sola cuenta aunque trabajen en dos escuelas (matutina y vespertina).
+- Los **maestros** tienen una sola cuenta aunque trabajen en dos escuelas (matutina y vespertina),
+  y llevan su **cuaderno** (asistencia diaria y notas por actividad) desde el teléfono, **aun sin
+  internet**. Al cierre del parcial, las notas quedan listas para pasarlas al **SACE**.
 
 Para colegios privados quedan además facturación (con CAI) y wallet de cafetería.
 
@@ -20,8 +22,9 @@ Para colegios privados quedan además facturación (con CAI) y wallet de cafeter
 | 0    | Monorepo, CI, login, colegios (multi-tenant), usuarios y roles, infraestructura en AWS                      | ✅ Listo  |
 | 1    | Matrícula: estructura académica, alumnos, familias, cupos, importación desde Excel                          | ✅ Listo  |
 | 2    | Departamento → distrito → centro, maestros en varios centros, licencias y sustitutos, tablero departamental | ✅ Listo  |
-| 3    | Planificación semanal de docentes con revisión de coordinación                                              | Siguiente |
-| 4    | Asistencia y notas, boletas en PDF                                                                          | Pendiente |
+| 3    | Cuaderno del maestro sin internet (asistencia y notas por actividad), alerta temprana, cuadro para el SACE  | ✅ Listo  |
+| 4    | Planificación semanal de docentes con revisión de coordinación                                              | Siguiente |
+| 5    | Boletas en PDF y consulta de notas y asistencia para las familias                                           | Pendiente |
 | —    | Para colegios privados: facturación con CAI y wallet de cafetería                                           | Después   |
 
 ## Arquitectura
@@ -35,14 +38,15 @@ flowchart LR
   academic -->|JWKS y validación de docentes| identity
   identity --> dbi[(escolar_identity)]
   academic --> dba[(escolar_academic)]
-  futuros["billing · wallet<br/>(fases 3-4)"] -. mismo patrón .-> identity
+  futuros["billing · wallet<br/>(colegios privados)"] -. mismo patrón .-> identity
 ```
 
 - **`apps/web`**: Next.js 16 (App Router). Funciona como _backend for frontend_: el navegador solo
   tiene cookies httpOnly, y es el servidor de Next el que llama a los microservicios.
 - **`services/identity`**: colegios (tenants), usuarios, roles, login y emisión de tokens.
 - **`services/academic`**: año lectivo, grados, secciones con cupo, materias, docentes por materia,
-  alumnos, responsables (familias), matrícula, retiros, cambios de sección e importación desde Excel.
+  alumnos, responsables (familias), matrícula, retiros, cambios de sección, importación desde Excel,
+  licencias y sustitutos, parciales, actividades y notas, asistencia, seguimiento y tablero regional.
   No tiene la llave privada: verifica los tokens con el JWKS público de identity, y para validar a un
   docente consulta a identity reenviando el token de quien hace la petición.
 - **`packages/service-kit`**: base común de todos los microservicios (servidor, errores, logs,
@@ -54,7 +58,23 @@ flowchart LR
 Cada microservicio tiene **su propia base de datos** (mismo servidor Postgres en desarrollo, mismo
 RDS en AWS) y nunca lee la base de otro: se comunican por API (y, desde facturación, por eventos).
 
-## Decisiones importantes (software financiero)
+## Complemento del SACE
+
+Los maestros de escuelas públicas ya registran las notas oficiales en el **SACE** de la Secretaría de
+Educación. Esta plataforma **no lo reemplaza ni entra en él** (nunca pide ni guarda contraseñas del
+SACE): cubre lo que pasa _antes_ de que las notas lleguen ahí.
+
+| En el SACE                                             | Aquí                                                                                                     |
+| ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| Se ingresa la nota final del parcial, al cierre        | El maestro registra cada actividad durante el parcial y la nota se calcula sola (100 puntos por parcial) |
+| Necesita internet y computadora                        | Funciona en el teléfono y **sin internet**; se sincroniza solo cuando vuelve la señal                    |
+| La asistencia diaria se lleva en papel                 | Lista de asistencia en un toque por alumno (presente, ausente, tarde, justificada)                       |
+| Los problemas se ven cuando el parcial ya cerró        | **Alerta temprana**: alumnos en riesgo por faltas o por la proyección de sus notas, antes del cierre     |
+| La dirección no sabe qué maestros van atrasados        | Avance de notas por clase y aviso cuando el cierre está a 7 días o menos                                 |
+| La departamental ve los datos cuando ya son históricos | Tablero con asistencia, alumnos en riesgo y centros atrasados, al día                                    |
+| Las notas se transcriben a mano desde cuadernos        | **Cuadro de calificaciones** por sección (identidad, alumno, nota por materia) para pasar al SACE        |
+
+## Decisiones importantes
 
 - **Dinero en centavos enteros.** Nada de `float`. `packages/shared/src/money.ts` tiene el parseo,
   el formato en Lempiras, el ISV por puntos básicos con redondeo explícito y el reparto en cuotas
@@ -84,6 +104,15 @@ RDS en AWS) y nunca lee la base de otro: se comunican por API (y, desde facturac
 - **Importación todo o nada.** La vista previa valida cada fila (con su número) sin crear nada; al
   confirmar, todo se crea en una sola transacción. Excel suele guardar la identidad como número y
   borra el cero inicial (0801… → 801…): se restaura al leer el archivo.
+- **Cuaderno sin internet sin perder nada.** Cada cambio del maestro se anota al instante en el
+  dispositivo (un diario en `localStorage` y una bandeja en IndexedDB) y se envía al volver la
+  conexión. Las operaciones son idempotentes: el id de cada actividad lo genera el dispositivo y las
+  notas y la asistencia se sobrescriben, así que reenviar no duplica. Si una nota se rechaza (p. ej.
+  mayor al valor de la actividad), el maestro ve el motivo. Un service worker guarda solo las páginas
+  del cuaderno, y se borran en la pantalla de inicio de sesión (dispositivos compartidos).
+- **Un parcial vale 100 puntos.** El servidor no deja repartir más, ni bajar el valor de una actividad
+  por debajo de notas ya puestas, ni quitar un parcial que tiene notas. Solo califica quien da la
+  clase (o su sustituto mientras dura la licencia) y la dirección.
 - **Bitácora de auditoría de solo inserción.** Un trigger de Postgres impide `UPDATE` y `DELETE`.
 - **Login sin enumeración de usuarios.** El mismo mensaje y el mismo tiempo de respuesta para correo
   inexistente o contraseña incorrecta. Límite de 10 intentos por minuto por IP. Contraseñas con Argon2id.
@@ -139,15 +168,18 @@ pnpm db:seed:demo
 
 Para una **presentación a una departamental**, carga además el departamento de demostración
 "Islas de la Bahía": 4 distritos, 7 escuelas públicas **ficticias** con logo, maestros (una en dos
-escuelas), unos 340 alumnos y licencias con y sin sustituto:
+escuelas), unos 320 alumnos, licencias con y sin sustituto, asistencia del último mes y notas del
+parcial (escuelas al día, atrasadas y una que no usa el cuaderno). Las fechas son relativas al día en
+que se carga: el parcial vigente cierra en 6 días, para que se vean las alertas.
 
 ```bash
 pnpm db:seed:region
 ```
 
 Cuentas de la demo (contraseña `SEED_DEMO_PASSWORD`): `departamental@demo-ihb.hn`,
-`distrital.roatan@demo-ihb.hn`, `director@demo-oak-ridge.hn` (tiene clases sin maestro) y
-`shanice.bodden@demo-ihb.hn` (maestra en dos escuelas).
+`distrital.roatan@demo-ihb.hn`, `director@demo-oak-ridge.hn` (tiene clases sin maestro),
+`director@demo-west-end.hn` (atrasada con las notas), `maestro4@demo-west-end.hn` (cuaderno del
+maestro) y `shanice.bodden@demo-ihb.hn` (maestra en dos escuelas).
 
 - Panel: http://localhost:3000. Identity: http://localhost:3001. Academic: http://localhost:3002.
 - Usuarios de prueba (con `SEED_DEMO=true`): `superadmin@escolar.local` con `SEED_SUPERADMIN_PASSWORD`,
@@ -227,9 +259,9 @@ producción conviene pasar a subredes privadas con VPC endpoints.
 ## Estructura
 
 ```
-apps/web                 Next.js 16: panel por rol, alumnos, estructura académica, usuarios, colegios
+apps/web                 Next.js 16: panel por rol, cuaderno sin internet (service worker), seguimiento, alumnos, estructura académica, usuarios, colegios
 services/identity        Fastify + Drizzle + Postgres: auth, tenants, usuarios, auditoría
-services/academic        Fastify + Drizzle + Postgres: estructura académica, alumnos y matrícula
+services/academic        Fastify + Drizzle + Postgres: estructura, matrícula, licencias, notas, asistencia, tablero regional
   drizzle/               migraciones SQL versionadas
   test/                  tests de API contra Postgres en memoria
 packages/service-kit     base común de microservicios

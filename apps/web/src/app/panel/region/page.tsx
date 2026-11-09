@@ -8,6 +8,8 @@ import { requireRole } from "@/lib/dal";
 
 export const metadata: Metadata = { title: "Tablero de centros" };
 
+const pct = (rate: number | null) => (rate === null ? "—" : `${Math.round(rate * 100)}%`);
+
 export default async function RegionPage({ searchParams }: PageProps<"/panel/region">) {
   const session = await requireRole("director_departamental", "director_distrital", "superadmin");
   const params = await searchParams;
@@ -19,8 +21,15 @@ export default async function RegionPage({ searchParams }: PageProps<"/panel/reg
   const districts = [...new Set(overview.schools.map((s) => s.districtName).filter(Boolean))] as string[];
   const schools = overview.schools
     .filter((s) => !distrito || s.districtName === distrito)
-    .sort((a, b) => b.uncoveredClasses - a.uncoveredClasses || a.schoolName.localeCompare(b.schoolName));
+    .sort(
+      (a, b) =>
+        b.uncoveredClasses - a.uncoveredClasses ||
+        Number(b.behindOnGrades) - Number(a.behindOnGrades) ||
+        b.studentsAtRisk - a.studentsAtRisk ||
+        a.schoolName.localeCompare(b.schoolName),
+    );
   const alerts = schools.filter((s) => s.uncoveredClasses > 0);
+  const behind = schools.filter((s) => s.behindOnGrades);
   const t = overview.totals;
   const isToday = fecha === todayInHonduras();
 
@@ -77,6 +86,26 @@ export default async function RegionPage({ searchParams }: PageProps<"/panel/reg
         />
       </section>
 
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+        <Kpi
+          label="Asistencia (7 días)"
+          value={pct(t.attendanceRate7d)}
+          hint="de los centros que la registran"
+        />
+        <Kpi
+          label="Alumnos en riesgo"
+          value={t.studentsAtRisk.toLocaleString("es-HN")}
+          tone={t.studentsAtRisk > 0 ? "alert" : "ok"}
+          hint="por faltas o notas bajas, antes del cierre"
+        />
+        <Kpi
+          label="Centros atrasados con notas"
+          value={t.schoolsBehindOnGrades}
+          tone={t.schoolsBehindOnGrades > 0 ? "alert" : "ok"}
+          hint="el cierre está a 7 días o menos"
+        />
+      </section>
+
       {alerts.length > 0 && (
         <section role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-900">
           <p className="font-semibold">
@@ -95,6 +124,23 @@ export default async function RegionPage({ searchParams }: PageProps<"/panel/reg
         </section>
       )}
 
+      {behind.length > 0 && (
+        <section className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <p className="font-semibold">Centros con el cierre de notas encima y notas incompletas</p>
+          <ul className="mt-2 space-y-1">
+            {behind.map((s) => (
+              <li key={s.schoolId}>
+                <Link href={`/panel/region/${s.schoolId}?fecha=${fecha}`} className="font-medium underline">
+                  {s.schoolName}
+                </Link>
+                : {s.gradeProgress.complete} de {s.gradeProgress.total} clases con notas completas
+                {s.periodClosesOn ? ` (cierre ${formatDay(s.periodClosesOn)})` : ""}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <section className="card overflow-hidden">
         {schools.length === 0 ? (
           <p className="p-8 text-center text-sm text-slate-500">No hay centros en este ámbito todavía.</p>
@@ -103,12 +149,13 @@ export default async function RegionPage({ searchParams }: PageProps<"/panel/reg
             <table className="w-full text-left text-sm">
               <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                 <tr>
-                  <th className="px-4 py-3 font-semibold">Centro</th>
+                  <th className="min-w-64 px-4 py-3 font-semibold">Centro</th>
                   <th className="px-4 py-3 text-right font-semibold">Alumnos</th>
-                  <th className="px-4 py-3 text-right font-semibold">Secciones</th>
                   <th className="px-4 py-3 text-right font-semibold">Maestros</th>
-                  <th className="px-4 py-3 text-right font-semibold">Con licencia</th>
                   <th className="px-4 py-3 font-semibold">Clases</th>
+                  <th className="px-4 py-3 text-right font-semibold">Asistencia</th>
+                  <th className="px-4 py-3 text-right font-semibold">En riesgo</th>
+                  <th className="px-4 py-3 font-semibold">Notas del parcial</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -133,18 +180,52 @@ export default async function RegionPage({ searchParams }: PageProps<"/panel/reg
                         </span>
                       </Link>
                     </td>
-                    <td className="px-4 py-3 text-right tabular-nums">{s.students}</td>
-                    <td className="px-4 py-3 text-right tabular-nums">{s.sections}</td>
-                    <td className="px-4 py-3 text-right tabular-nums">{s.teachers}</td>
-                    <td className="px-4 py-3 text-right tabular-nums">{s.teachersOnLeave}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {s.students}
+                      <span className="block whitespace-nowrap text-xs text-slate-500">
+                        {s.sections} {s.sections === 1 ? "sección" : "secciones"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {s.teachers}
+                      {s.teachersOnLeave > 0 && (
+                        <span className="block whitespace-nowrap text-xs text-amber-700">
+                          {s.teachersOnLeave} con licencia
+                        </span>
+                      )}
+                    </td>
                     <td className="px-4 py-3">
                       {s.uncoveredClasses > 0 ? (
-                        <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">
+                        <span className="whitespace-nowrap rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">
                           {s.uncoveredClasses} sin maestro
                         </span>
                       ) : (
-                        <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
+                        <span className="whitespace-nowrap rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
                           {s.classes > 0 ? "Todas cubiertas" : "Sin clases asignadas"}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">{pct(s.attendanceRate7d)}</td>
+                    <td
+                      className={`px-4 py-3 text-right tabular-nums ${s.studentsAtRisk > 0 ? "font-semibold text-red-700" : ""}`}
+                    >
+                      {s.studentsAtRisk}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      {s.gradeProgress.total === 0 ? (
+                        <span className="text-slate-400">—</span>
+                      ) : (
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                            s.behindOnGrades
+                              ? "bg-amber-100 text-amber-900"
+                              : s.gradeProgress.complete === s.gradeProgress.total
+                                ? "bg-brand-50 text-brand-700"
+                                : "bg-slate-100 text-slate-700"
+                          }`}
+                          title={s.periodName ?? undefined}
+                        >
+                          {s.gradeProgress.complete}/{s.gradeProgress.total} completas
                         </span>
                       )}
                     </td>

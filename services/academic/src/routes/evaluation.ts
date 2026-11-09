@@ -23,7 +23,7 @@ import {
   type TeacherClassDto,
 } from "@escolar/shared";
 import { and, eq, gt, inArray } from "drizzle-orm";
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { DbOrTx } from "../db/client";
 import {
@@ -65,7 +65,7 @@ async function assignmentOrThrow(db: DbOrTx, schoolId: string, assignmentId: str
   return { assignment, year: year as NonNullable<typeof year> };
 }
 
-async function periodsFor(db: DbOrTx, request: FastifyRequest, schoolId: string) {
+async function periodsFor(db: DbOrTx, schoolId: string) {
   const year = await requireCurrentYear(db, schoolId);
   const periods = await ensureDefaultPeriods(db, year);
   return { year, periods };
@@ -88,7 +88,7 @@ export async function evaluationRoutes(app: FastifyInstance, { db, today }: Acad
       request,
     ): Promise<{ periods: GradingPeriodDto[]; current: string | null; passingGrade: number }> => {
       const schoolId = tenantOf(request);
-      const { periods } = await periodsFor(db, request, schoolId);
+      const { periods } = await periodsFor(db, schoolId);
       return {
         periods,
         current: currentPeriod(periods, today())?.id ?? null,
@@ -101,7 +101,10 @@ export async function evaluationRoutes(app: FastifyInstance, { db, today }: Acad
     const schoolId = tenantOf(request);
     const input = parseOrThrow(periodsInputSchema, request.body);
     const year = await requireCurrentYear(db, schoolId);
-    if (input.periods[0]!.startsOn < year.startsOn || input.periods.at(-1)!.endsOn > year.endsOn) {
+    if (
+      (input.periods[0]?.startsOn ?? "") < year.startsOn ||
+      (input.periods.at(-1)?.endsOn ?? "") > year.endsOn
+    ) {
       throw badRequest(
         `Los parciales deben estar dentro del año lectivo (${year.startsOn} a ${year.endsOn})`,
       );
@@ -172,7 +175,7 @@ export async function evaluationRoutes(app: FastifyInstance, { db, today }: Acad
     const editable = await canGrade(db, request.auth, assignment, today());
     // Un docente solo ve el cuaderno de las clases que da (o cubre); la oficina, todas.
     if (request.auth.role === "docente" && !editable) throw notFound("Clase no encontrada");
-    const { periods } = await periodsFor(db, request, schoolId);
+    const { periods } = await periodsFor(db, schoolId);
     const period = periods.find((p) => p.id === periodId) ?? currentPeriod(periods, today());
     if (!period) throw notFound("El año no tiene parciales");
     return gradebook(db, schoolId, assignment, periods, period, editable);
@@ -205,6 +208,17 @@ export async function evaluationRoutes(app: FastifyInstance, { db, today }: Acad
         .where(and(eq(activities.schoolId, schoolId), eq(activities.id, id)));
       if (existing && existing.assignmentId !== assignment.id)
         throw conflict("Esa actividad es de otra clase");
+      // Cada parcial vale 100 puntos: las actividades no pueden repartir más.
+      const others = await tx
+        .select({ id: activities.id, maxPoints: activities.maxPoints })
+        .from(activities)
+        .where(and(eq(activities.assignmentId, assignment.id), eq(activities.periodId, period.id)));
+      const used = others.filter((a) => a.id !== id).reduce((acc, a) => acc + a.maxPoints, 0);
+      if (used + input.maxPoints > 100) {
+        throw conflict(
+          `El parcial ya tiene ${used} puntos repartidos; a esta actividad le puedes dar hasta ${100 - used}`,
+        );
+      }
       if (existing) {
         const tooHigh = await tx
           .select({ points: scores.points })
@@ -364,7 +378,7 @@ export async function evaluationRoutes(app: FastifyInstance, { db, today }: Acad
     const { id } = parseOrThrow(idParams, request.params);
     const { periodId } = parseOrThrow(periodQuery, request.query);
     const section = await getSection(db, schoolId, id);
-    const { periods } = await periodsFor(db, request, schoolId);
+    const { periods } = await periodsFor(db, schoolId);
     const period = periods.find((p) => p.id === periodId) ?? currentPeriod(periods, today());
     if (!period) throw notFound("El año no tiene parciales");
     const assignments = (await listAssignments(db, schoolId, { schoolYearId: section.schoolYearId })).filter(

@@ -1,19 +1,27 @@
 import "server-only";
 import type {
+  ActivityInput,
   AssignmentDto,
   AssignmentInput,
+  AttendanceInput,
+  AttendanceSheetDto,
   CoverageDto,
   CreateStudentInput,
+  GradebookDto,
   GradeDto,
   GradeInput,
+  GradingPeriodDto,
   GuardianInput,
   ImportResultDto,
   LeaveDto,
   LeaveInput,
+  PeriodsInput,
   RegionalOverviewDto,
   RegionalSchoolDetailDto,
+  SchoolFollowUpDto,
   SchoolYearDto,
   SchoolYearInput,
+  ScoresInput,
   SectionDto,
   SectionInput,
   StudentDetailDto,
@@ -21,6 +29,7 @@ import type {
   StudentListItemDto,
   SubjectDto,
   SubstitutionInput,
+  TeacherClassDto,
 } from "@escolar/shared";
 import { serviceCall } from "./api";
 import { academicUrl } from "./config";
@@ -113,6 +122,43 @@ export const academic = {
     call<RegionalOverviewDto>(fecha ? `/regional/overview?fecha=${fecha}` : "/regional/overview", { token }),
   regionalSchool: (token: string, id: string, fecha?: string) =>
     call<RegionalSchoolDetailDto>(`/regional/schools/${id}${fecha ? `?fecha=${fecha}` : ""}`, { token }),
+
+  // Cuaderno del maestro y seguimiento
+  periods: (token: string) =>
+    call<{ periods: GradingPeriodDto[]; current: string | null; passingGrade: number }>("/periods", {
+      token,
+    }),
+  updatePeriods: (token: string, input: PeriodsInput) =>
+    call<GradingPeriodDto[]>("/periods", { method: "PUT", token, body: input }),
+  setPassingGrade: (token: string, passingGrade: number) =>
+    call<{ passingGrade: number }>("/evaluation-settings", { method: "PUT", token, body: { passingGrade } }),
+  teacherClasses: (token: string) => call<TeacherClassDto[]>("/teacher/classes", { token }),
+  gradebook: (token: string, assignmentId: string, periodId?: string) =>
+    call<GradebookDto>(`/gradebook/${assignmentId}${periodId ? `?periodId=${periodId}` : ""}`, { token }),
+  putActivity: (token: string, input: ActivityInput) =>
+    call<{ id: string }>(`/activities/${input.id}`, { method: "PUT", token, body: input }),
+  deleteActivity: (token: string, id: string) => call<void>(`/activities/${id}`, { method: "DELETE", token }),
+  putScores: (token: string, input: ScoresInput) =>
+    call<{ saved: number }>("/scores", { method: "PUT", token, body: input }),
+  attendance: (token: string, sectionId: string, fecha?: string) =>
+    call<AttendanceSheetDto>(`/attendance/${sectionId}${fecha ? `?fecha=${fecha}` : ""}`, { token }),
+  putAttendance: (token: string, input: AttendanceInput) =>
+    call<{ saved: number }>("/attendance", { method: "PUT", token, body: input }),
+  followUp: (token: string, fecha?: string) =>
+    call<SchoolFollowUpDto>(fecha ? `/follow-up?fecha=${fecha}` : "/follow-up", { token }),
+  gradesReport: (token: string, sectionId: string, periodId?: string) =>
+    call<{
+      section: SectionDto;
+      period: GradingPeriodDto;
+      passingGrade: number;
+      subjects: Array<{ assignmentId: string; subjectName: string; teacherName: string }>;
+      students: Array<{
+        studentId: string;
+        name: string;
+        nationalId: string | null;
+        grades: Record<string, { grade: number | null; points: number; possible: number }>;
+      }>;
+    }>(`/sections/${sectionId}/grades-report${periodId ? `?periodId=${periodId}` : ""}`, { token }),
 
   importStudents: (token: string, rows: Record<string, string>[], dryRun: boolean) =>
     call<ImportResultDto>("/students/import", { method: "POST", token, body: { rows, dryRun } }),

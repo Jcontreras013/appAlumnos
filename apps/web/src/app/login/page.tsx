@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ClearOfflinePages } from "@/components/offline";
 import { APP_NAME, APP_TAGLINE } from "@/lib/brand";
 import { LoginForm } from "./login-form";
 
@@ -9,6 +10,8 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
 
   return (
     <main className="grid min-h-dvh lg:grid-cols-2">
+      {/* En un dispositivo compartido, las páginas guardadas del maestro anterior no quedan a la vista. */}
+      <ClearOfflinePages />
       <section className="hidden flex-col justify-between bg-brand-900 p-12 text-white lg:flex">
         <Logo />
         <div className="max-w-md space-y-4">

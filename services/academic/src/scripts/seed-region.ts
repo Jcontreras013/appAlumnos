@@ -1,16 +1,26 @@
 /**
  * Departamento de DEMOSTRACIÓN para presentaciones: "Islas de la Bahía" con sus cuatro distritos y
  * siete escuelas públicas FICTICIAS (todas llevan "Demo" en el nombre), maestros, alumnos, licencias
- * con y sin sustituto, y las cuentas de la dirección departamental y distrital.
+ * con y sin sustituto, asistencia del último mes, notas del parcial (unas escuelas al día, otras
+ * atrasadas y una que no usa el cuaderno) y las cuentas de la dirección departamental y distrital.
+ * Las fechas son relativas a hoy: el IV parcial cierra en 6 días, para que se vean las alertas.
  *
  * Todo se carga A TRAVÉS DE LAS APIs, igual que lo haría el panel. Requiere identity y academic
  * corriendo y el superadmin creado (`pnpm db:seed`).
  *
  *   pnpm db:seed:region
  */
+import { randomUUID } from "node:crypto";
 import { deflateSync } from "node:zlib";
 import { optionalEnv, requireEnv } from "@escolar/service-kit";
-import { addDays, type DepartmentDto, todayInHonduras, type UserDto } from "@escolar/shared";
+import {
+  type AttendanceSheetDto,
+  type AttendanceStatus,
+  addDays,
+  type DepartmentDto,
+  todayInHonduras,
+  type UserDto,
+} from "@escolar/shared";
 
 const identityUrl = optionalEnv("IDENTITY_URL", "http://localhost:3001");
 const academicUrl = optionalEnv("ACADEMIC_URL", "http://localhost:3002");
@@ -134,7 +144,8 @@ const LAST = [
 let seed = 7;
 const rand = (n: number) => {
   seed = (seed * 1103515245 + 12345) % 2147483648;
-  return seed % n;
+  // Los bits altos: los bajos de este generador se repiten (seed % 2 alterna 0, 1, 0, 1…).
+  return Math.floor((seed / 2147483648) * n);
 };
 const pick = <T>(list: T[]) => list[rand(list.length)] as T;
 
@@ -147,12 +158,15 @@ const GRADES = [
   "Sexto grado",
 ];
 const SUBJECTS = ["Español", "Matemáticas", "Ciencias Naturales", "Ciencias Sociales", "Inglés"];
+/** Cómo lleva cada escuela el cuaderno: al día, atrasada con las notas, o sin usarlo. */
+type Usage = "al_dia" | "atrasada" | "sin_uso";
 const SCHOOLS: Array<{
   slug: string;
   name: string;
   district: string;
   grades: number;
   color: [number, number, number];
+  usage?: Usage;
 }> = [
   {
     slug: "demo-coxen-hole",
@@ -167,6 +181,7 @@ const SCHOOLS: Array<{
     district: "Roatán",
     grades: 4,
     color: [160, 60, 40],
+    usage: "atrasada",
   },
   {
     slug: "demo-french-harbour",
@@ -181,6 +196,7 @@ const SCHOOLS: Array<{
     district: "José Santos Guardiola",
     grades: 5,
     color: [120, 70, 160],
+    usage: "atrasada",
   },
   {
     slug: "demo-punta-gorda",
@@ -196,6 +212,7 @@ const SCHOOLS: Array<{
     district: "Guanaja",
     grades: 4,
     color: [180, 40, 100],
+    usage: "sin_uso",
   },
 ];
 
@@ -235,7 +252,7 @@ await idApi("/regional-users", "POST", {
   email: "distrital.roatan@demo-ihb.hn",
   password: PASSWORD,
   role: "director_distrital",
-  districtId: districtIds["Roatán"],
+  districtId: districtIds.Roatán,
 });
 
 const today = todayInHonduras();
@@ -285,17 +302,34 @@ for (const [index, school] of SCHOOLS.entries()) {
     );
   }
 
+  // Año lectivo de ~8 meses que termina en 18 días; el IV parcial es el vigente y cierra en 6.
   const year = await acApi<{ id: string }>("/school-years", "POST", {
-    name: "2026",
-    startsOn: "2026-02-02",
-    endsOn: "2026-11-27",
+    name: today.slice(0, 4),
+    startsOn: addDays(today, -235),
+    endsOn: addDays(today, 18),
   });
+  const span = (name: string, from: number, to: number, close: number) => ({
+    name,
+    startsOn: addDays(today, from),
+    endsOn: addDays(today, to),
+    closesOn: addDays(today, close),
+  });
+  const periods = await acApi<Array<{ id: string; number: number }>>("/periods", "PUT", {
+    periods: [
+      span("I Parcial", -235, -176, -170),
+      span("II Parcial", -175, -116, -110),
+      span("III Parcial", -115, -56, -50),
+      span("IV Parcial", -55, 4, 6),
+    ],
+  });
+  const currentPeriodId = periods.find((p) => p.number === 4)?.id as string;
   const subjects: Record<string, string> = {};
   for (const name of SUBJECTS)
     subjects[name] = (await acApi<{ id: string }>("/subjects", "POST", { name })).id;
 
   const rows: Array<Record<string, string>> = [];
   const sectionsByTeacher: Array<{ sectionId: string; teacher: UserDto }> = [];
+  const assignmentsBySection: Record<string, string[]> = {};
   for (let g = 0; g < school.grades; g++) {
     const gradeName = GRADES[g] as string;
     const grade = await acApi<{ id: string }>("/grades", "POST", { name: gradeName, sortOrder: g + 1 });
@@ -311,11 +345,12 @@ for (const [index, school] of SCHOOLS.entries()) {
       // Inglés lo da la maestra compartida en las dos escuelas de Roatán
       const shared = teachers.find((t) => t.email === "shanice.bodden@demo-ihb.hn");
       const who = subject === "Inglés" && shared ? shared : teacher;
-      await acApi("/assignments", "POST", {
+      const assignment = await acApi<{ id: string }>("/assignments", "POST", {
         sectionId: section.id,
         subjectId: subjects[subject],
         teacherUserId: who.id,
       });
+      assignmentsBySection[section.id] = [...(assignmentsBySection[section.id] ?? []), assignment.id];
     }
     const count = 6 + rand(9);
     for (let i = 0; i < count; i++) {
@@ -375,6 +410,85 @@ for (const [index, school] of SCHOOLS.entries()) {
       notes: "Capacitación de la Secretaría de Educación",
     });
   }
+
+  // ── Cuaderno: asistencia del último mes y notas del IV parcial ──
+  const usage = school.usage ?? "al_dia";
+  if (usage === "sin_uso") continue;
+  const schoolDays: string[] = [];
+  for (let d = -30; d <= 0; d++) {
+    const date = addDays(today, d);
+    const weekday = new Date(`${date}T12:00:00Z`).getUTCDay();
+    if (weekday !== 0 && weekday !== 6) schoolDays.push(date);
+  }
+  for (const [s, { sectionId }] of sectionsByTeacher.entries()) {
+    const roster = (await acApi<AttendanceSheetDto>(`/attendance/${sectionId}?fecha=${schoolDays[0]}`))
+      .students;
+    // Cada alumno tiene su "perfil": la mayoría asiste y rinde bien; unos pocos faltan mucho o van bajos.
+    const profile = new Map(
+      roster.map((r) => [
+        r.studentId,
+        {
+          chronic: rand(16) === 0,
+          ability: rand(12) === 0 ? 0.42 + rand(22) / 100 : 0.76 + rand(23) / 100,
+        },
+      ]),
+    );
+    for (const date of schoolDays) {
+      // Hoy, la última sección todavía no ha tomado asistencia.
+      if (date === today && s === sectionsByTeacher.length - 1) continue;
+      await acApi("/attendance", "PUT", {
+        sectionId,
+        date,
+        entries: roster.map((r) => {
+          const roll = rand(100);
+          const chronic = profile.get(r.studentId)?.chronic;
+          const status: AttendanceStatus =
+            roll < (chronic ? 30 : 3)
+              ? "ausente"
+              : roll < (chronic ? 34 : 7)
+                ? "tarde"
+                : roll < (chronic ? 36 : 9)
+                  ? "justificada"
+                  : "presente";
+          return { studentId: r.studentId, status };
+        }),
+      });
+    }
+
+    const plan = [
+      { name: "Tarea 1", maxPoints: 10, day: -48 },
+      { name: "Trabajo en clase", maxPoints: 15, day: -40 },
+      { name: "Prueba corta", maxPoints: 20, day: -30 },
+      { name: "Proyecto", maxPoints: 25, day: -15 },
+      { name: "Examen del parcial", maxPoints: 30, day: -3 },
+    ];
+    for (const assignmentId of assignmentsBySection[sectionId] ?? []) {
+      // En las escuelas atrasadas, la mitad de las clases todavía no hace el examen, y en algunas
+      // el maestro no ha calificado el proyecto de un alumno.
+      const behind = usage === "atrasada" && rand(2) === 0;
+      const ungraded = behind && rand(2) === 0 ? rand(roster.length) : -1;
+      for (const [a, activity] of (behind ? plan.slice(0, 4) : plan).entries()) {
+        const id = randomUUID();
+        await acApi(`/activities/${id}`, "PUT", {
+          id,
+          assignmentId,
+          periodId: currentPeriodId,
+          name: activity.name,
+          maxPoints: activity.maxPoints,
+          date: addDays(today, activity.day),
+        });
+        await acApi("/scores", "PUT", {
+          activityId: id,
+          entries: roster.map((r, i) => {
+            if (a === 3 && i === ungraded) return { studentId: r.studentId, points: null };
+            const ability = profile.get(r.studentId)?.ability ?? 0.8;
+            const ratio = Math.max(0, Math.min(1, ability + (rand(13) - 6) / 100));
+            return { studentId: r.studentId, points: Math.round(ratio * activity.maxPoints * 2) / 2 };
+          }),
+        });
+      }
+    }
+  }
 }
 
 console.log(`Listo: ${SCHOOLS.length} escuelas, ${studentsTotal} alumnos.`);
@@ -383,3 +497,4 @@ console.log("  departamental@demo-ihb.hn       Dirección departamental");
 console.log("  distrital.roatan@demo-ihb.hn    Dirección distrital de Roatán");
 console.log("  director@demo-oak-ridge.hn      Dirección de escuela (tiene una clase sin maestro)");
 console.log("  shanice.bodden@demo-ihb.hn      Maestra en dos escuelas");
+console.log("  maestro1@demo-west-end.hn       Maestro con su cuaderno (escuela atrasada con las notas)");

@@ -22,7 +22,7 @@ let secretary: TestUser;
 let math1A: AssignmentDto;
 let structure: Awaited<ReturnType<AcademicTestContext["seedStructure"]>>;
 let periods: GradingPeriodDto[];
-const kids: string[] = [];
+let kids: [string, string, string];
 const schoolId = randomUUID();
 const TODAY = "2026-11-09";
 
@@ -46,6 +46,7 @@ beforeAll(async () => {
     subjectId: structure.subject.id,
     teacherUserId: ceci.id,
   });
+  const ids: string[] = [];
   for (const name of ["Ana", "Beto", "Carla"]) {
     const s = await ctx.call<StudentDetailDto>(director, "POST", "/students", {
       firstNames: name,
@@ -53,8 +54,9 @@ beforeAll(async () => {
       guardians: [guardian()],
       sectionId: structure.sectionA.id,
     });
-    kids.push(s.body.id);
+    ids.push(s.body.id);
   }
+  kids = ids as [string, string, string];
   periods = (await ctx.call<{ periods: GradingPeriodDto[] }>(director, "GET", "/periods")).body.periods;
 });
 afterAll(() => ctx.close());
@@ -93,7 +95,7 @@ describe("parciales", () => {
 
   it("valida que los parciales estén dentro del año", async () => {
     const shifted = periods.map((p) => ({ ...p, endsOn: p.endsOn, closesOn: addDays(p.endsOn, 7) }));
-    shifted[0] = { ...shifted[0]!, startsOn: "2026-01-01" };
+    shifted[0] = { ...(shifted[0] as GradingPeriodDto), startsOn: "2026-01-01" };
     expect((await ctx.call(director, "PUT", "/periods", { periods: shifted })).status).toBe(400);
   });
 });
@@ -116,13 +118,13 @@ describe("cuaderno de notas", () => {
 
   it("calcula la nota acumulada, la proyección y marca a quien va reprobando", async () => {
     await putScores(ana, tarea, [
-      { studentId: kids[0]!, points: 18 },
-      { studentId: kids[1]!, points: 8 },
-      { studentId: kids[2]!, points: null },
+      { studentId: kids[0], points: 18 },
+      { studentId: kids[1], points: 8 },
+      { studentId: kids[2], points: null },
     ]);
     await putScores(ana, examen, [
-      { studentId: kids[0]!, points: 27.5 },
-      { studentId: kids[1]!, points: 12 },
+      { studentId: kids[0], points: 27.5 },
+      { studentId: kids[1], points: 12 },
     ]);
     const res = (await book(ana)).body;
     expect(res.possible).toBe(50);
@@ -133,7 +135,7 @@ describe("cuaderno de notas", () => {
   });
 
   it("no acepta notas mayores al valor ni alumnos de otra sección", async () => {
-    expect((await putScores(ana, tarea, [{ studentId: kids[0]!, points: 21 }])).status).toBe(400);
+    expect((await putScores(ana, tarea, [{ studentId: kids[0], points: 21 }])).status).toBe(400);
     expect((await putScores(ana, tarea, [{ studentId: randomUUID(), points: 5 }])).status).toBe(400);
   });
 
@@ -142,9 +144,27 @@ describe("cuaderno de notas", () => {
     expect(res.status).toBe(409);
   });
 
+  it("un parcial no reparte más de 100 puntos", async () => {
+    // Ya hay 50 puntos (20 + 30): caben 50 más, no 51.
+    const id = randomUUID();
+    const extra = await ctx.call<{ error: { message: string } }>(ana, "PUT", `/activities/${id}`, {
+      id,
+      assignmentId: math1A.id,
+      periodId: current().id,
+      date: TODAY,
+      name: "Proyecto",
+      maxPoints: 51,
+    });
+    expect(extra.status).toBe(409);
+    expect(extra.body.error.message).toContain("hasta 50");
+    // Editar una actividad existente no cuenta su propio valor dos veces.
+    expect((await putActivity(ana, { id: examen, name: "Examen", maxPoints: 80 })).status).toBe(200);
+    expect((await putActivity(ana, { id: examen, name: "Examen", maxPoints: 30 })).status).toBe(200);
+  });
+
   it("un maestro que no da la clase no la ve ni la califica", async () => {
     expect((await book(ceci)).status).toBe(404);
-    expect((await putScores(ceci, tarea, [{ studentId: kids[0]!, points: 5 }])).status).toBe(403);
+    expect((await putScores(ceci, tarea, [{ studentId: kids[0], points: 5 }])).status).toBe(403);
     expect((await putActivity(ceci, { id: randomUUID(), name: "Intrusa", maxPoints: 5 })).status).toBe(403);
   });
 
@@ -161,18 +181,18 @@ describe("cuaderno de notas", () => {
     });
     const classes = (await ctx.call<TeacherClassDto[]>(beto, "GET", "/teacher/classes")).body;
     expect(classes).toMatchObject([{ assignment: { id: math1A.id }, substituting: true }]);
-    expect((await putScores(beto, tarea, [{ studentId: kids[2]!, points: 15 }])).status).toBe(200);
+    expect((await putScores(beto, tarea, [{ studentId: kids[2], points: 15 }])).status).toBe(200);
 
     ctx.setToday(addDays(TODAY, 5)); // terminó la licencia
-    expect((await putScores(beto, tarea, [{ studentId: kids[2]!, points: 16 }])).status).toBe(403);
-    expect((await putScores(ana, tarea, [{ studentId: kids[2]!, points: 16 }])).status).toBe(200);
+    expect((await putScores(beto, tarea, [{ studentId: kids[2], points: 16 }])).status).toBe(403);
+    expect((await putScores(ana, tarea, [{ studentId: kids[2], points: 16 }])).status).toBe(200);
     ctx.setToday(TODAY);
   });
 
   it("borrar una actividad borra sus notas; borrarla otra vez no es error", async () => {
     const extra = randomUUID();
     await putActivity(ana, { id: extra, name: "Borrable", maxPoints: 5 });
-    await putScores(ana, extra, [{ studentId: kids[0]!, points: 5 }]);
+    await putScores(ana, extra, [{ studentId: kids[0], points: 5 }]);
     expect((await ctx.call(ana, "DELETE", `/activities/${extra}`)).status).toBe(204);
     expect((await ctx.call(ana, "DELETE", `/activities/${extra}`)).status).toBe(204);
     expect((await book(ana)).body.activities.map((a) => a.id)).not.toContain(extra);
@@ -181,7 +201,7 @@ describe("cuaderno de notas", () => {
   it("otro centro no toca estas notas", async () => {
     const other = await ctx.user("admin", randomUUID());
     expect((await ctx.call(other, "GET", `/gradebook/${math1A.id}`)).status).toBe(404);
-    expect((await putScores(other, tarea, [{ studentId: kids[0]!, points: 1 }])).status).toBe(404);
+    expect((await putScores(other, tarea, [{ studentId: kids[0], points: 1 }])).status).toBe(404);
   });
 });
 

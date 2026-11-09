@@ -5,7 +5,15 @@ import { academic } from "@/lib/academic";
 import { requireRole } from "@/lib/dal";
 import { identity } from "@/lib/identity";
 import { deleteAssignmentAction, setCurrentYearAction } from "./actions";
-import { AssignmentForm, GradeForm, SectionForm, SubjectForm, YearForm } from "./forms";
+import {
+  AssignmentForm,
+  GradeForm,
+  PassingGradeForm,
+  PeriodsForm,
+  SectionForm,
+  SubjectForm,
+  YearForm,
+} from "./forms";
 
 export const metadata: Metadata = { title: "Estructura académica" };
 
@@ -14,13 +22,14 @@ export default async function StructurePage() {
   const token = session.accessToken;
   const canEdit = session.user.role !== "secretaria";
 
-  const [years, grades, sections, subjects, assignments, staff] = await Promise.all([
+  const [years, grades, sections, subjects, assignments, staff, evaluation] = await Promise.all([
     academic.listYears(token),
     academic.listGrades(token),
     academic.listSections(token),
     academic.listSubjects(token),
     academic.listAssignments(token),
     canEdit ? identity.listUsers(token) : Promise.resolve([]),
+    academic.periods(token).catch(() => null),
   ]);
   const current = years.find((y) => y.isCurrent);
   const teachers = staff
@@ -66,6 +75,37 @@ export default async function StructurePage() {
           </Table>
         )}
       </Block>
+
+      {current && evaluation && (
+        <Block
+          title={`Parciales ${current.name} y nota mínima`}
+          aside={canEdit && <PassingGradeForm passingGrade={evaluation.passingGrade} />}
+        >
+          {canEdit ? (
+            <div className="p-4">
+              <PeriodsForm
+                key={evaluation.periods.map((p) => p.id + p.closesOn).join()}
+                periods={evaluation.periods}
+                year={current}
+              />
+            </div>
+          ) : (
+            <Table head={["Parcial", "Del", "Al", "Cierre de notas"]}>
+              {evaluation.periods.map((p) => (
+                <tr key={p.id}>
+                  <td className="px-4 py-3 font-medium text-slate-900">
+                    {p.name}
+                    {p.id === evaluation.current && <Badge>Vigente</Badge>}
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3 tabular-nums">{formatDay(p.startsOn)}</td>
+                  <td className="whitespace-nowrap px-4 py-3 tabular-nums">{formatDay(p.endsOn)}</td>
+                  <td className="whitespace-nowrap px-4 py-3 tabular-nums">{formatDay(p.closesOn)}</td>
+                </tr>
+              ))}
+            </Table>
+          )}
+        </Block>
+      )}
 
       <Block
         title="Grados y secciones"

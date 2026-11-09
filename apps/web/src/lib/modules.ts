@@ -23,32 +23,52 @@ export const MODULES: ModuleInfo[] = [
     href: "/panel/alumnos",
   },
   {
+    key: "cuaderno",
+    label: "Mi cuaderno",
+    description:
+      "Asistencia diaria y notas por actividad durante el parcial, desde el teléfono y aun sin internet. Al cierre, las notas quedan listas para el SACE.",
+    phase: 3,
+    roles: ["docente", "admin", "coordinador"],
+    href: "/panel/cuaderno",
+  },
+  {
+    key: "seguimiento",
+    label: "Seguimiento y alerta temprana",
+    description:
+      "Avance de notas por clase, asistencia y alumnos en riesgo antes del cierre del parcial; cuadro de calificaciones para el SACE.",
+    phase: 3,
+    roles: ["admin", "coordinador", "secretaria"],
+    href: "/panel/seguimiento",
+  },
+  {
     key: "planificacion",
     label: "Planificación semanal",
     description:
       "Los docentes planifican cada semana; coordinación revisa, aprueba o devuelve con observaciones.",
-    phase: 2,
+    phase: 4,
     roles: ["admin", "coordinador", "docente"],
+  },
+  {
+    key: "boletas",
+    label: "Boletas y familias",
+    description: "Boletas en PDF y consulta de notas y asistencia para padres y madres.",
+    phase: 5,
+    roles: ["admin", "coordinador", "secretaria", "padre"],
   },
   {
     key: "facturacion",
     label: "Facturación",
-    description: "Colegiaturas, facturas con CAI, pagos en línea, mora y estados de cuenta por familia.",
-    phase: 3,
+    description:
+      "Para colegios privados: colegiaturas, facturas con CAI, pagos en línea, mora y estados de cuenta.",
+    phase: 6,
     roles: ["admin", "finanzas", "padre"],
   },
   {
     key: "wallet",
     label: "Wallet de cafetería",
-    description: "Saldo prepagado del alumno: recargas de los padres y consumos con carnet o QR.",
-    phase: 4,
+    description:
+      "Para colegios privados: saldo prepagado del alumno, recargas de los padres y consumos con carnet o QR.",
+    phase: 6,
     roles: ["admin", "finanzas", "padre"],
-  },
-  {
-    key: "notas",
-    label: "Notas y boletas",
-    description: "Calificaciones por parcial, promedios y boletas en PDF.",
-    phase: 5,
-    roles: ["admin", "coordinador", "docente", "secretaria", "padre"],
   },
 ];

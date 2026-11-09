@@ -237,7 +237,7 @@ export async function gradebook(
         ...result,
         atRisk:
           result.projected !== null &&
-          result.possible - 0 >= RISK_RULES.minPointsToProject &&
+          result.possible >= RISK_RULES.minPointsToProject &&
           result.projected < passingGrade,
       };
     }),

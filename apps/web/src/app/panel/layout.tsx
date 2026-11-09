@@ -1,6 +1,7 @@
 import { isRegionalRole, ROLE_LABELS, type Role } from "@escolar/shared";
 import type { ReactNode } from "react";
 import { Nav, type NavItem } from "@/components/nav";
+import { OfflineAgent } from "@/components/offline";
 import { SchoolLogo } from "@/components/school-logo";
 import { APP_NAME } from "@/lib/brand";
 import { getSession } from "@/lib/dal";
@@ -21,6 +22,11 @@ export default async function PanelLayout({ children }: { children: ReactNode })
     items.push({ href: "/panel/colegios", label: "Centros educativos" });
     items.push({ href: "/panel/departamentos", label: "Departamentos" });
   }
+  // En escuelas pequeñas la directora también da clases: también tiene su cuaderno.
+  if (is("docente", "admin", "coordinador")) items.push({ href: "/panel/cuaderno", label: "Mi cuaderno" });
+  if (is("admin", "coordinador", "secretaria")) {
+    items.push({ href: "/panel/seguimiento", label: "Seguimiento" });
+  }
   if (is("admin", "secretaria", "coordinador")) items.push({ href: "/panel/alumnos", label: "Alumnos" });
   if (is("admin", "coordinador", "secretaria")) {
     items.push({ href: "/panel/licencias", label: "Licencias y sustitutos" });
@@ -38,6 +44,7 @@ export default async function PanelLayout({ children }: { children: ReactNode })
 
   return (
     <div className="min-h-dvh md:grid md:grid-cols-[15rem_1fr]">
+      <OfflineAgent owner={current.id} />
       <aside className="border-b border-slate-200 bg-white px-4 py-4 md:min-h-dvh md:border-b-0 md:border-r md:py-6">
         <div className="mb-4 flex items-center gap-2 px-1 font-semibold md:mb-8">
           <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-600 text-sm text-white">
