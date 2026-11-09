@@ -9,6 +9,7 @@ import type { FastifyServerOptions } from "fastify";
 import { type Db, ping } from "./db/client";
 import type { AcademicDeps } from "./deps";
 import type { IdentityClient } from "./lib/identity-client";
+import { evaluationRoutes } from "./routes/evaluation";
 import { importRoutes } from "./routes/import";
 import { regionalRoutes } from "./routes/regional";
 import { staffRoutes } from "./routes/staff";
@@ -48,6 +49,7 @@ export async function buildApp(options: BuildAppOptions) {
     await importRoutes(scope, deps);
     await staffRoutes(scope, deps);
     await regionalRoutes(scope, deps);
+    await evaluationRoutes(scope, deps);
   });
   return app;
 }

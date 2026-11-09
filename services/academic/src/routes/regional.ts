@@ -12,6 +12,7 @@ import { z } from "zod";
 import type { DbOrTx } from "../db/client";
 import { enrollments } from "../db/schema";
 import type { AcademicDeps } from "../deps";
+import { ensureDefaultPeriods, followUp } from "../lib/evaluation";
 import { bearerOf } from "../lib/identity-client";
 import { findCurrentYear, listAssignments, listSections } from "../lib/queries";
 import { coverageFor } from "../lib/staff";
@@ -41,8 +42,16 @@ async function summarize(
       classes: 0,
       teachersOnLeave: 0,
       uncoveredClasses: 0,
+      attendanceRate7d: null,
+      studentsAtRisk: 0,
+      periodName: null,
+      periodClosesOn: null,
+      gradeProgress: { complete: 0, total: 0 },
+      behindOnGrades: false,
     };
   }
+  await ensureDefaultPeriods(db, year);
+  const follow = await followUp(db, school.id, date);
   const [students] = await db
     .select({ n: sql<number>`count(*)::int` })
     .from(enrollments)
@@ -64,6 +73,16 @@ async function summarize(
     classes: assignments.length,
     teachersOnLeave: coverage.teachersOnLeave,
     uncoveredClasses: coverage.totals.sin_cubrir,
+    attendanceRate7d: follow.attendance.rate7d,
+    studentsAtRisk: follow.studentsAtRisk.length,
+    periodName: follow.period?.name ?? null,
+    periodClosesOn: follow.period?.closesOn ?? null,
+    gradeProgress: { complete: follow.gradeProgress.complete, total: follow.gradeProgress.total },
+    behindOnGrades:
+      follow.daysToClose !== null &&
+      follow.daysToClose <= 7 &&
+      follow.gradeProgress.total > 0 &&
+      follow.gradeProgress.complete < follow.gradeProgress.total,
   };
 }
 
@@ -98,6 +117,15 @@ export async function regionalRoutes(app: FastifyInstance, { db, identity, today
         teachersOnLeave: sum("teachersOnLeave"),
         uncoveredClasses: sum("uncoveredClasses"),
         schoolsWithUncoveredClasses: schools.filter((s) => s.uncoveredClasses > 0).length,
+        studentsAtRisk: sum("studentsAtRisk"),
+        schoolsBehindOnGrades: schools.filter((s) => s.behindOnGrades).length,
+        attendanceRate7d: (() => {
+          const withData = schools.filter((s) => s.attendanceRate7d !== null && s.students > 0);
+          const weight = withData.reduce((acc, s) => acc + s.students, 0);
+          return weight
+            ? withData.reduce((acc, s) => acc + (s.attendanceRate7d ?? 0) * s.students, 0) / weight
+            : null;
+        })(),
       },
     };
   });

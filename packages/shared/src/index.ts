@@ -1,6 +1,7 @@
 export * from "./academic";
 export * from "./csv";
 export * from "./enrollment";
+export * from "./evaluation";
 export * from "./format";
 export * from "./money";
 export * from "./roles";

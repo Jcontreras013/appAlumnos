@@ -24,6 +24,7 @@ import { z } from "zod";
 import { grades, schoolYears, sections, subjects, teachingAssignments } from "../db/schema";
 import type { AcademicDeps } from "../deps";
 import { audit } from "../lib/audit";
+import { ensureDefaultPeriods } from "../lib/evaluation";
 import {
   findCurrentYear,
   getSection,
@@ -81,6 +82,8 @@ export async function structureRoutes(app: FastifyInstance, { db, identity }: Ac
         `Ya existe el año lectivo "${input.name}"`,
       );
       if (!created) throw new Error("No se creó el año lectivo");
+      // Cuatro parciales por defecto; coordinación puede ajustar las fechas.
+      await ensureDefaultPeriods(tx, created);
       await audit(tx, request, {
         action: "school_year.created",
         entityType: "school_year",

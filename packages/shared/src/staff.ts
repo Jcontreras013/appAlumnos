@@ -120,17 +120,33 @@ export interface RegionalSchoolSummaryDto {
   classes: number;
   teachersOnLeave: number;
   uncoveredClasses: number;
+  /** Asistencia de los alumnos en los últimos 7 días (null si no se ha registrado). */
+  attendanceRate7d: number | null;
+  studentsAtRisk: number;
+  /** Parcial vigente y avance de notas: clases con notas completas / clases. */
+  periodName: string | null;
+  periodClosesOn: string | null;
+  gradeProgress: { complete: number; total: number };
+  /** Faltan 7 días o menos para el cierre de notas (o ya pasó) y no están completas. */
+  behindOnGrades: boolean;
 }
 
 export interface RegionalOverviewDto {
   date: string;
   schools: RegionalSchoolSummaryDto[];
-  totals: Omit<
-    RegionalSchoolSummaryDto,
-    "schoolId" | "schoolName" | "districtName" | "logoVersion" | "schoolYear"
-  > & {
+  totals: {
     schools: number;
+    students: number;
+    sections: number;
+    teachers: number;
+    classes: number;
+    teachersOnLeave: number;
+    uncoveredClasses: number;
     schoolsWithUncoveredClasses: number;
+    studentsAtRisk: number;
+    schoolsBehindOnGrades: number;
+    /** Promedio ponderado por alumnos de los centros que registran asistencia. */
+    attendanceRate7d: number | null;
   };
 }
 

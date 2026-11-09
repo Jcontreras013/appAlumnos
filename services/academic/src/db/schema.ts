@@ -1,4 +1,4 @@
-import { LEAVE_TYPES } from "@escolar/shared";
+import { ATTENDANCE_STATUSES, DEFAULT_PASSING_GRADE, LEAVE_TYPES } from "@escolar/shared";
 import { sql } from "drizzle-orm";
 import {
   boolean,
@@ -8,6 +8,7 @@ import {
   index,
   integer,
   jsonb,
+  numeric,
   pgEnum,
   pgTable,
   primaryKey,
@@ -32,6 +33,7 @@ export const sexEnum = pgEnum("sex", ["F", "M"]);
 export const relationshipEnum = pgEnum("relationship", ["madre", "padre", "tutor", "abuelo", "otro"]);
 export const enrollmentStatusEnum = pgEnum("enrollment_status", ["activa", "retirada"]);
 export const leaveTypeEnum = pgEnum("leave_type", LEAVE_TYPES);
+export const attendanceStatusEnum = pgEnum("attendance_status", ATTENDANCE_STATUSES);
 
 // ───────────────────────────── Estructura académica ─────────────────────────────
 
@@ -324,6 +326,133 @@ export const substitutions = pgTable(
   ],
 );
 
+// ───────────────────────────── Evaluación y asistencia ─────────────────────────────
+
+/** Configuración de evaluación del centro (por ahora, la nota mínima de aprobación). */
+export const evaluationSettings = pgTable("evaluation_settings", {
+  schoolId: uuid("school_id").primaryKey(),
+  passingGrade: integer("passing_grade").notNull().default(DEFAULT_PASSING_GRADE),
+  updatedAt: updatedAt(),
+});
+
+/** Parciales del año lectivo, con la fecha en que deben estar completas las notas. */
+export const gradingPeriods = pgTable(
+  "grading_periods",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    schoolId: schoolId(),
+    schoolYearId: uuid("school_year_id").notNull(),
+    number: integer("number").notNull(),
+    name: text("name").notNull(),
+    startsOn: date("starts_on", { mode: "string" }).notNull(),
+    endsOn: date("ends_on", { mode: "string" }).notNull(),
+    closesOn: date("closes_on", { mode: "string" }).notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique("grading_periods_tenant_key").on(t.schoolId, t.id),
+    unique("grading_periods_number_unique").on(t.schoolYearId, t.number),
+    check("grading_periods_dates", sql`${t.startsOn} <= ${t.endsOn} and ${t.endsOn} <= ${t.closesOn}`),
+    foreignKey({
+      name: "grading_periods_school_year_fk",
+      columns: [t.schoolId, t.schoolYearId],
+      foreignColumns: [schoolYears.schoolId, schoolYears.id],
+    }).onDelete("cascade"),
+  ],
+);
+
+/**
+ * Actividad evaluada (tarea, trabajo, prueba, examen) de una clase en un parcial.
+ * El id lo genera el dispositivo del maestro: una actividad creada sin internet se sincroniza
+ * después sin duplicarse.
+ */
+export const activities = pgTable(
+  "activities",
+  {
+    id: uuid("id").primaryKey(),
+    schoolId: schoolId(),
+    assignmentId: uuid("assignment_id").notNull(),
+    periodId: uuid("period_id").notNull(),
+    name: text("name").notNull(),
+    maxPoints: numeric("max_points", { precision: 5, scale: 2, mode: "number" }).notNull(),
+    date: date("date", { mode: "string" }).notNull(),
+    createdByUserId: uuid("created_by_user_id").notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique("activities_tenant_key").on(t.schoolId, t.id),
+    index("activities_assignment_period_idx").on(t.assignmentId, t.periodId),
+    check("activities_points", sql`${t.maxPoints} > 0 and ${t.maxPoints} <= 100`),
+    foreignKey({
+      name: "activities_assignment_fk",
+      columns: [t.schoolId, t.assignmentId],
+      foreignColumns: [teachingAssignments.schoolId, teachingAssignments.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "activities_period_fk",
+      columns: [t.schoolId, t.periodId],
+      foreignColumns: [gradingPeriods.schoolId, gradingPeriods.id],
+    }).onDelete("cascade"),
+  ],
+);
+
+/** Nota de un alumno en una actividad. null = sin nota todavía. */
+export const scores = pgTable(
+  "scores",
+  {
+    schoolId: schoolId(),
+    activityId: uuid("activity_id").notNull(),
+    studentId: uuid("student_id").notNull(),
+    points: numeric("points", { precision: 5, scale: 2, mode: "number" }),
+    updatedByUserId: uuid("updated_by_user_id").notNull(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    primaryKey({ name: "scores_pk", columns: [t.activityId, t.studentId] }),
+    check("scores_points", sql`${t.points} is null or ${t.points} >= 0`),
+    foreignKey({
+      name: "scores_activity_fk",
+      columns: [t.schoolId, t.activityId],
+      foreignColumns: [activities.schoolId, activities.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "scores_student_fk",
+      columns: [t.schoolId, t.studentId],
+      foreignColumns: [students.schoolId, students.id],
+    }),
+  ],
+);
+
+/** Asistencia diaria por sección. */
+export const attendanceRecords = pgTable(
+  "attendance_records",
+  {
+    schoolId: schoolId(),
+    sectionId: uuid("section_id").notNull(),
+    date: date("date", { mode: "string" }).notNull(),
+    studentId: uuid("student_id").notNull(),
+    status: attendanceStatusEnum("status").notNull(),
+    recordedByUserId: uuid("recorded_by_user_id").notNull(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    primaryKey({ name: "attendance_pk", columns: [t.sectionId, t.date, t.studentId] }),
+    index("attendance_school_date_idx").on(t.schoolId, t.date),
+    index("attendance_student_idx").on(t.studentId, t.date),
+    foreignKey({
+      name: "attendance_section_fk",
+      columns: [t.schoolId, t.sectionId],
+      foreignColumns: [sections.schoolId, sections.id],
+    }),
+    foreignKey({
+      name: "attendance_student_fk",
+      columns: [t.schoolId, t.studentId],
+      foreignColumns: [students.schoolId, students.id],
+    }),
+  ],
+);
+
 /** Bitácora de cambios. Solo inserción. */
 export const auditEvents = pgTable(
   "audit_events",
@@ -352,3 +481,5 @@ export type StudentGuardian = typeof studentGuardians.$inferSelect;
 export type Enrollment = typeof enrollments.$inferSelect;
 export type TeacherLeave = typeof teacherLeaves.$inferSelect;
 export type Substitution = typeof substitutions.$inferSelect;
+export type GradingPeriod = typeof gradingPeriods.$inferSelect;
+export type Activity = typeof activities.$inferSelect;
