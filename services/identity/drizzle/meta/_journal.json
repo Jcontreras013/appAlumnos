@@ -36,6 +36,13 @@
       "when": 1794187903297,
       "tag": "0004_jerarquia_y_membresias",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794332554232,
+      "tag": "0005_acceso_de_familias",
+      "breakpoints": true
     }
   ]
 }

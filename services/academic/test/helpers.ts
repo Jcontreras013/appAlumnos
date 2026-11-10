@@ -37,12 +37,43 @@ export async function setupAcademic(options: { today?: string } = {}) {
   const directory = new Map<string, UserDto>();
   /** Qué centros "ve" cada token regional (lo que en producción responde identity). */
   const scopes = new Map<string, ScopedSchoolDto[]>();
+  /** Cuentas de familia creadas en identity (por identidad o correo), como las guardaría identity. */
+  const familyAccounts = new Map<string, { userId: string; password: string; active: boolean }>();
   const identity: IdentityClient = {
     async getUser(_token, userId) {
       return directory.get(userId) ?? null;
     },
     async getScopeSchools(token) {
       return scopes.get(token) ?? [];
+    },
+    async createFamilyAccount(_token, input) {
+      const key = input.nationalId ?? input.email ?? "";
+      const existing = familyAccounts.get(key);
+      if (existing) {
+        existing.active = true;
+        return { userId: existing.userId, login: key, temporaryPassword: null, linkedExisting: true };
+      }
+      const account = {
+        userId: randomUUID(),
+        password: `Temporal-${familyAccounts.size + 1000}-Clave`,
+        active: true,
+      };
+      familyAccounts.set(key, account);
+      return {
+        userId: account.userId,
+        login: key,
+        temporaryPassword: account.password,
+        linkedExisting: false,
+      };
+    },
+    async resetFamilyPassword(_token, userId) {
+      const entry = [...familyAccounts.entries()].find(([, a]) => a.userId === userId);
+      if (!entry) throw new Error("cuenta no encontrada");
+      entry[1].password = `Nueva-${Date.now() % 10000}-Clave`;
+      return { userId, login: entry[0], temporaryPassword: entry[1].password, linkedExisting: true };
+    },
+    async revokeFamilyAccount(_token, userId) {
+      for (const account of familyAccounts.values()) if (account.userId === userId) account.active = false;
     },
   };
 
@@ -103,8 +134,12 @@ export async function setupAcademic(options: { today?: string } = {}) {
     return { id, role, token, schoolId: "", name: "Dirección regional" } as TestUser;
   }
 
-  async function user(role: Role, schoolId: string, name = `${role} de prueba`): Promise<TestUser> {
-    const id = randomUUID();
+  async function user(
+    role: Role,
+    schoolId: string,
+    name = `${role} de prueba`,
+    id: string = randomUUID(),
+  ): Promise<TestUser> {
     const now = Math.floor(Date.now() / 1000);
     const token = await new SignJWT({ role, school_id: schoolId, name })
       .setProtectedHeader({ alg: JWT_ALGORITHM })
@@ -180,6 +215,7 @@ export async function setupAcademic(options: { today?: string } = {}) {
     user,
     regionalUser,
     call,
+    familyAccounts,
     seedStructure,
     directory,
     setToday: (value: string) => {

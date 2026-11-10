@@ -86,18 +86,26 @@ export const schoolLogos = pgTable("school_logos", {
 // ───────────────────────────── Personas y accesos ─────────────────────────────
 
 /** Una persona. Sus roles y centros están en `memberships`. */
-export const users = pgTable("users", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  name: text("name").notNull(),
-  /** Siempre en minúsculas (lo normaliza el esquema Zod). Único en toda la plataforma. */
-  email: text("email").notNull().unique("users_email_unique"),
-  passwordHash: text("password_hash").notNull(),
-  active: boolean("active").notNull().default(true),
-  /** Último acceso usado: al iniciar sesión se entra directo a ese centro. */
-  lastMembershipId: uuid("last_membership_id"),
-  createdAt: createdAt(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const users = pgTable(
+  "users",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
+    /** Siempre en minúsculas (lo normaliza el esquema Zod). Único en toda la plataforma. */
+    email: text("email").unique("users_email_unique"),
+    /** Número de identidad (13 dígitos): las familias sin correo entran con él. */
+    nationalId: text("national_id").unique("users_national_id_unique"),
+    passwordHash: text("password_hash").notNull(),
+    /** Contraseña temporal entregada por el centro: hay que cambiarla al entrar. */
+    mustChangePassword: boolean("must_change_password").notNull().default(false),
+    active: boolean("active").notNull().default(true),
+    /** Último acceso usado: al iniciar sesión se entra directo a ese centro. */
+    lastMembershipId: uuid("last_membership_id"),
+    createdAt: createdAt(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [check("users_login_identifier", sql`${t.email} is not null or ${t.nationalId} is not null`)],
+);
 
 /**
  * Acceso de una persona: un rol en un centro, un distrito o un departamento.

@@ -54,7 +54,7 @@ describe("login", () => {
     });
     expect(res.statusCode).toBe(400);
     expect(res.json().error.code).toBe("validation_error");
-    expect(res.json().error.message).toBe("Correo electrónico inválido");
+    expect(res.json().error.message).toBe("Escribe tu contraseña");
   });
 
   it("registra el login fallido en la bitácora", async () => {

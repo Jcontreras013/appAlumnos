@@ -150,6 +150,7 @@ export async function getStudentDetail(
         email: guardian.email,
         relationship: link.relationship,
         isPrimary: link.isPrimary,
+        hasPortalAccess: guardian.userId !== null,
       }),
     ),
     enrollments: enrollmentRows.map(

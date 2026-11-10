@@ -1,6 +1,6 @@
 import { badRequest, notFound, parseOrThrow, requireRole, tenantOf } from "@escolar/service-kit";
 import { type CreatedUserDto, createUserInputSchema, SCHOOL_ROLES, type UserDto } from "@escolar/shared";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, ne } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { memberships, users } from "../db/schema";
@@ -29,7 +29,13 @@ export async function userRoutes(app: FastifyInstance, { db, tokens }: IdentityD
       .select({ user: users, membership: memberships })
       .from(memberships)
       .innerJoin(users, eq(users.id, memberships.userId))
-      .where(and(eq(memberships.schoolId, schoolId), role ? eq(memberships.role, role) : undefined))
+      // Las familias no son personal: solo aparecen si se piden (?role=padre).
+      .where(
+        and(
+          eq(memberships.schoolId, schoolId),
+          role ? eq(memberships.role, role) : ne(memberships.role, "padre"),
+        ),
+      )
       .orderBy(asc(users.name), asc(memberships.role));
     return rows.map((r) => toUserDto(r.user, r.membership));
   });

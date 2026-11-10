@@ -24,13 +24,27 @@ export interface UserDto {
   id: string;
   schoolId: string | null;
   name: string;
-  email: string;
+  /** Las cuentas de familias pueden no tener correo (entran con su identidad). */
+  email: string | null;
+  nationalId?: string | null;
+  /** Entró con una contraseña temporal: debe cambiarla antes de usar el panel. */
+  mustChangePassword?: boolean;
   /** Rol en el centro o ámbito desde el que se consulta. */
   role: Role;
   /** Todos sus roles activos en ese centro (solo en la consulta individual). */
   roles?: Role[];
   active: boolean;
   createdAt: string;
+}
+
+/** Cuenta del portal de familias recién creada (o ya existente, enlazada a este centro). */
+export interface FamilyAccountDto {
+  userId: string;
+  /** Con qué entra: el correo o la identidad con guiones. */
+  login: string;
+  /** Solo si se creó la cuenta (o se restableció la contraseña); se muestra una vez para entregarla. */
+  temporaryPassword: string | null;
+  linkedExisting: boolean;
 }
 
 export interface CreatedUserDto extends UserDto {

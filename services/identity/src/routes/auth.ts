@@ -1,6 +1,8 @@
 import { forbidden, notFound, parseOrThrow, unauthorized } from "@escolar/service-kit";
 import {
+  changePasswordInputSchema,
   type LoginResponseDto,
+  loginIdentifier,
   loginInputSchema,
   type MeResponseDto,
   refreshInputSchema,
@@ -15,11 +17,11 @@ import type { IdentityDeps } from "../deps";
 import { type ResolvedMembership, usableMemberships } from "../lib/access";
 import { audit } from "../lib/audit";
 import { publicJwks } from "../lib/keys";
-import { verifyPassword } from "../lib/passwords";
+import { hashPassword, verifyPassword } from "../lib/passwords";
 import type { TokenService } from "../lib/tokens";
 import { toSchoolDto, toUserDto } from "../lib/users";
 
-const INVALID_CREDENTIALS = "Correo o contraseña incorrectos";
+const INVALID_CREDENTIALS = "Usuario o contraseña incorrectos";
 
 /** Abre una sesión con un acceso concreto y lo recuerda para el próximo inicio de sesión. */
 async function openSession(
@@ -54,7 +56,12 @@ export async function authRoutes(app: FastifyInstance, { db, keys, tokens, setti
     { config: { rateLimit: { max: settings.loginRateLimitPerMinute, timeWindow: "1 minute" } } },
     async (request): Promise<LoginResponseDto> => {
       const input = parseOrThrow(loginInputSchema, request.body);
-      const [user] = await db.select().from(users).where(eq(users.email, input.email)).limit(1);
+      const id = loginIdentifier(input.email);
+      const [user] = await db
+        .select()
+        .from(users)
+        .where("nationalId" in id ? eq(users.nationalId, id.nationalId) : eq(users.email, id.email))
+        .limit(1);
       const passwordOk = await verifyPassword(user?.passwordHash ?? null, input.password);
 
       // El mismo mensaje para "no existe", "contraseña incorrecta" y "desactivado":
@@ -69,7 +76,7 @@ export async function authRoutes(app: FastifyInstance, { db, keys, tokens, setti
             data: { reason: passwordOk ? "inactive" : "bad_password" },
           });
         } else {
-          request.log.warn({ email: input.email }, "Intento de login con correo no registrado");
+          request.log.warn({ login: input.email }, "Intento de login con un usuario no registrado");
         }
         throw unauthorized(INVALID_CREDENTIALS);
       }
@@ -82,6 +89,37 @@ export async function authRoutes(app: FastifyInstance, { db, keys, tokens, setti
       const chosen = options.find((o) => o.membership.id === user.lastMembershipId) ?? options[0];
       if (!chosen) throw forbidden();
       return db.transaction((tx) => openSession(tx, tokens, request, user, chosen, "auth.login"));
+    },
+  );
+
+  /** Cambiar la contraseña propia (obligatorio la primera vez si el centro entregó una temporal). */
+  app.post(
+    "/auth/password",
+    { preHandler: app.authenticate, config: { rateLimit: { max: 10, timeWindow: "1 minute" } } },
+    async (request, reply) => {
+      const input = parseOrThrow(changePasswordInputSchema, request.body);
+      const [user] = await db.select().from(users).where(eq(users.id, request.auth.userId));
+      if (!user?.active) throw unauthorized();
+      if (!(await verifyPassword(user.passwordHash, input.currentPassword))) {
+        throw forbidden("La contraseña actual no es correcta");
+      }
+      await db.transaction(async (tx) => {
+        await tx
+          .update(users)
+          .set({
+            passwordHash: await hashPassword(input.newPassword),
+            mustChangePassword: false,
+            updatedAt: new Date(),
+          })
+          .where(eq(users.id, user.id));
+        await audit(tx, request, {
+          action: "auth.password_changed",
+          actorUserId: user.id,
+          entityType: "user",
+          entityId: user.id,
+        });
+      });
+      return reply.status(204).send();
     },
   );
 

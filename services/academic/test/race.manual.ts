@@ -14,7 +14,17 @@ const { db, pool } = createDb(url);
 const keys = await generateKeyPair(JWT_ALGORITHM);
 const app = await buildApp({
   db,
-  identity: { getUser: async () => null, getScopeSchools: async () => [] },
+  identity: {
+    getUser: async () => null,
+    getScopeSchools: async () => [],
+    createFamilyAccount: async () => {
+      throw new Error("no se usa en esta prueba");
+    },
+    resetFamilyPassword: async () => {
+      throw new Error("no se usa en esta prueba");
+    },
+    revokeFamilyAccount: async () => {},
+  },
   verifier: await createAccessTokenVerifier({ publicKey: keys.publicKey }),
   today: () => "2026-11-09",
   logger: false,

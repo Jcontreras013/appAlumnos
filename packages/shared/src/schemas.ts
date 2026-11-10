@@ -14,10 +14,38 @@ export const passwordSchema = z
   .min(10, { error: "La contraseña debe tener al menos 10 caracteres" })
   .max(200, { error: "La contraseña es demasiado larga" });
 
+/**
+ * Se entra con el correo o con el número de identidad (muchas familias no usan correo). El campo se
+ * sigue llamando `email` en la API por compatibilidad; `loginIdentifier` decide qué es.
+ */
 export const loginInputSchema = z.object({
-  email: emailSchema,
-  password: z.string().min(1, { error: "Escribe tu contraseña" }).max(200),
+  email: z
+    .string({ error: "Escribe tu correo o tu número de identidad" })
+    .trim()
+    .min(3, { error: "Escribe tu correo o tu número de identidad" })
+    .max(200),
+  password: z.string({ error: "Escribe tu contraseña" }).min(1, { error: "Escribe tu contraseña" }).max(200),
 });
+
+/** "0801-1985-01234" o "0801198501234" => identidad; cualquier otra cosa => correo en minúsculas. */
+export function loginIdentifier(value: string): { nationalId: string } | { email: string } {
+  const trimmed = value.trim();
+  const digits = trimmed.replace(/[\s-]/g, "");
+  if (/^\d{13}$/.test(digits)) return { nationalId: digits };
+  return { email: trimmed.toLowerCase() };
+}
+
+export const changePasswordInputSchema = z
+  .object({
+    currentPassword: z.string().min(1, { error: "Escribe tu contraseña actual" }).max(200),
+    newPassword: passwordSchema,
+  })
+  .refine((v) => v.currentPassword !== v.newPassword, {
+    error: "La contraseña nueva debe ser distinta de la actual",
+    path: ["newPassword"],
+  });
+export type ChangePasswordInput = z.infer<typeof changePasswordInputSchema>;
+
 export type LoginInput = z.infer<typeof loginInputSchema>;
 
 export const refreshInputSchema = z.object({
@@ -115,3 +143,21 @@ export const switchMembershipInputSchema = z.object({
   membershipId: z.uuid(),
   refreshToken: z.string().min(20).max(200).optional(),
 });
+
+/** Cuenta del portal para un padre, madre o encargado: se identifica con correo o identidad. */
+export const familyAccountInputSchema = z
+  .object({
+    name: personNameSchema,
+    email: emailSchema.optional(),
+    nationalId: z
+      .string()
+      .trim()
+      .transform((v) => v.replace(/\D/g, ""))
+      .pipe(z.string().regex(/^\d{13}$/, { error: "La identidad debe tener 13 dígitos" }))
+      .optional(),
+  })
+  .refine((v) => v.email || v.nationalId, {
+    error: "Hace falta el correo o el número de identidad del encargado",
+    path: ["nationalId"],
+  });
+export type FamilyAccountInput = z.infer<typeof familyAccountInputSchema>;

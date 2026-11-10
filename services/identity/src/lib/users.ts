@@ -12,6 +12,8 @@ export function toUserDto(user: User, membership: Membership): UserDto {
     schoolId: membership.schoolId,
     name: user.name,
     email: user.email,
+    nationalId: user.nationalId,
+    mustChangePassword: user.mustChangePassword,
     role: membership.role,
     active: user.active && membership.active,
     createdAt: user.createdAt.toISOString(),

@@ -206,6 +206,8 @@ export interface GuardianDto {
 export interface GuardianLinkDto extends GuardianDto {
   relationship: Relationship;
   isPrimary: boolean;
+  /** Ya tiene cuenta en el portal de familias. */
+  hasPortalAccess: boolean;
 }
 
 export interface EnrollmentDto {

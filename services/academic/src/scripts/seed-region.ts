@@ -594,7 +594,7 @@ for (const [index, school] of SCHOOLS.entries()) {
   const week = mondayOf(today);
   const planned = new Set<string>();
   for (const [t, teacher] of teachers.entries()) {
-    const token = await loginAt(teacher.email, created.school.id);
+    const token = await loginAt(teacher.email ?? "", created.school.id);
     const asTeacher = <T>(path: string, method = "GET", body?: unknown) =>
       request<T>(`${academicUrl}${path}`, { method, token, body });
     for (const weekStart of [addDays(week, -7), week]) {
