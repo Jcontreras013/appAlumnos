@@ -17,6 +17,9 @@ const REDACT = [
   "req.headers.cookie",
   "*.password",
   "*.passwordHash",
+  "*.currentPassword",
+  "*.newPassword",
+  "*.temporaryPassword",
   "*.refreshToken",
   "*.accessToken",
 ];

@@ -4,7 +4,35 @@ import type { NextConfig } from "next";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
+/**
+ * Política de contenido: solo código, estilos e imágenes del propio panel; nada de iframes ajenos ni
+ * formularios que envíen datos a otro sitio. Next necesita scripts en línea (los datos de cada página
+ * viajan en el HTML). En desarrollo no se aplica: la recarga en caliente usa eval.
+ */
+const contentSecurityPolicy = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "font-src 'self' data:",
+  "connect-src 'self'",
+  "worker-src 'self'",
+  "frame-ancestors 'none'",
+  "form-action 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+].join("; ");
+
+const isProduction = process.env.NODE_ENV === "production";
+
 const securityHeaders = [
+  ...(isProduction
+    ? [
+        { key: "Content-Security-Policy", value: contentSecurityPolicy },
+        // Solo tiene efecto con HTTPS (en AWS con dominio); por HTTP el navegador lo ignora.
+        { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
+      ]
+    : []),
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "X-Frame-Options", value: "DENY" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },

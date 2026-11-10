@@ -103,7 +103,11 @@ export async function authRoutes(app: FastifyInstance, { db, keys, tokens, setti
             data: { reason: locked ? "locked" : passwordOk ? "inactive" : "bad_password" },
           });
         } else {
-          request.log.warn({ login: input.email }, "Intento de login con un usuario no registrado");
+          // Solo el inicio de lo que escribió: puede ser la identidad o el correo de una persona real.
+          request.log.warn(
+            { login: `${input.email.slice(0, 4)}…` },
+            "Intento de login con un usuario no registrado",
+          );
         }
         throw unauthorized(INVALID_CREDENTIALS);
       }
