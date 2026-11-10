@@ -13,3 +13,6 @@ next-env.d.ts
 
 .DS_Store
 *.log
+
+# Demo en Windows sin Docker (scripts/demo-windows.ps1)
+demo-logs/

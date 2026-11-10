@@ -152,6 +152,21 @@ docker compose -f docker-compose.demo.yml down -v
 y se vuelve a levantar con el primer comando. Es solo para mostrar en la propia computadora: las
 contraseñas son públicas y no usa HTTPS.
 
+### Sin Docker (Windows, computadoras sin virtualización)
+
+Si Docker Desktop no arranca ("Virtualization support not detected") y no se quiere tocar la BIOS,
+la demo también corre directo en Windows. Instala [Node.js](https://nodejs.org) (versión LTS) y
+[PostgreSQL](https://www.postgresql.org/download/windows/) (anota la contraseña del usuario
+`postgres`), pon la carpeta del proyecto **fuera de OneDrive** (por ejemplo `C:\demo\appAlumnos-main`)
+y, en PowerShell dentro de esa carpeta:
+
+```bash
+powershell -ExecutionPolicy Bypass -File .\scripts\demo-windows.ps1
+```
+
+La primera vez pide la contraseña de `postgres`, instala, compila y carga la demo (unos minutos);
+después abre el navegador. Con `-Reiniciar` deja la demo como nueva y con `-Apagar` la apaga.
+
 ## Desarrollo local
 
 Requisitos: Node 22+, pnpm 10 (`corepack enable`) y Docker (o un Postgres 16 propio).

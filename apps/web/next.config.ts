@@ -12,8 +12,10 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  // Imagen de Docker mínima para ECS: `node server.js` sin node_modules completos.
-  output: "standalone",
+  // Imagen de Docker mínima para ECS: `node server.js` sin node_modules completos. En Windows sin
+  // Docker (scripts/demo-windows.ps1) se apaga con STANDALONE=false: crea enlaces simbólicos que
+  // Windows no deja crear sin permisos de administrador, y ahí se usa `next start`.
+  output: process.env.STANDALONE === "false" ? undefined : "standalone",
   // En el monorepo, el trazado de archivos parte de la raíz para incluir los paquetes internos.
   outputFileTracingRoot: join(here, "../.."),
   transpilePackages: ["@escolar/shared"],
