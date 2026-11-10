@@ -86,7 +86,7 @@ export default async function RegionPage({ searchParams }: PageProps<"/panel/reg
         />
       </section>
 
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Kpi
           label="Asistencia (7 días)"
           value={pct(t.attendanceRate7d)}
@@ -103,6 +103,12 @@ export default async function RegionPage({ searchParams }: PageProps<"/panel/reg
           value={t.schoolsBehindOnGrades}
           tone={t.schoolsBehindOnGrades > 0 ? "alert" : "ok"}
           hint="el cierre está a 7 días o menos"
+        />
+        <Kpi
+          label="Planificaciones de la semana"
+          value={t.plansTotal ? `${Math.round((t.plansDelivered / t.plansTotal) * 100)}%` : "—"}
+          tone={t.plansOverdue > 0 ? "alert" : "neutral"}
+          hint={`${t.plansDelivered} de ${t.plansTotal} entregadas${t.plansOverdue ? ` · ${t.plansOverdue} atrasadas` : ""}`}
         />
       </section>
 
@@ -155,7 +161,7 @@ export default async function RegionPage({ searchParams }: PageProps<"/panel/reg
                   <th className="px-4 py-3 font-semibold">Clases</th>
                   <th className="px-4 py-3 text-right font-semibold">Asistencia</th>
                   <th className="px-4 py-3 text-right font-semibold">En riesgo</th>
-                  <th className="px-4 py-3 font-semibold">Notas del parcial</th>
+                  <th className="px-4 py-3 font-semibold">Notas y planificación</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -226,6 +232,13 @@ export default async function RegionPage({ searchParams }: PageProps<"/panel/reg
                           title={s.periodName ?? undefined}
                         >
                           {s.gradeProgress.complete}/{s.gradeProgress.total} completas
+                        </span>
+                      )}
+                      {s.plans.total > 0 && (
+                        <span
+                          className={`mt-1 block text-xs ${s.plans.overdue > 0 ? "font-semibold text-red-700" : "text-slate-500"}`}
+                        >
+                          Planificación {s.plans.delivered}/{s.plans.total}
                         </span>
                       )}
                     </td>

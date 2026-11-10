@@ -18,6 +18,10 @@ import {
   type AttendanceStatus,
   addDays,
   type DepartmentDto,
+  type MeResponseDto,
+  mondayOf,
+  type PlanBoardDto,
+  type PlanDetailDto,
   todayInHonduras,
   type UserDto,
 } from "@escolar/shared";
@@ -43,13 +47,25 @@ async function request<T>(
   return data as T;
 }
 
-const login = async (email: string, password: string) =>
-  (
-    await request<{ accessToken: string }>(`${identityUrl}/auth/login`, {
+/** Inicia sesión; si identity pide esperar (límite de intentos por minuto), espera y reintenta. */
+async function login(email: string, password: string): Promise<string> {
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(`${identityUrl}/auth/login`, {
       method: "POST",
-      body: { email, password },
-    })
-  ).accessToken;
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    if (res.status === 429 && attempt < 12) {
+      const seconds = Number(res.headers.get("retry-after")) || 10;
+      console.log(`  (esperando ${seconds} s por el límite de inicios de sesión…)`);
+      await new Promise((r) => setTimeout(r, seconds * 1000));
+      continue;
+    }
+    const data = await res.json();
+    if (!res.ok) throw new Error(`login ${email} -> ${res.status}: ${JSON.stringify(data)}`);
+    return (data as { accessToken: string }).accessToken;
+  }
+}
 
 // ── Logo simple (círculos concéntricos) en PNG, sin dependencias ──
 function crc32(buf: Buffer) {
@@ -216,6 +232,87 @@ const SCHOOLS: Array<{
   },
 ];
 
+/** Inicia sesión y, si la persona trabaja en varios centros, se pasa al centro indicado. */
+async function loginAt(email: string, schoolId: string): Promise<string> {
+  const token = await login(email, PASSWORD);
+  const me = await request<MeResponseDto>(`${identityUrl}/me`, { token });
+  if (me.current.scopeId === schoolId) return token;
+  const target = me.memberships.find((m) => m.scopeType === "centro" && m.scopeId === schoolId);
+  if (!target) throw new Error(`${email} no tiene acceso al centro ${schoolId}`);
+  const switched = await request<{ accessToken: string }>(`${identityUrl}/auth/switch`, {
+    method: "POST",
+    token,
+    body: { membershipId: target.id },
+  });
+  return switched.accessToken;
+}
+
+// ── Planificaciones de ejemplo ──
+const TOPICS: Record<string, string[]> = {
+  Español: [
+    "El sustantivo y sus clases",
+    "Comprensión lectora: el cuento",
+    "Signos de puntuación",
+    "El verbo",
+  ],
+  Matemáticas: [
+    "Fracciones equivalentes",
+    "Multiplicación por dos cifras",
+    "Perímetro y área",
+    "Suma y resta con llevadas",
+  ],
+  "Ciencias Naturales": [
+    "El ciclo del agua",
+    "Partes de la planta",
+    "El arrecife de coral de Roatán",
+    "El sistema digestivo",
+  ],
+  "Ciencias Sociales": [
+    "Los municipios de Islas de la Bahía",
+    "Símbolos patrios",
+    "La familia y la comunidad",
+    "Regiones de Honduras",
+  ],
+  Inglés: ["Greetings and introductions", "Numbers 1 to 100", "My family", "Daily routines"],
+};
+
+function planContent(subject: string, section: string) {
+  const tema = pick(TOPICS[subject] ?? ["Repaso general"]);
+  return {
+    tema,
+    estandar: `Al finalizar la semana, los alumnos de ${section} explican y aplican «${tema}» con ejemplos de su entorno.`,
+    contenidos: `${tema}: conceptos clave, ejemplos y ejercicios guiados.`,
+    actividades: {
+      lunes: "Exploración de conocimientos previos con preguntas y lluvia de ideas.",
+      martes: "Explicación con ejemplos en la pizarra y trabajo en parejas.",
+      miercoles: "Ejercicios del libro de texto y revisión en grupo.",
+      jueves: "Actividad práctica en equipos y puesta en común.",
+      viernes: "Evaluación formativa y cierre del tema.",
+    },
+    recursos: "Libro de texto, cuaderno, láminas y material del entorno.",
+    evaluacion: "Lista de cotejo del trabajo en clase y prueba corta del viernes.",
+    tareas: "Ejercicios de repaso para la casa (página del libro indicada en clase).",
+  };
+}
+
+type PlanState = "sin_iniciar" | "borrador" | "enviada" | "devuelta" | "aprobada";
+
+/** Estado de cada planificación de la demo según cómo lleva el centro la planificación. */
+function planState(usage: Usage, thisWeek: boolean, showcase: boolean, subject: string): PlanState {
+  if (showcase && thisWeek) {
+    // La maestra de la demo (maestro4@demo-west-end.hn) tiene un poco de todo para mostrar.
+    return (
+      ({ Matemáticas: "sin_iniciar", Español: "devuelta", "Ciencias Naturales": "aprobada" } as const)[
+        subject as "Matemáticas"
+      ] ?? "enviada"
+    );
+  }
+  const roll = rand(100);
+  if (!thisWeek) return roll < 85 ? "aprobada" : "enviada";
+  if (usage === "atrasada") return roll < 50 ? "sin_iniciar" : roll < 75 ? "borrador" : "enviada";
+  return roll < 50 ? "aprobada" : roll < 80 ? "enviada" : roll < 90 ? "devuelta" : "borrador";
+}
+
 const root = await login(
   optionalEnv("SEED_SUPERADMIN_EMAIL", "superadmin@escolar.local"),
   requireEnv("SEED_SUPERADMIN_PASSWORD"),
@@ -370,10 +467,12 @@ for (const [index, school] of SCHOOLS.entries()) {
   studentsTotal += imported.created;
 
   // Situaciones para el tablero
+  const onLeave = new Set<string>();
   const first = sectionsByTeacher[0];
   const second = sectionsByTeacher[1];
   if (school.slug === "demo-coxen-hole" && first && second) {
     // Licencia por enfermedad CON sustituto en todas sus clases
+    onLeave.add(first.teacher.id);
     const leave = await acApi<{ id: string; classes: Array<{ assignment: { id: string } }> }>(
       "/leaves",
       "POST",
@@ -394,6 +493,7 @@ for (const [index, school] of SCHOOLS.entries()) {
   }
   if (school.slug === "demo-oak-ridge" && first) {
     // Licencia de maternidad SIN sustituto todavía: aparece como alerta en el tablero
+    onLeave.add(first.teacher.id);
     await acApi("/leaves", "POST", {
       teacherUserId: first.teacher.id,
       type: "maternidad",
@@ -486,6 +586,53 @@ for (const [index, school] of SCHOOLS.entries()) {
             return { studentId: r.studentId, points: Math.round(ratio * activity.maxPoints * 2) / 2 };
           }),
         });
+      }
+    }
+  }
+
+  // ── Planificación semanal: la semana pasada (casi toda aprobada) y esta semana ──
+  const week = mondayOf(today);
+  const planned = new Set<string>();
+  for (const [t, teacher] of teachers.entries()) {
+    const token = await loginAt(teacher.email, created.school.id);
+    const asTeacher = <T>(path: string, method = "GET", body?: unknown) =>
+      request<T>(`${academicUrl}${path}`, { method, token, body });
+    for (const weekStart of [addDays(week, -7), week]) {
+      const thisWeek = weekStart === week;
+      if (thisWeek && onLeave.has(teacher.id)) continue; // de licencia: la planifica quien la cubre
+      const mine = await asTeacher<PlanBoardDto>(`/plans/mine?semana=${weekStart}`);
+      for (const row of mine.rows) {
+        const key = `${row.assignment.id}:${weekStart}`;
+        if (planned.has(key)) continue;
+        planned.add(key);
+        const state = planState(
+          usage,
+          thisWeek,
+          school.slug === "demo-west-end" && t === 3,
+          row.assignment.subjectName,
+        );
+        if (state === "sin_iniciar") continue;
+        const created = await asTeacher<PlanDetailDto>("/plans", "POST", {
+          assignmentId: row.assignment.id,
+          weekStart,
+        });
+        const id = created.plan.id;
+        const content = planContent(row.assignment.subjectName, row.assignment.sectionLabel);
+        if (state === "borrador") {
+          await asTeacher(`/plans/${id}`, "PUT", {
+            content: { tema: content.tema, contenidos: content.contenidos },
+          });
+          continue;
+        }
+        await asTeacher(`/plans/${id}/submit`, "POST", { content });
+        if (state === "aprobada") await acApi(`/plans/${id}/review`, "POST", { decision: "aprobar" });
+        if (state === "devuelta") {
+          await acApi(`/plans/${id}/review`, "POST", {
+            decision: "devolver",
+            comment:
+              "Las actividades del jueves y viernes son muy generales. Detalla cómo vas a evaluar el tema.",
+          });
+        }
       }
     }
   }

@@ -91,6 +91,25 @@ export default async function FollowUpPage({ searchParams }: PageProps<"/panel/s
         </section>
       )}
 
+      <section className="card flex flex-wrap items-center justify-between gap-4 p-4">
+        <div>
+          <h2 className="text-sm font-semibold text-slate-700">Planificación de esta semana</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            <strong className="text-slate-900">
+              {data.plans.delivered} de {data.plans.total}
+            </strong>{" "}
+            clases entregadas · {data.plans.approved} aprobadas
+            {data.plans.overdue > 0 && (
+              <span className="font-semibold text-red-700"> · {data.plans.overdue} atrasadas</span>
+            )}{" "}
+            <span className="text-slate-400">(vencía el {formatDay(data.plans.deadline)})</span>
+          </p>
+        </div>
+        <Link href="/panel/planificacion" className="btn-secondary px-3 py-1.5">
+          Ver planificaciones
+        </Link>
+      </section>
+
       <Card
         title="Alumnos en riesgo"
         hint={`Asistencia de los últimos ${RISK_RULES.attendanceWindowDays} días y proyección de notas del parcial`}

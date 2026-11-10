@@ -131,6 +131,22 @@ function Esperar([string]$nombre, [string]$url) {
   Falla "$nombre no respondió en 2 minutos. Manda una captura de las líneas de arriba."
 }
 
+# Huella del código: si cambia (se descargó una versión nueva), se reinstala y se recompila.
+function HuellaDelCodigo {
+  $carpetas = @("apps\web\src", "apps\web\public", "packages\shared\src", "packages\service-kit\src",
+    "services\identity\src", "services\identity\drizzle", "services\academic\src", "services\academic\drizzle")
+  $archivos = @()
+  foreach ($c in $carpetas) {
+    $archivos += Get-ChildItem -Path (Join-Path $Raiz $c) -Recurse -File -ErrorAction SilentlyContinue
+  }
+  $archivos += Get-Item (Join-Path $Raiz "pnpm-lock.yaml"), (Join-Path $Raiz "apps\web\next.config.ts")
+  $lineas = $archivos | Sort-Object FullName | ForEach-Object {
+    "$($_.FullName.Substring($Raiz.Length))|$((Get-FileHash $_.FullName -Algorithm SHA256).Hash)"
+  }
+  $sha = [System.Security.Cryptography.SHA256]::Create()
+  return [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes(($lineas -join "`n")))).Replace("-", "")
+}
+
 function EscribirArchivo([string]$ruta, [string[]]$lineas) {
   # UTF-8 sin BOM: Node no reconoce la primera variable si el archivo empieza con BOM.
   [System.IO.File]::WriteAllLines($ruta, $lineas)
@@ -180,7 +196,13 @@ foreach ($puerto in 3000, 3001, 3002) {
 }
 
 # ───────────────────────────── Instalación ─────────────────────────────
-if (-not (Test-Path (Join-Path $Raiz "node_modules\.modules.yaml"))) {
+$ArchivoHuella = Join-Path $Logs "compilado.txt"
+$Huella = HuellaDelCodigo
+$Anterior = ""
+if (Test-Path $ArchivoHuella) { $Anterior = (Get-Content $ArchivoHuella -Raw).Trim() }
+$Recompilar = ($Huella -ne $Anterior)
+if ($Recompilar -and $Anterior) { Write-Host "   Hay una versión nueva del código: se vuelve a compilar." }
+if ($Recompilar -or -not (Test-Path (Join-Path $Raiz "node_modules\.modules.yaml"))) {
   Paso "Instalando dependencias (la primera vez tarda unos minutos)"
   & pnpm install --frozen-lockfile
   Revisar "instalar dependencias"
@@ -229,6 +251,10 @@ if (-not ((Test-Path $EnvIdentity) -and (Test-Path $EnvAcademic))) {
   Write-Host "   Listo (guardado en services\identity\.env y services\academic\.env)"
 }
 
+# La carga de la demo inicia sesión con cada maestro: en esta demo local se sube el límite por minuto.
+$lineas = @(Get-Content $EnvIdentity | Where-Object { $_ -notlike "LOGIN_RATE_LIMIT_PER_MINUTE=*" })
+EscribirArchivo $EnvIdentity ($lineas + @("LOGIN_RATE_LIMIT_PER_MINUTE=300"))
+
 # Los servicios se hablan por IPv4 (en Windows "localhost" puede ir primero a IPv6).
 $lineas = @(Get-Content $EnvAcademic | Where-Object { $_ -notlike "IDENTITY_URL=*" -and $_ -notlike "ACADEMIC_URL=*" })
 EscribirArchivo $EnvAcademic ($lineas + @("IDENTITY_URL=http://127.0.0.1:3001", "ACADEMIC_URL=http://127.0.0.1:3002"))
@@ -244,18 +270,19 @@ if ($Reiniciar) {
 
 # ───────────────────────────── Compilación ─────────────────────────────
 foreach ($servicio in "identity", "academic") {
-  if (-not (Test-Path (Join-Path $Raiz "services\$servicio\dist\index.js"))) {
+  if ($Recompilar -or -not (Test-Path (Join-Path $Raiz "services\$servicio\dist\index.js"))) {
     Paso "Compilando el servicio $servicio"
     & pnpm --filter "@escolar/$servicio" build
     Revisar "compilar $servicio"
   }
 }
-if (-not (Test-Path (Join-Path $Raiz "apps\web\.next\BUILD_ID"))) {
+if ($Recompilar -or -not (Test-Path (Join-Path $Raiz "apps\web\.next\BUILD_ID"))) {
   Paso "Compilando el panel web (tarda un par de minutos)"
   $env:STANDALONE = "false"
   & pnpm --filter "@escolar/web" build
   Revisar "compilar el panel web"
 }
+Set-Content -Path $ArchivoHuella -Value $Huella
 
 # ───────────────────────────── Arranque y datos ─────────────────────────────
 Paso "Arrancando"

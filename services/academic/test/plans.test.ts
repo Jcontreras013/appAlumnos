@@ -5,6 +5,7 @@ import type {
   PlanBoardDto,
   PlanDetailDto,
   PlanTemplateDto,
+  SchoolFollowUpDto,
 } from "@escolar/shared";
 import { addDays, DEFAULT_PLAN_TEMPLATE } from "@escolar/shared";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";

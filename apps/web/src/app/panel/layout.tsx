@@ -24,6 +24,9 @@ export default async function PanelLayout({ children }: { children: ReactNode })
   }
   // En escuelas pequeñas la directora también da clases: también tiene su cuaderno.
   if (is("docente", "admin", "coordinador")) items.push({ href: "/panel/cuaderno", label: "Mi cuaderno" });
+  if (is("docente", "admin", "coordinador", "secretaria")) {
+    items.push({ href: "/panel/planificacion", label: "Planificación" });
+  }
   if (is("admin", "coordinador", "secretaria")) {
     items.push({ href: "/panel/seguimiento", label: "Seguimiento" });
   }

@@ -10,6 +10,8 @@ Departamental de Educación**:
 - Los **maestros** tienen una sola cuenta aunque trabajen en dos escuelas (matutina y vespertina),
   y llevan su **cuaderno** (asistencia diaria y notas por actividad) desde el teléfono, **aun sin
   internet**. Al cierre del parcial, las notas quedan listas para pasarlas al **SACE**.
+- Cada semana el maestro entrega su **planificación** por clase; la dirección o coordinación la
+  aprueba o la devuelve con observaciones, y la departamental ve qué centros van al día.
 
 Para colegios privados quedan además facturación (con CAI) y wallet de cafetería.
 
@@ -23,7 +25,7 @@ Para colegios privados quedan además facturación (con CAI) y wallet de cafeter
 | 1    | Matrícula: estructura académica, alumnos, familias, cupos, importación desde Excel                          | ✅ Listo  |
 | 2    | Departamento → distrito → centro, maestros en varios centros, licencias y sustitutos, tablero departamental | ✅ Listo  |
 | 3    | Cuaderno del maestro sin internet (asistencia y notas por actividad), alerta temprana, cuadro para el SACE  | ✅ Listo  |
-| 4    | Planificación semanal de docentes con revisión de coordinación                                              | Siguiente |
+| 4    | Planificación semanal con la plantilla del centro, revisión de dirección/coordinación e historial           | ✅ Listo  |
 | 5    | Boletas en PDF y consulta de notas y asistencia para las familias                                           | Pendiente |
 | —    | Para colegios privados: facturación con CAI y wallet de cafetería                                           | Después   |
 
@@ -110,6 +112,10 @@ SACE): cubre lo que pasa _antes_ de que las notas lleguen ahí.
   notas y la asistencia se sobrescriben, así que reenviar no duplica. Si una nota se rechaza (p. ej.
   mayor al valor de la actividad), el maestro ve el motivo. Un service worker guarda solo las páginas
   del cuaderno, y se borran en la pantalla de inicio de sesión (dispositivos compartidos).
+- **Planificación con historial y sin pisarse.** Cada planificación guarda una copia de los campos de
+  la plantilla con que se creó (cambiar la plantilla no rompe las anteriores) y un número de versión:
+  si se guarda desde dos ventanas, la segunda recibe un aviso en vez de borrar lo de la primera. La
+  escribe el titular o quien lo cubre esa semana; la dirección revisa pero no escribe por otros.
 - **Un parcial vale 100 puntos.** El servidor no deja repartir más, ni bajar el valor de una actividad
   por debajo de notas ya puestas, ni quitar un parcial que tiene notas. Solo califica quien da la
   clase (o su sustituto mientras dura la licencia) y la dirección.
@@ -139,7 +145,7 @@ La primera vez tarda unos minutos (construye las imágenes y carga la demo). Cua
 | `distrital.roatan@demo-ihb.hn` | Lo mismo, solo los centros del distrito de Roatán                    |
 | `director@demo-oak-ridge.hn`   | Licencia sin sustituto: asignarlo y ver que la alerta desaparece     |
 | `director@demo-west-end.hn`    | Seguimiento: notas atrasadas, alumnos en riesgo, cuadro para el SACE |
-| `maestro4@demo-west-end.hn`    | Mi cuaderno: asistencia de hoy y notas (también sin internet)        |
+| `maestro4@demo-west-end.hn`    | Mi cuaderno (también sin internet) y planificación semanal           |
 | `shanice.bodden@demo-ihb.hn`   | Maestra en dos escuelas: «Cambiar de centro»                         |
 
 Para apagarla, `Ctrl+C` (o `docker compose -f docker-compose.demo.yml stop`). Las fechas de la demo se
@@ -216,7 +222,7 @@ pnpm db:seed:demo
 
 Para una **presentación a una departamental**, carga además el departamento de demostración
 "Islas de la Bahía": 4 distritos, 7 escuelas públicas **ficticias** con logo, maestros (una en dos
-escuelas), unos 320 alumnos, licencias con y sin sustituto, asistencia del último mes y notas del
+escuelas), unos 320 alumnos, licencias con y sin sustituto, planificaciones semanales, asistencia del último mes y notas del
 parcial (escuelas al día, atrasadas y una que no usa el cuaderno). Las fechas son relativas al día en
 que se carga: el parcial vigente cierra en 6 días, para que se vean las alertas.
 

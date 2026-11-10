@@ -68,7 +68,7 @@ export default async function RegionSchoolPage({ params, searchParams }: PagePro
         />
       </section>
 
-      <section className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Kpi
           label="Asistencia (7 días)"
           value={summary.attendanceRate7d === null ? "—" : `${Math.round(summary.attendanceRate7d * 100)}%`}
@@ -89,6 +89,12 @@ export default async function RegionSchoolPage({ params, searchParams }: PagePro
               ? `clases completas · cierre ${formatDay(summary.periodClosesOn)}`
               : "clases completas"
           }
+        />
+        <Kpi
+          label="Planificaciones de la semana"
+          value={`${summary.plans.delivered} / ${summary.plans.total}`}
+          tone={summary.plans.overdue > 0 ? "alert" : "neutral"}
+          hint={summary.plans.overdue ? `${summary.plans.overdue} atrasadas` : "entregadas a la dirección"}
         />
       </section>
 

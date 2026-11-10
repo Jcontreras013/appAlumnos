@@ -6,6 +6,7 @@ import type {
   AttendanceInput,
   AttendanceSheetDto,
   CoverageDto,
+  CreatePlanInput,
   CreateStudentInput,
   GradebookDto,
   GradeDto,
@@ -15,9 +16,16 @@ import type {
   ImportResultDto,
   LeaveDto,
   LeaveInput,
+  LessonPlanDto,
   PeriodsInput,
+  PlanBoardDto,
+  PlanDetailDto,
+  PlanTemplateDto,
+  PlanTemplateInput,
   RegionalOverviewDto,
   RegionalSchoolDetailDto,
+  ReviewPlanInput,
+  SavePlanInput,
   SchoolFollowUpDto,
   SchoolYearDto,
   SchoolYearInput,
@@ -159,6 +167,25 @@ export const academic = {
         grades: Record<string, { grade: number | null; points: number; possible: number }>;
       }>;
     }>(`/sections/${sectionId}/grades-report${periodId ? `?periodId=${periodId}` : ""}`, { token }),
+
+  // Planificación semanal
+  planTemplate: (token: string) => call<PlanTemplateDto>("/plan-template", { token }),
+  updatePlanTemplate: (token: string, input: PlanTemplateInput) =>
+    call<PlanTemplateDto>("/plan-template", { method: "PUT", token, body: input }),
+  myPlans: (token: string, semana?: string) =>
+    call<PlanBoardDto>(semana ? `/plans/mine?semana=${semana}` : "/plans/mine", { token }),
+  planBoard: (token: string, semana?: string) =>
+    call<PlanBoardDto>(semana ? `/plans/board?semana=${semana}` : "/plans/board", { token }),
+  recentPlans: (token: string) => call<LessonPlanDto[]>("/plans/recent", { token }),
+  createPlan: (token: string, input: CreatePlanInput) =>
+    call<PlanDetailDto>("/plans", { method: "POST", token, body: input }),
+  getPlan: (token: string, id: string) => call<PlanDetailDto>(`/plans/${id}`, { token }),
+  savePlan: (token: string, id: string, input: SavePlanInput) =>
+    call<PlanDetailDto>(`/plans/${id}`, { method: "PUT", token, body: input }),
+  submitPlan: (token: string, id: string, input: Partial<SavePlanInput>) =>
+    call<PlanDetailDto>(`/plans/${id}/submit`, { method: "POST", token, body: input }),
+  reviewPlan: (token: string, id: string, input: ReviewPlanInput) =>
+    call<PlanDetailDto>(`/plans/${id}/review`, { method: "POST", token, body: input }),
 
   importStudents: (token: string, rows: Record<string, string>[], dryRun: boolean) =>
     call<ImportResultDto>("/students/import", { method: "POST", token, body: { rows, dryRun } }),
