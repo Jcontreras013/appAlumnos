@@ -13,7 +13,7 @@ import { type AccountInput, grantAccess } from "../lib/users";
 
 const { db, pool } = createDb(databaseUrlFromEnv());
 
-async function ensureUser(input: AccountInput) {
+async function ensureUser(input: AccountInput & { email: string }) {
   const [existing] = await db.select().from(users).where(eq(users.email, input.email));
   if (existing) {
     console.log(`  = ${input.email} ya existe`);

@@ -71,12 +71,32 @@ export const rtnSchema = z
 
 export const personNameSchema = z.string().trim().min(2, { error: "Nombre demasiado corto" }).max(150);
 
-export const createUserInputSchema = z.object({
-  name: personNameSchema,
-  email: emailSchema,
-  password: passwordSchema,
-  role: z.enum(SCHOOL_ROLES, { error: "Rol inválido" }),
-});
+const blankToUndefined = (v: unknown) => (typeof v === "string" && v.trim() === "" ? undefined : v);
+
+/**
+ * Alta de una persona del centro. Entra con su correo o su identidad; si no se le pone contraseña,
+ * se genera una temporal que debe cambiar al entrar.
+ */
+export const createUserInputSchema = z
+  .object({
+    name: personNameSchema,
+    email: z.preprocess(blankToUndefined, emailSchema.optional()),
+    nationalId: z.preprocess(
+      blankToUndefined,
+      z
+        .string()
+        .trim()
+        .transform((v) => v.replace(/\D/g, ""))
+        .pipe(z.string().regex(/^\d{13}$/, { error: "La identidad debe tener 13 dígitos" }))
+        .optional(),
+    ),
+    password: z.preprocess(blankToUndefined, passwordSchema.optional()),
+    role: z.enum(SCHOOL_ROLES, { error: "Rol inválido" }),
+  })
+  .refine((v) => v.email || v.nationalId, {
+    error: "Escribe el correo o el número de identidad (con eso entrará)",
+    path: ["nationalId"],
+  });
 export type CreateUserInput = z.infer<typeof createUserInputSchema>;
 
 export const createSchoolInputSchema = z.object({

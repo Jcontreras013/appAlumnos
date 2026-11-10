@@ -44,6 +44,11 @@ export default async function RegionPage({ searchParams }: PageProps<"/panel/reg
           </p>
         </div>
         <form className="flex flex-wrap items-end gap-2">
+          {session.user.role === "director_departamental" && (
+            <Link href="/panel/region/importar" className="btn-secondary">
+              Cargar centros
+            </Link>
+          )}
           {districts.length > 1 && (
             <select name="distrito" defaultValue={distrito} aria-label="Distrito" className="input w-48">
               <option value="">Todos los distritos</option>

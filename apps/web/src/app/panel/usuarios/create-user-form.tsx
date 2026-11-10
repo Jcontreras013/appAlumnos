@@ -14,7 +14,15 @@ export function CreateUserForm() {
     <form action={action} className="space-y-4" noValidate>
       <FormAlert state={state} />
       <Field name="name" label="Nombre completo" autoComplete="off" required state={state} />
-      <Field name="email" label="Correo electrónico" type="email" autoComplete="off" required state={state} />
+      <Field
+        name="nationalId"
+        label="Número de identidad"
+        placeholder="0801-1990-01234"
+        autoComplete="off"
+        hint="Con su identidad (o su correo) entra a la plataforma."
+        state={state}
+      />
+      <Field name="email" label="Correo (opcional)" type="email" autoComplete="off" state={state} />
       <div>
         <label htmlFor="campo-role" className="label">
           Rol
@@ -42,11 +50,10 @@ export function CreateUserForm() {
       </div>
       <Field
         name="password"
-        label="Contraseña temporal"
+        label="Contraseña (opcional)"
         type="password"
         autoComplete="new-password"
-        hint="Mínimo 10 caracteres. Compártela por un medio seguro."
-        required
+        hint="Déjala vacía y se genera una temporal que la persona cambia al entrar."
         state={state}
       />
       <SubmitButton pendingText="Creando…">Crear usuario</SubmitButton>

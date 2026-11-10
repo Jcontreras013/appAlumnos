@@ -1,3 +1,4 @@
+import { randomInt } from "node:crypto";
 import { hash, verify } from "@node-rs/argon2";
 
 /** Argon2id con los parámetros mínimos recomendados por OWASP (19 MiB, 2 iteraciones). */
@@ -24,4 +25,34 @@ export async function verifyPassword(storedHash: string | null, password: string
   } catch {
     return false;
   }
+}
+
+// Palabras sin tildes ni eñes: la contraseña temporal se dicta por teléfono o se escribe en un papel.
+const WORDS = [
+  "Ceiba",
+  "Coral",
+  "Mango",
+  "Palma",
+  "Garza",
+  "Tucan",
+  "Lapa",
+  "Roble",
+  "Brisa",
+  "Delfin",
+  "Iguana",
+  "Jaguar",
+  "Caracol",
+  "Marea",
+  "Pino",
+  "Guara",
+  "Arena",
+  "Velero",
+  "Faro",
+  "Ola",
+];
+
+/** "Ceiba-4821-Coral": fácil de dictar y de escribir, y de un solo uso (se cambia al entrar). */
+export function temporaryPassword(): string {
+  const word = () => WORDS[randomInt(WORDS.length)] as string;
+  return `${word()}-${randomInt(1000, 10000)}-${word()}`;
 }

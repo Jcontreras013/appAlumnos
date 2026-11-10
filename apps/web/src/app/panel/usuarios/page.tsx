@@ -1,5 +1,6 @@
 import { formatDate, ROLE_LABELS } from "@escolar/shared";
 import type { Metadata } from "next";
+import Link from "next/link";
 import { requireRole } from "@/lib/dal";
 import { identity } from "@/lib/identity";
 import { setUserActiveAction } from "./actions";
@@ -13,11 +14,16 @@ export default async function UsersPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Usuarios</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Personal y familias de {session.school?.name}. Solo ves las cuentas de tu colegio.
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold text-slate-900">Personal</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Personal de {session.school?.name}. Las familias se manejan desde la ficha de cada alumno.
+          </p>
+        </div>
+        <Link href="/panel/usuarios/importar" className="btn-secondary">
+          Cargar personal desde Excel
+        </Link>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">

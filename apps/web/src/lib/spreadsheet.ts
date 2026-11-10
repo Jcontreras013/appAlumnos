@@ -1,15 +1,16 @@
 import "server-only";
-import { IMPORT_COLUMNS, type ImportColumnKey, mapImportHeaders, parseCsv } from "@escolar/shared";
+import { IMPORT_COLUMNS, type ImportColumn, mapHeaders, parseCsv } from "@escolar/shared";
 import { readSheet } from "read-excel-file/node";
 
 export const MAX_IMPORT_BYTES = 4 * 1024 * 1024;
 
 export class SpreadsheetError extends Error {}
 
-const ID_COLUMNS = new Set<ImportColumnKey>(["identidad", "identidad_responsable"]);
+/** Columnas con número de identidad: Excel les quita el cero inicial y hay que devolvérselo. */
+const ID_COLUMNS = new Set<string>(["identidad", "identidad_responsable", "identidad_director"]);
 
 /** Convierte una celda de Excel a texto como lo escribiría una persona. */
-function cellToText(value: unknown, column: ImportColumnKey | undefined): string {
+function cellToText(value: unknown, column: string | undefined): string {
   if (value === null || value === undefined) return "";
   if (value instanceof Date) {
     // Excel guarda fechas sin zona horaria: se leen en UTC para no correr un día.
@@ -33,11 +34,19 @@ function decodeText(bytes: ArrayBuffer): string {
   }
 }
 
+/** Alumnos con su responsable (importación de matrícula). */
+export function readStudentSpreadsheet(file: File): Promise<Record<string, string>[]> {
+  return readSpreadsheet(file, IMPORT_COLUMNS);
+}
+
 /**
  * Lee un .xlsx o .csv y devuelve las filas con las columnas reconocidas.
  * Lanza SpreadsheetError con un mensaje para la persona si el archivo no sirve.
  */
-export async function readStudentSpreadsheet(file: File): Promise<Record<string, string>[]> {
+export async function readSpreadsheet<K extends string>(
+  file: File,
+  columns: readonly ImportColumn<K>[],
+): Promise<Record<string, string>[]> {
   if (file.size === 0) throw new SpreadsheetError("El archivo está vacío");
   if (file.size > MAX_IMPORT_BYTES) throw new SpreadsheetError("El archivo pesa más de 4 MB");
 
@@ -60,7 +69,10 @@ export async function readStudentSpreadsheet(file: File): Promise<Record<string,
 
   const [headerRow, ...dataRows] = table;
   if (!headerRow) throw new SpreadsheetError("El archivo no tiene encabezados");
-  const { mapping, missing } = mapImportHeaders(headerRow.map((h) => String(h ?? "")));
+  const { mapping, missing } = mapHeaders(
+    columns,
+    headerRow.map((h) => String(h ?? "")),
+  );
   if (missing.length) {
     throw new SpreadsheetError(`Faltan columnas obligatorias: ${missing.join(", ")}. Usa la plantilla.`);
   }
@@ -68,7 +80,7 @@ export async function readStudentSpreadsheet(file: File): Promise<Record<string,
   return dataRows
     .map((cells) => {
       const row: Record<string, string> = {};
-      for (const column of IMPORT_COLUMNS) {
+      for (const column of columns) {
         const index = mapping[column.key];
         if (index !== undefined) row[column.key] = cellToText(cells[index], column.key);
       }

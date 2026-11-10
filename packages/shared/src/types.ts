@@ -48,6 +48,8 @@ export interface FamilyAccountDto {
 }
 
 export interface CreatedUserDto extends UserDto {
+  /** Si no se eligió contraseña: la temporal que se le entrega (solo se muestra una vez). */
+  temporaryPassword?: string | null;
   /** La persona ya tenía cuenta (p. ej. trabaja en otro centro): se le agregó el acceso a este. */
   linkedExisting: boolean;
 }

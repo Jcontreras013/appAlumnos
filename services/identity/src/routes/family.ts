@@ -8,39 +8,10 @@ import type { DbOrTx } from "../db/client";
 import { memberships, type User, users } from "../db/schema";
 import type { IdentityDeps } from "../deps";
 import { audit } from "../lib/audit";
-import { hashPassword } from "../lib/passwords";
+import { hashPassword, temporaryPassword } from "../lib/passwords";
+import { provisionAccount } from "../lib/users";
 
 const idParams = z.object({ id: z.uuid() });
-
-// Palabras sin tildes ni eñes: la contraseña temporal se dicta por teléfono o se escribe en un papel.
-const WORDS = [
-  "Ceiba",
-  "Coral",
-  "Mango",
-  "Palma",
-  "Garza",
-  "Tucan",
-  "Lapa",
-  "Roble",
-  "Brisa",
-  "Delfin",
-  "Iguana",
-  "Jaguar",
-  "Caracol",
-  "Marea",
-  "Pino",
-  "Guara",
-  "Arena",
-  "Velero",
-  "Faro",
-  "Ola",
-];
-
-/** "Ceiba-4821-Coral": fácil de dictar y de escribir, y de un solo uso (se cambia al entrar). */
-function temporaryPassword(): string {
-  const word = () => WORDS[randomInt(WORDS.length)] as string;
-  return `${word()}-${randomInt(1000, 10000)}-${word()}`;
-}
 
 const loginOf = (user: Pick<User, "email" | "nationalId">, prefer?: "nationalId" | "email") =>
   prefer === "email" && user.email
@@ -71,71 +42,26 @@ export async function familyRoutes(app: FastifyInstance, { db, tokens }: Identit
     const schoolId = tenantOf(request);
     const input = parseOrThrow(familyAccountInputSchema, request.body);
     return db.transaction(async (tx) => {
-      const [byNationalId] = input.nationalId
-        ? await tx.select().from(users).where(eq(users.nationalId, input.nationalId))
-        : [];
-      const [byEmail] = input.email ? await tx.select().from(users).where(eq(users.email, input.email)) : [];
-      if (byNationalId && byEmail && byNationalId.id !== byEmail.id) {
-        throw conflict("Esa identidad y ese correo pertenecen a cuentas distintas");
-      }
-      let user = byNationalId ?? byEmail;
-      const linkedExisting = Boolean(user);
-      let password: string | null = null;
-
-      if (!user) {
-        password = temporaryPassword();
-        [user] = await tx
-          .insert(users)
-          .values({
-            name: input.name,
-            email: input.email ?? null,
-            nationalId: input.nationalId ?? null,
-            passwordHash: await hashPassword(password),
-            mustChangePassword: true,
-          })
-          .returning();
-      } else if ((input.nationalId && !user.nationalId) || (input.email && !user.email)) {
-        // Se completa el dato que le faltaba (p. ej. tenía correo y ahora también entra con su identidad).
-        [user] = await tx
-          .update(users)
-          .set({
-            nationalId: user.nationalId ?? input.nationalId ?? null,
-            email: user.email ?? input.email ?? null,
-            updatedAt: new Date(),
-          })
-          .where(eq(users.id, user.id))
-          .returning();
-      }
-      if (!user) throw new Error("No se pudo crear la cuenta");
-
-      const existing = await familyMembership(tx, user.id, schoolId);
-      if (!existing) {
-        const [membership] = await tx
-          .insert(memberships)
-          .values({ userId: user.id, role: "padre", schoolId })
-          .returning();
-        if (membership && !user.lastMembershipId) {
-          await tx.update(users).set({ lastMembershipId: membership.id }).where(eq(users.id, user.id));
-        }
-      } else if (!existing.active) {
-        await tx
-          .update(memberships)
-          .set({ active: true, updatedAt: new Date() })
-          .where(eq(memberships.id, existing.id));
-      }
+      const result = await provisionAccount(tx, {
+        name: input.name,
+        email: input.email,
+        nationalId: input.nationalId,
+        role: "padre",
+        schoolId,
+      });
       await audit(tx, request, {
         action: "family_account.granted",
         schoolId,
         actorUserId: request.auth.userId,
         entityType: "user",
-        entityId: user.id,
-        data: { linkedExisting },
+        entityId: result.user.id,
+        data: { linkedExisting: result.linkedExisting },
       });
       return {
-        userId: user.id,
-        login: loginOf(user, input.nationalId ? "nationalId" : "email"),
-        temporaryPassword: password,
-        linkedExisting,
+        userId: result.user.id,
+        login: loginOf(result.user, input.nationalId ? "nationalId" : "email"),
+        temporaryPassword: result.temporaryPassword,
+        linkedExisting: result.linkedExisting,
       };
     });
   });

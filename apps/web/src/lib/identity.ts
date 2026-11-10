@@ -4,12 +4,15 @@ import type {
   CreateSchoolInput,
   CreateUserInput,
   DepartmentDto,
+  ImportSummaryDto,
   LoginResponseDto,
   MeResponseDto,
   RegionalUserInput,
   SchoolDto,
+  SchoolImportRowDto,
   SchoolRole,
   ScopedSchoolDto,
+  StaffImportRowDto,
   TokenPairDto,
   UserDto,
 } from "@escolar/shared";
@@ -28,6 +31,18 @@ export const identity = {
     call<TokenPairDto>("/auth/refresh", { method: "POST", body: { refreshToken } }),
   logout: (refreshToken: string) => call<void>("/auth/logout", { method: "POST", body: { refreshToken } }),
   me: (token: string) => call<MeResponseDto>("/me", { token }),
+  importStaff: (token: string, rows: Record<string, string>[], dryRun: boolean) =>
+    call<ImportSummaryDto<StaffImportRowDto>>("/users/import", {
+      method: "POST",
+      token,
+      body: { rows, dryRun },
+    }),
+  importSchools: (token: string, rows: Record<string, string>[], dryRun: boolean) =>
+    call<ImportSummaryDto<SchoolImportRowDto>>("/scope/schools/import", {
+      method: "POST",
+      token,
+      body: { rows, dryRun },
+    }),
   changePassword: (token: string, input: { currentPassword: string; newPassword: string }) =>
     call<void>("/auth/password", { method: "POST", token, body: input }),
 

@@ -166,21 +166,35 @@ export function normalizeHeader(header: string): string {
 }
 
 /** Encuentra qué columna del archivo corresponde a cada campo. Devuelve también las que faltan. */
+export interface ImportColumn<K extends string = string> {
+  key: K;
+  label: string;
+  required: boolean;
+  aliases: readonly string[];
+}
+
+/** Ubica cada columna conocida en los encabezados del archivo (sin importar tildes ni mayúsculas). */
+export function mapHeaders<K extends string>(
+  columns: readonly ImportColumn<K>[],
+  headers: string[],
+): { mapping: Partial<Record<K, number>>; missing: string[] } {
+  const normalized = headers.map(normalizeHeader);
+  const mapping: Partial<Record<K, number>> = {};
+  for (const column of columns) {
+    // El nombre visible de la columna (el de la plantilla) también vale como encabezado.
+    const candidates: string[] = [column.key, ...column.aliases, normalizeHeader(column.label)];
+    const index = normalized.findIndex((h) => candidates.includes(h));
+    if (index >= 0) mapping[column.key] = index;
+  }
+  const missing = columns.filter((c) => c.required && mapping[c.key] === undefined).map((c) => c.label);
+  return { mapping, missing };
+}
+
 export function mapImportHeaders(headers: string[]): {
   mapping: Partial<Record<ImportColumnKey, number>>;
   missing: string[];
 } {
-  const normalized = headers.map(normalizeHeader);
-  const mapping: Partial<Record<ImportColumnKey, number>> = {};
-  for (const column of IMPORT_COLUMNS) {
-    const candidates: string[] = [column.key, ...column.aliases];
-    const index = normalized.findIndex((h) => candidates.includes(h));
-    if (index >= 0) mapping[column.key] = index;
-  }
-  const missing = IMPORT_COLUMNS.filter((c) => c.required && mapping[c.key] === undefined).map(
-    (c) => c.label,
-  );
-  return { mapping, missing };
+  return mapHeaders(IMPORT_COLUMNS, headers);
 }
 
 export type ImportRow = Partial<Record<ImportColumnKey, string>>;

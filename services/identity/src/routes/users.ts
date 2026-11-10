@@ -73,6 +73,7 @@ export async function userRoutes(app: FastifyInstance, { db, tokens }: IdentityD
     const body: CreatedUserDto = {
       ...toUserDto(result.user, result.membership),
       linkedExisting: result.linkedExisting,
+      temporaryPassword: result.temporaryPassword,
     };
     return reply.status(201).send(body);
   });
