@@ -5,6 +5,8 @@ import {
   enrollInputSchema,
   guardianInputSchema,
   type ImportResultDto,
+  type PortalAccessDto,
+  portalAccessInputSchema,
   studentFieldsSchema,
   withdrawInputSchema,
 } from "@escolar/shared";
@@ -213,4 +215,39 @@ export async function confirmImportAction(_prev: ImportState, formData: FormData
   }
   revalidatePath("/panel/alumnos");
   redirect(`/panel/alumnos?importados=${created}`);
+}
+
+export interface PortalAccessState extends FormState {
+  access?: PortalAccessDto;
+}
+
+/** Portal de familias desde la ficha: dar acceso, nueva contraseña temporal o quitar el acceso. */
+export async function portalAccessAction(
+  _prev: PortalAccessState,
+  formData: FormData,
+): Promise<PortalAccessState> {
+  const { accessToken } = await requireRole("admin", "secretaria");
+  const studentId = z.uuid().parse(formData.get("studentId"));
+  const guardianId = z.uuid().parse(formData.get("guardianId"));
+  const intent = String(formData.get("intent") ?? "dar");
+  try {
+    if (intent === "quitar") {
+      await academic.revokePortalAccess(accessToken, guardianId);
+      revalidatePath(`/panel/alumnos/${studentId}`);
+      return { ok: true, message: "Se quitó el acceso al portal." };
+    }
+    if (intent === "restablecer") {
+      const access = await academic.resetPortalAccess(accessToken, guardianId);
+      revalidatePath(`/panel/alumnos/${studentId}`);
+      return { ok: true, access };
+    }
+    const values = formValues(formData, ["nationalId", "email"]);
+    const parsed = portalAccessInputSchema.safeParse(values);
+    if (!parsed.success) return { ...fromZodError(parsed.error), values };
+    const access = await academic.grantPortalAccess(accessToken, guardianId, parsed.data);
+    revalidatePath(`/panel/alumnos/${studentId}`);
+    return { ok: true, access };
+  } catch (err) {
+    return fromServiceError(err);
+  }
 }

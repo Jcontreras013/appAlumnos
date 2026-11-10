@@ -22,6 +22,8 @@ import {
   mondayOf,
   type PlanBoardDto,
   type PlanDetailDto,
+  type PortalAccessDto,
+  type StudentDetailDto,
   todayInHonduras,
   type UserDto,
 } from "@escolar/shared";
@@ -246,6 +248,10 @@ async function loginAt(email: string, schoolId: string): Promise<string> {
   });
   return switched.accessToken;
 }
+
+// Identidad claramente ficticia (empieza con 0000) para la familia de la demo.
+const FAMILY_DNI = "0000-2026-00001";
+const FAMILY_EMAIL = "familia@demo-west-end.hn";
 
 // ── Planificaciones de ejemplo ──
 const TOPICS: Record<string, string[]> = {
@@ -636,6 +642,35 @@ for (const [index, school] of SCHOOLS.entries()) {
       }
     }
   }
+
+  // ── Portal de familias: una madre (ficticia) con dos hijos en West End ──
+  const cuarto = sectionsByTeacher[3];
+  const primero = sectionsByTeacher[0];
+  if (school.slug === "demo-west-end" && cuarto && primero) {
+    let guardianId = "";
+    for (const sectionId of [cuarto.sectionId, primero.sectionId]) {
+      const kid = (await acApi<AttendanceSheetDto>(`/attendance/${sectionId}`)).students[0];
+      if (!kid) continue;
+      const detail = await acApi<StudentDetailDto>(`/students/${kid.studentId}/guardians`, "POST", {
+        fullName: "Keisha Bodden (demo)",
+        relationship: "madre",
+        nationalId: FAMILY_DNI,
+        email: FAMILY_EMAIL,
+        phone: "9900-0001",
+      });
+      guardianId = detail.guardians.find((g) => g.email === FAMILY_EMAIL)?.id ?? guardianId;
+    }
+    const access = await acApi<PortalAccessDto>(`/guardians/${guardianId}/portal-access`, "POST", {});
+    // En la demo la cuenta queda lista: se cambia la contraseña temporal por la de la demo.
+    if (access.temporaryPassword) {
+      const token = await login(FAMILY_EMAIL, access.temporaryPassword);
+      await request(`${identityUrl}/auth/password`, {
+        method: "POST",
+        token,
+        body: { currentPassword: access.temporaryPassword, newPassword: PASSWORD },
+      });
+    }
+  }
 }
 
 console.log(`Listo: ${SCHOOLS.length} escuelas, ${studentsTotal} alumnos.`);
@@ -646,3 +681,6 @@ console.log("  director@demo-oak-ridge.hn      Dirección de escuela (tiene una 
 console.log("  shanice.bodden@demo-ihb.hn      Maestra en dos escuelas");
 console.log("  director@demo-west-end.hn       Dirección de escuela (atrasada con las notas)");
 console.log("  maestro4@demo-west-end.hn       Maestra con su cuaderno (asistencia de hoy pendiente)");
+console.log(
+  "  0000-2026-00001                 Familia con dos hijos (también entra con familia@demo-west-end.hn)",
+);

@@ -14,6 +14,7 @@ import { academic } from "@/lib/academic";
 import { ServiceError } from "@/lib/api";
 import { requireRole } from "@/lib/dal";
 import { removeGuardianAction, setPrimaryGuardianAction } from "../actions";
+import { PortalAccess } from "./portal-access";
 import { AddGuardianForm, EnrollForm, StudentDataForm, TransferForm, WithdrawForm } from "./student-forms";
 
 export const metadata: Metadata = { title: "Ficha del alumno" };
@@ -65,9 +66,14 @@ export default async function StudentPage({ params, searchParams }: PageProps<"/
             {student.firstNames} {student.lastNames}
           </h1>
           {current?.status === "activa" ? (
-            <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-sm font-medium text-brand-700">
-              {current.sectionLabel}
-            </span>
+            <>
+              <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-sm font-medium text-brand-700">
+                {current.sectionLabel}
+              </span>
+              <Link href={`/panel/alumnos/${student.id}/boleta`} className="btn-secondary px-3 py-1 text-xs">
+                Boleta
+              </Link>
+            </>
           ) : (
             <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-sm font-medium text-amber-800">
               {current ? "Retirado este año" : "Sin matrícula este año"}
@@ -204,6 +210,9 @@ export default async function StudentPage({ params, searchParams }: PageProps<"/
                     .filter(Boolean)
                     .join(" · ")}
                 </p>
+                {canEdit && (
+                  <PortalAccess studentId={student.id} guardian={g} schoolName={session.school?.name ?? ""} />
+                )}
               </li>
             ))}
           </ul>

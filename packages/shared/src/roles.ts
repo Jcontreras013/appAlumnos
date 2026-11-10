@@ -45,7 +45,7 @@ export const ROLE_LABELS: Record<Role, string> = {
   finanzas: "Finanzas",
   secretaria: "Secretaría",
   docente: "Docente",
-  padre: "Padre de familia",
+  padre: "Familia",
 };
 
 export function isRole(value: unknown): value is Role {

@@ -50,11 +50,21 @@ export const MODULES: ModuleInfo[] = [
     href: "/panel/planificacion",
   },
   {
-    key: "boletas",
-    label: "Boletas y familias",
-    description: "Boletas en PDF y consulta de notas y asistencia para padres y madres.",
+    key: "mis-hijos",
+    label: "Mis hijos",
+    description: "Notas por materia y parcial, asistencia, tareas de la semana y la boleta de cada hijo.",
     phase: 5,
-    roles: ["admin", "coordinador", "secretaria", "padre"],
+    roles: ["padre"],
+    href: "/panel/familia",
+  },
+  {
+    key: "familias",
+    label: "Portal de familias y boletas",
+    description:
+      "Desde la ficha de cada alumno se le da acceso a su familia (con su identidad) y se imprime su boleta.",
+    phase: 5,
+    roles: ["admin", "secretaria", "coordinador"],
+    href: "/panel/alumnos",
   },
   {
     key: "facturacion",

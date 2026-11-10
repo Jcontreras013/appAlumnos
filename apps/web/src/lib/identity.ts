@@ -28,6 +28,8 @@ export const identity = {
     call<TokenPairDto>("/auth/refresh", { method: "POST", body: { refreshToken } }),
   logout: (refreshToken: string) => call<void>("/auth/logout", { method: "POST", body: { refreshToken } }),
   me: (token: string) => call<MeResponseDto>("/me", { token }),
+  changePassword: (token: string, input: { currentPassword: string; newPassword: string }) =>
+    call<void>("/auth/password", { method: "POST", token, body: input }),
 
   listUsers: (token: string, role?: SchoolRole) =>
     call<UserDto[]>(role ? `/users?role=${role}` : "/users", { token }),

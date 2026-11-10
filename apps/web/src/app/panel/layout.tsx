@@ -1,5 +1,7 @@
 import { isRegionalRole, ROLE_LABELS, type Role } from "@escolar/shared";
+import Link from "next/link";
 import type { ReactNode } from "react";
+import { ChangePasswordForm } from "@/components/change-password-form";
 import { Nav, type NavItem } from "@/components/nav";
 import { OfflineAgent } from "@/components/offline";
 import { SchoolLogo } from "@/components/school-logo";
@@ -15,6 +17,8 @@ export default async function PanelLayout({ children }: { children: ReactNode })
   const items: NavItem[] = [];
   if (isRegionalRole(user.role)) {
     items.push({ href: "/panel/region", label: "Tablero de centros" });
+  } else if (is("padre")) {
+    items.push({ href: "/panel/familia", label: "Mis hijos" });
   } else {
     items.push({ href: "/panel", label: "Inicio" });
   }
@@ -46,20 +50,23 @@ export default async function PanelLayout({ children }: { children: ReactNode })
   const others = memberships.filter((m) => m.id !== current.id);
 
   return (
-    <div className="min-h-dvh md:grid md:grid-cols-[15rem_1fr]">
+    <div className="min-h-dvh md:grid md:grid-cols-[15rem_1fr] print:block">
       <OfflineAgent owner={current.id} />
-      <aside className="border-b border-slate-200 bg-white px-4 py-4 md:min-h-dvh md:border-b-0 md:border-r md:py-6">
+      <aside className="border-b border-slate-200 bg-white px-4 py-4 md:min-h-dvh md:border-b-0 md:border-r md:py-6 print:hidden">
         <div className="mb-4 flex items-center gap-2 px-1 font-semibold md:mb-8">
           <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-600 text-sm text-white">
             PE
           </span>
           <span className="truncate">{APP_NAME}</span>
         </div>
-        <Nav items={items} upcoming={upcoming} />
+        <Nav
+          items={user.mustChangePassword ? [] : items}
+          upcoming={user.mustChangePassword ? [] : upcoming}
+        />
       </aside>
 
       <div className="flex min-w-0 flex-col">
-        <header className="flex items-center justify-between gap-4 border-b border-slate-200 bg-white px-4 py-3 sm:px-8">
+        <header className="flex items-center justify-between gap-4 border-b border-slate-200 bg-white px-4 py-3 sm:px-8 print:hidden">
           <div className="flex min-w-0 items-center gap-3">
             {school ? (
               <SchoolLogo school={school} className="size-10" />
@@ -103,6 +110,12 @@ export default async function PanelLayout({ children }: { children: ReactNode })
                 </div>
               </details>
             )}
+            <Link
+              href="/panel/cuenta"
+              className="hidden text-sm font-medium text-slate-600 hover:text-slate-900 sm:block"
+            >
+              Mi cuenta
+            </Link>
             <form action={logoutAction}>
               <button type="submit" className="btn-secondary px-3 py-1.5">
                 Cerrar sesión
@@ -110,7 +123,27 @@ export default async function PanelLayout({ children }: { children: ReactNode })
             </form>
           </div>
         </header>
-        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-8">{children}</main>
+        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-8 print:max-w-none print:p-0">
+          {user.mustChangePassword ? (
+            // Entró con la contraseña temporal que le dio el centro: primero la cambia.
+            <div className="space-y-4">
+              <div>
+                <h1 className="text-2xl font-semibold text-slate-900">
+                  Bienvenido, {user.name.split(" ")[0]}
+                </h1>
+                <p className="mt-1 max-w-xl text-sm text-slate-500">
+                  Entraste con una contraseña temporal. Para proteger tu cuenta, elige ahora una contraseña
+                  que solo tú conozcas.
+                </p>
+              </div>
+              <div className="card p-5">
+                <ChangePasswordForm temporary />
+              </div>
+            </div>
+          ) : (
+            children
+          )}
+        </main>
       </div>
     </div>
   );

@@ -318,6 +318,7 @@ Write-Host "   director@demo-oak-ridge.hn     Licencia sin sustituto"
 Write-Host "   director@demo-west-end.hn      Seguimiento y cuadro para el SACE"
 Write-Host "   maestro4@demo-west-end.hn      Mi cuaderno (asistencia y notas)"
 Write-Host "   shanice.bodden@demo-ihb.hn     Maestra en dos escuelas"
+Write-Host "   0000-2026-00001                Familia con dos hijos (portal de familias)"
 Write-Host ""
 Start-Process "http://localhost:3000"
 

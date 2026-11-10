@@ -8,6 +8,8 @@ import type {
   CoverageDto,
   CreatePlanInput,
   CreateStudentInput,
+  FamilyChildDto,
+  FamilyChildSummaryDto,
   GradebookDto,
   GradeDto,
   GradeInput,
@@ -22,6 +24,8 @@ import type {
   PlanDetailDto,
   PlanTemplateDto,
   PlanTemplateInput,
+  PortalAccessDto,
+  PortalAccessInput,
   RegionalOverviewDto,
   RegionalSchoolDetailDto,
   ReviewPlanInput,
@@ -167,6 +171,19 @@ export const academic = {
         grades: Record<string, { grade: number | null; points: number; possible: number }>;
       }>;
     }>(`/sections/${sectionId}/grades-report${periodId ? `?periodId=${periodId}` : ""}`, { token }),
+
+  // Portal de familias
+  grantPortalAccess: (token: string, guardianId: string, input: PortalAccessInput) =>
+    call<PortalAccessDto>(`/guardians/${guardianId}/portal-access`, { method: "POST", token, body: input }),
+  resetPortalAccess: (token: string, guardianId: string) =>
+    call<PortalAccessDto>(`/guardians/${guardianId}/portal-access/reset`, { method: "POST", token }),
+  revokePortalAccess: (token: string, guardianId: string) =>
+    call<void>(`/guardians/${guardianId}/portal-access`, { method: "DELETE", token }),
+  reportCard: (token: string, studentId: string) =>
+    call<FamilyChildDto>(`/students/${studentId}/report-card`, { token }),
+  familyChildren: (token: string) => call<FamilyChildSummaryDto[]>("/family/children", { token }),
+  familyChild: (token: string, studentId: string) =>
+    call<FamilyChildDto>(`/family/children/${studentId}`, { token }),
 
   // Planificación semanal
   planTemplate: (token: string) => call<PlanTemplateDto>("/plan-template", { token }),

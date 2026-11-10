@@ -14,8 +14,12 @@ export function LoginForm({ expired }: { expired: boolean }) {
       <FormAlert state={shown} />
       <Field
         name="email"
-        label="Correo electrónico"
-        type="email"
+        label="Correo o número de identidad"
+        type="text"
+        inputMode="email"
+        autoCapitalize="none"
+        spellCheck={false}
+        placeholder="nombre@correo.hn o 0801-1985-01234"
         autoComplete="username"
         required
         autoFocus

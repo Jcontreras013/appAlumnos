@@ -13,6 +13,8 @@ export default async function PanelHome() {
   const { user, school, accessToken } = await getSession();
   // Las direcciones departamental y distrital empiezan en su tablero de centros.
   if (isRegionalRole(user.role)) redirect("/panel/region");
+  // Las familias van directo a ver a sus hijos.
+  if (user.role === "padre" && !user.mustChangePassword) redirect("/panel/familia");
   const firstName = user.name.split(" ")[0];
 
   if (user.role === "superadmin") {

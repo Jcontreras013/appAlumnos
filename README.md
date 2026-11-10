@@ -12,6 +12,8 @@ Departamental de Educación**:
   internet**. Al cierre del parcial, las notas quedan listas para pasarlas al **SACE**.
 - Cada semana el maestro entrega su **planificación** por clase; la dirección o coordinación la
   aprueba o la devuelve con observaciones, y la departamental ve qué centros van al día.
+- Las **familias** entran con su número de identidad (o su correo) y ven las notas, la asistencia y
+  las tareas de la semana de sus hijos, y su boleta para imprimir.
 
 Para colegios privados quedan además facturación (con CAI) y wallet de cafetería.
 
@@ -19,15 +21,15 @@ Para colegios privados quedan además facturación (con CAI) y wallet de cafeter
 
 ## Estado
 
-| Fase | Contenido                                                                                                   | Estado    |
-| ---- | ----------------------------------------------------------------------------------------------------------- | --------- |
-| 0    | Monorepo, CI, login, colegios (multi-tenant), usuarios y roles, infraestructura en AWS                      | ✅ Listo  |
-| 1    | Matrícula: estructura académica, alumnos, familias, cupos, importación desde Excel                          | ✅ Listo  |
-| 2    | Departamento → distrito → centro, maestros en varios centros, licencias y sustitutos, tablero departamental | ✅ Listo  |
-| 3    | Cuaderno del maestro sin internet (asistencia y notas por actividad), alerta temprana, cuadro para el SACE  | ✅ Listo  |
-| 4    | Planificación semanal con la plantilla del centro, revisión de dirección/coordinación e historial           | ✅ Listo  |
-| 5    | Boletas en PDF y consulta de notas y asistencia para las familias                                           | Pendiente |
-| —    | Para colegios privados: facturación con CAI y wallet de cafetería                                           | Después   |
+| Fase | Contenido                                                                                                   | Estado   |
+| ---- | ----------------------------------------------------------------------------------------------------------- | -------- |
+| 0    | Monorepo, CI, login, colegios (multi-tenant), usuarios y roles, infraestructura en AWS                      | ✅ Listo |
+| 1    | Matrícula: estructura académica, alumnos, familias, cupos, importación desde Excel                          | ✅ Listo |
+| 2    | Departamento → distrito → centro, maestros en varios centros, licencias y sustitutos, tablero departamental | ✅ Listo |
+| 3    | Cuaderno del maestro sin internet (asistencia y notas por actividad), alerta temprana, cuadro para el SACE  | ✅ Listo |
+| 4    | Planificación semanal con la plantilla del centro, revisión de dirección/coordinación e historial           | ✅ Listo |
+| 5    | Portal de familias: notas, asistencia y tareas de sus hijos; acceso con identidad; boleta imprimible        | ✅ Listo |
+| —    | Para colegios privados: facturación con CAI y wallet de cafetería                                           | Después  |
 
 ## Arquitectura
 
@@ -116,6 +118,11 @@ SACE): cubre lo que pasa _antes_ de que las notas lleguen ahí.
   la plantilla con que se creó (cambiar la plantilla no rompe las anteriores) y un número de versión:
   si se guarda desde dos ventanas, la segunda recibe un aviso en vez de borrar lo de la primera. La
   escribe el titular o quien lo cubre esa semana; la dirección revisa pero no escribe por otros.
+- **Familias: solo lo de sus hijos.** La cuenta la crea la secretaría desde la ficha del alumno, con
+  la identidad del encargado (muchas familias no usan correo) y una contraseña temporal fácil de
+  dictar que se cambia al entrar. Si la persona ya tenía cuenta (maestra en otra escuela, hijos en
+  otro centro) solo se le agrega el acceso. Cada consulta comprueba que el alumno es suyo y del centro
+  de la sesión; la secretaría no puede restablecer la contraseña de alguien que también es personal.
 - **Un parcial vale 100 puntos.** El servidor no deja repartir más, ni bajar el valor de una actividad
   por debajo de notas ya puestas, ni quitar un parcial que tiene notas. Solo califica quien da la
   clase (o su sustituto mientras dura la licencia) y la dirección.
@@ -147,6 +154,7 @@ La primera vez tarda unos minutos (construye las imágenes y carga la demo). Cua
 | `director@demo-west-end.hn`    | Seguimiento: notas atrasadas, alumnos en riesgo, cuadro para el SACE |
 | `maestro4@demo-west-end.hn`    | Mi cuaderno (también sin internet) y planificación semanal           |
 | `shanice.bodden@demo-ihb.hn`   | Maestra en dos escuelas: «Cambiar de centro»                         |
+| `0000-2026-00001`              | Familia con dos hijos: notas, asistencia, tareas y boleta            |
 
 Para apagarla, `Ctrl+C` (o `docker compose -f docker-compose.demo.yml stop`). Las fechas de la demo se
 calculan desde el día en que se carga; para dejarla como nueva antes de una presentación:
