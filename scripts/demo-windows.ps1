@@ -118,13 +118,12 @@ function Esperar([string]$nombre, [string]$url) {
       ApagarServidores
       Falla "$nombre se cerró al arrancar (código $($proceso.ExitCode)). Manda una captura de las líneas de arriba."
     }
-    try {
-      $respuesta = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 2
-      if ($respuesta.StatusCode -eq 200) {
-        Write-Host "   $nombre listo" -ForegroundColor Green
-        return
-      }
-    } catch { }
+    # Con Node y no con Invoke-WebRequest: este usa el proxy de Windows y puede no llegar a la propia PC.
+    & node -e "fetch('$url', { signal: AbortSignal.timeout(2000) }).then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"
+    if ($LASTEXITCODE -eq 0) {
+      Write-Host "   $nombre listo" -ForegroundColor Green
+      return
+    }
     Start-Sleep -Seconds 1
   }
   MostrarRegistro $nombre
