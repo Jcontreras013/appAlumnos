@@ -85,7 +85,10 @@ beforeAll(async () => {
     });
   }
   // Planificación de esta semana con tarea para la casa.
-  const plan = await ctx.call<PlanDetailDto>(ana, "POST", "/plans", { assignmentId: math1A.id, weekStart: TODAY });
+  const plan = await ctx.call<PlanDetailDto>(ana, "POST", "/plans", {
+    assignmentId: math1A.id,
+    weekStart: TODAY,
+  });
   await ctx.call(ana, "POST", `/plans/${plan.body.plan.id}/submit`, {
     content: {
       tema: "Fracciones equivalentes",
@@ -105,7 +108,12 @@ describe("acceso al portal", () => {
   let access: PortalAccessDto;
 
   it("la secretaría da acceso a la madre: entra con su identidad y ve a sus dos hijos", async () => {
-    const res = await ctx.call<PortalAccessDto>(secretary, "POST", `/guardians/${motherId()}/portal-access`, {});
+    const res = await ctx.call<PortalAccessDto>(
+      secretary,
+      "POST",
+      `/guardians/${motherId()}/portal-access`,
+      {},
+    );
     expect(res.status).toBe(200);
     access = res.body;
     expect(access).toMatchObject({ login: MOM, linkedExisting: false, guardianName: "María López Castro" });
@@ -117,7 +125,12 @@ describe("acceso al portal", () => {
 
   it("si el encargado no tiene identidad ni correo, hay que escribir uno (y queda en su ficha)", async () => {
     const dad = pedro.guardians[0]?.id as string;
-    const missing = await ctx.call<{ error: { message: string } }>(secretary, "POST", `/guardians/${dad}/portal-access`, {});
+    const missing = await ctx.call<{ error: { message: string } }>(
+      secretary,
+      "POST",
+      `/guardians/${dad}/portal-access`,
+      {},
+    );
     expect(missing.status).toBe(400);
     const ok = await ctx.call<PortalAccessDto>(secretary, "POST", `/guardians/${dad}/portal-access`, {
       email: "Carlos.Perez@Correo.hn",
@@ -141,7 +154,12 @@ describe("acceso al portal", () => {
       const res = await ctx.call<FamilyChildSummaryDto[]>(mom, "GET", "/family/children");
       expect(res.body.map((c) => c.name).sort()).toEqual(["Luis López", "Sofía López"]);
       const luisSummary = res.body.find((c) => c.studentId === luis.id);
-      expect(luisSummary).toMatchObject({ periodName: "IV Parcial", periodAverage: 86, absences30d: 1, homeworkThisWeek: 1 });
+      expect(luisSummary).toMatchObject({
+        periodName: "IV Parcial",
+        periodAverage: 86,
+        absences30d: 1,
+        homeworkThisWeek: 1,
+      });
     });
 
     it("el detalle: notas por actividad, asistencia y la tarea de la semana", async () => {
@@ -149,7 +167,12 @@ describe("acceso al portal", () => {
       expect(res.status).toBe(200);
       const math = res.body.subjects[0];
       expect(math?.subjectName).toBe("Matemáticas");
-      expect(math?.grades[res.body.period?.id ?? ""]).toMatchObject({ points: 43, possible: 50, projected: 86, grade: null });
+      expect(math?.grades[res.body.period?.id ?? ""]).toMatchObject({
+        points: 43,
+        possible: 50,
+        projected: 86,
+        grade: null,
+      });
       expect(math?.activities.map((a) => [a.name, a.points])).toEqual([
         ["Tarea 1", 18],
         ["Prueba", 25],
@@ -169,7 +192,9 @@ describe("acceso al portal", () => {
     it("no ve a hijos de otras familias ni datos de otro centro", async () => {
       expect((await ctx.call(mom, "GET", `/family/children/${pedro.id}`)).status).toBe(404);
       const elsewhere = await ctx.user("padre", randomUUID(), "Misma cuenta, otro centro", access.userId);
-      expect((await ctx.call<FamilyChildSummaryDto[]>(elsewhere, "GET", "/family/children")).body).toEqual([]);
+      expect((await ctx.call<FamilyChildSummaryDto[]>(elsewhere, "GET", "/family/children")).body).toEqual(
+        [],
+      );
       expect((await ctx.call(elsewhere, "GET", `/family/children/${luis.id}`)).status).toBe(404);
     });
 
@@ -181,16 +206,25 @@ describe("acceso al portal", () => {
 
     it("la oficina imprime la misma boleta; un docente no", async () => {
       const card = await ctx.call<FamilyChildDto>(secretary, "GET", `/students/${luis.id}/report-card`);
-      expect(card.body.student).toMatchObject({ name: "Luis López", sectionLabel: expect.stringContaining("A") });
+      expect(card.body.student).toMatchObject({
+        name: "Luis López",
+        sectionLabel: expect.stringContaining("A"),
+      });
       expect((await ctx.call(ana, "GET", `/students/${luis.id}/report-card`)).status).toBe(403);
     });
 
     it("restablecer la contraseña da otra temporal; quitar el acceso deja de mostrar a los hijos", async () => {
-      const reset = await ctx.call<PortalAccessDto>(secretary, "POST", `/guardians/${motherId()}/portal-access/reset`);
+      const reset = await ctx.call<PortalAccessDto>(
+        secretary,
+        "POST",
+        `/guardians/${motherId()}/portal-access/reset`,
+      );
       expect(reset.body.temporaryPassword).toBeTruthy();
       expect(reset.body.temporaryPassword).not.toBe(access.temporaryPassword);
 
-      expect((await ctx.call(secretary, "DELETE", `/guardians/${motherId()}/portal-access`)).status).toBe(204);
+      expect((await ctx.call(secretary, "DELETE", `/guardians/${motherId()}/portal-access`)).status).toBe(
+        204,
+      );
       expect((await ctx.call<FamilyChildSummaryDto[]>(mom, "GET", "/family/children")).body).toEqual([]);
       expect([...ctx.familyAccounts.values()].find((a) => a.userId === access.userId)?.active).toBe(false);
     });
