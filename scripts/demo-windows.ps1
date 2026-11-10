@@ -311,6 +311,11 @@ Write-Host ""
 Write-Host "================================================================" -ForegroundColor Green
 Write-Host " Demo lista: http://localhost:3000" -ForegroundColor Green
 Write-Host " Contraseña de todas las cuentas: $ClaveDemo" -ForegroundColor Green
+# Para abrirla desde otra computadora o un teléfono conectado a la misma red.
+$ips = @(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+    Where-Object { $_.IPAddress -notlike "127.*" -and $_.IPAddress -notlike "169.254.*" } |
+    Select-Object -ExpandProperty IPAddress)
+foreach ($ip in $ips) { Write-Host " Desde otra computadora en la misma red: http://${ip}:3000" -ForegroundColor Green }
 Write-Host "================================================================" -ForegroundColor Green
 Write-Host "   departamental@demo-ihb.hn      Tablero de los 7 centros"
 Write-Host "   distrital.roatan@demo-ihb.hn   Centros del distrito de Roatán"
