@@ -12,6 +12,7 @@ new EscolarStack(app, `Escolar-${stage}`, {
   },
   jwtSecretArn: app.node.tryGetContext("jwtSecretArn"),
   certificateArn: app.node.tryGetContext("certificateArn"),
+  alertEmail: app.node.tryGetContext("alertEmail"),
 });
 
 Tags.of(app).add("proyecto", "plataforma-escolar");

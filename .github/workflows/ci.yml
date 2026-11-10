@@ -37,6 +37,14 @@ jobs:
         run: >
           pnpm --filter @escolar/infra synth
           -c jwtSecretArn=arn:aws:secretsmanager:us-east-1:111111111111:secret:ci-placeholder-AbCdEf
+      - name: Sintetizar infraestructura de producción (CDK)
+        env:
+          CDK_DEFAULT_REGION: us-east-1
+        run: >
+          pnpm --filter @escolar/infra synth
+          -c stage=prod
+          -c jwtSecretArn=arn:aws:secretsmanager:us-east-1:111111111111:secret:ci-placeholder-AbCdEf
+          -c certificateArn=arn:aws:acm:us-east-1:111111111111:certificate/ci-placeholder
 
   imagenes:
     name: Imagen Docker (${{ matrix.name }})

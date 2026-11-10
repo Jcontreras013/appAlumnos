@@ -80,6 +80,11 @@ SACE): cubre lo que pasa _antes_ de que las notas lleguen ahí.
 
 ## Decisiones importantes
 
+- **Puesta en marcha sin correo.** La departamental carga sus centros (con cada director) y cada
+  dirección a su personal desde Excel; todos entran con su número de identidad y una contraseña
+  temporal que cambian al primer ingreso. Si alguien la olvida, quien está a cargo le da otra (solo
+  dentro de su ámbito). Tras 5 intentos fallidos la cuenta se bloquea 15 minutos.
+
 - **Dinero en centavos enteros.** Nada de `float`. `packages/shared/src/money.ts` tiene el parseo,
   el formato en Lempiras, el ISV por puntos básicos con redondeo explícito y el reparto en cuotas
   sin perder centavos.
@@ -271,6 +276,11 @@ pnpm test
   Docker en cada push y pull request.
 
 ## Despliegue en AWS
+
+Para **producción con 100 centros** (dominio con HTTPS, dos zonas, autoescalado, WAF, alarmas por
+correo, 30 días de respaldos y cómo restaurarlos) sigue [docs/despliegue.md](docs/despliegue.md);
+cuesta del orden de US$210 al mes. La revisión de seguridad está en [docs/seguridad.md](docs/seguridad.md).
+Lo de abajo es el ambiente `dev` (de pruebas).
 
 La primera vez:
 

@@ -116,3 +116,88 @@ describe("seguridad de la infraestructura", () => {
     expect(() => new EscolarStack(new App(), "SinSecreto", { stage: "dev" })).toThrow(/jwtSecretArn/);
   });
 });
+
+describe("producción (100 centros)", () => {
+  const CERT = "arn:aws:acm:us-east-1:111111111111:certificate/abcd-1234";
+  let prod: Template;
+
+  beforeAll(() => {
+    const stack = new EscolarStack(new App(), "Prod", {
+      stage: "prod",
+      jwtSecretArn: JWT_ARN,
+      certificateArn: CERT,
+      alertEmail: "alertas@ejemplo.hn",
+      env: { account: "111111111111", region: "us-east-1" },
+    });
+    prod = Template.fromStack(stack);
+  });
+
+  it("no se despliega sin HTTPS", () => {
+    expect(
+      () => new EscolarStack(new App(), "ProdSinCert", { stage: "prod", jwtSecretArn: JWT_ARN }),
+    ).toThrow(/HTTPS/);
+  });
+
+  it("base de datos en dos zonas, protegida contra borrado y con 30 días de respaldos", () => {
+    prod.hasResourceProperties("AWS::RDS::DBInstance", {
+      DBInstanceClass: "db.t4g.small",
+      MultiAZ: true,
+      DeletionProtection: true,
+      BackupRetentionPeriod: 30,
+      StorageEncrypted: true,
+      EnablePerformanceInsights: true,
+    });
+  });
+
+  it("los tres servicios escalan de 2 a 4 tareas según la CPU", () => {
+    const targets = prod.findResources("AWS::ApplicationAutoScaling::ScalableTarget");
+    expect(Object.keys(targets)).toHaveLength(3);
+    for (const target of Object.values(targets)) {
+      expect(target.Properties).toMatchObject({ MinCapacity: 2, MaxCapacity: 4 });
+    }
+  });
+
+  it("WAF frente al balanceador con límite de intentos de inicio de sesión por IP", () => {
+    prod.hasResourceProperties("AWS::WAFv2::WebACL", {
+      Rules: Match.arrayWith([
+        Match.objectLike({
+          Name: "limite-inicio-de-sesion",
+          Statement: { RateBasedStatement: Match.objectLike({ Limit: 100, AggregateKeyType: "IP" }) },
+        }),
+      ]),
+    });
+    prod.resourceCountIs("AWS::WAFv2::WebACLAssociation", 1);
+  });
+
+  it("alarmas por correo: errores, panel caído, CPU, memoria y base de datos", () => {
+    expect(Object.keys(prod.findResources("AWS::CloudWatch::Alarm")).length).toBeGreaterThanOrEqual(11);
+    prod.hasResourceProperties("AWS::SNS::Subscription", {
+      Protocol: "email",
+      Endpoint: "alertas@ejemplo.hn",
+    });
+  });
+
+  it("HTTP redirige a HTTPS y las cookies van solo por HTTPS", () => {
+    prod.hasResourceProperties("AWS::ElasticLoadBalancingV2::Listener", {
+      Protocol: "HTTP",
+      DefaultActions: [Match.objectLike({ Type: "redirect" })],
+    });
+    prod.hasResourceProperties("AWS::ECS::TaskDefinition", {
+      ContainerDefinitions: Match.arrayWith([
+        Match.objectLike({
+          Name: "web",
+          Environment: Match.arrayWith([{ Name: "COOKIE_SECURE", Value: "true" }]),
+        }),
+      ]),
+    });
+  });
+
+  it("el ambiente de pruebas sigue siendo barato: sin WAF ni autoescalado", () => {
+    template.resourceCountIs("AWS::WAFv2::WebACL", 0);
+    template.resourceCountIs("AWS::ApplicationAutoScaling::ScalableTarget", 0);
+    template.hasResourceProperties("AWS::RDS::DBInstance", {
+      DBInstanceClass: "db.t4g.micro",
+      MultiAZ: false,
+    });
+  });
+});

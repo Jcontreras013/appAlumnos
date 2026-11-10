@@ -2,6 +2,8 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CfnOutput, Duration, RemovalPolicy, Stack, type StackProps } from "aws-cdk-lib";
 import * as acm from "aws-cdk-lib/aws-certificatemanager";
+import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
+import * as cwActions from "aws-cdk-lib/aws-cloudwatch-actions";
 import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as ecs from "aws-cdk-lib/aws-ecs";
 import * as ecsPatterns from "aws-cdk-lib/aws-ecs-patterns";
@@ -9,6 +11,9 @@ import * as elbv2 from "aws-cdk-lib/aws-elasticloadbalancingv2";
 import * as logs from "aws-cdk-lib/aws-logs";
 import * as rds from "aws-cdk-lib/aws-rds";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
+import * as sns from "aws-cdk-lib/aws-sns";
+import * as subscriptions from "aws-cdk-lib/aws-sns-subscriptions";
+import * as wafv2 from "aws-cdk-lib/aws-wafv2";
 import type { Construct } from "constructs";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
@@ -33,8 +38,10 @@ export interface EscolarStackProps extends StackProps {
    * Se crea una sola vez antes del primer despliegue; ver README → Despliegue en AWS.
    */
   jwtSecretArn?: string;
-  /** Certificado de ACM para HTTPS. Sin él el panel queda en HTTP: solo para probar, nunca con datos reales. */
+  /** Certificado de ACM para HTTPS. Obligatorio en prod; en dev, sin él el panel queda en HTTP (solo pruebas). */
   certificateArn?: string;
+  /** Correo que recibe las alarmas (se confirma desde el correo que manda AWS). */
+  alertEmail?: string;
 }
 
 /**
@@ -58,6 +65,11 @@ export class EscolarStack extends Stack {
         "Falta el contexto jwtSecretArn. Crea el secreto de llaves JWT (ver README) y pásalo con -c jwtSecretArn=arn:...",
       );
     }
+    if (isProd && !props.certificateArn) {
+      throw new Error(
+        "En producción hace falta HTTPS: crea el certificado del dominio en ACM y pásalo con -c certificateArn=arn:... (ver docs/despliegue.md)",
+      );
+    }
 
     const vpc = new ec2.Vpc(this, "Vpc", {
       maxAzs: 2,
@@ -77,17 +89,24 @@ export class EscolarStack extends Stack {
     // ───────────────────────────── Base de datos ─────────────────────────────
     const database = new rds.DatabaseInstance(this, "Postgres", {
       engine: rds.DatabaseInstanceEngine.postgres({ version: rds.PostgresEngineVersion.VER_16 }),
-      instanceType: ec2.InstanceType.of(ec2.InstanceClass.T4G, ec2.InstanceSize.MICRO),
+      // 100 centros: t4g.small (2 GB) en prod; t4g.micro alcanza para pruebas.
+      instanceType: ec2.InstanceType.of(
+        ec2.InstanceClass.T4G,
+        isProd ? ec2.InstanceSize.SMALL : ec2.InstanceSize.MICRO,
+      ),
       vpc,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
       credentials: rds.Credentials.fromGeneratedSecret("escolar"),
       databaseName: "escolar_identity",
       allocatedStorage: 20,
-      maxAllocatedStorage: 100,
+      maxAllocatedStorage: isProd ? 200 : 100,
       storageEncrypted: true,
       publiclyAccessible: false,
       multiAz: isProd,
-      backupRetention: Duration.days(isProd ? 14 : 3),
+      // Respaldos automáticos con restauración a cualquier minuto de los últimos 30 días (prod).
+      backupRetention: Duration.days(isProd ? 30 : 3),
+      copyTagsToSnapshot: true,
+      enablePerformanceInsights: isProd,
       deletionProtection: isProd,
       removalPolicy: isProd ? RemovalPolicy.SNAPSHOT : RemovalPolicy.DESTROY,
       cloudwatchLogsExports: ["postgresql"],
@@ -97,6 +116,13 @@ export class EscolarStack extends Stack {
 
     const jwtSecret = secretsmanager.Secret.fromSecretCompleteArn(this, "JwtSecret", props.jwtSecretArn);
 
+    /** En prod: de 2 a 4 tareas según el uso de CPU (p. ej. a la hora de tomar asistencia). */
+    const autoscale = (service: ecs.FargateService) => {
+      service
+        .autoScaleTaskCount({ minCapacity: 2, maxCapacity: 4 })
+        .scaleOnCpuUtilization("Cpu", { targetUtilizationPercent: 60 });
+    };
+
     // ───────────────────────────── Microservicios ─────────────────────────────
     /**
      * Un microservicio interno: Fargate, sin entrada desde internet, publicado por Service Connect
@@ -105,12 +131,18 @@ export class EscolarStack extends Stack {
      */
     const backendService = (
       name: string,
-      options: { port: number; environment?: Record<string, string>; secrets?: Record<string, ecs.Secret> },
+      options: {
+        port: number;
+        environment?: Record<string, string>;
+        secrets?: Record<string, ecs.Secret>;
+        /** CPU y memoria en prod (en dev siempre 256/512). */
+        prodSize?: { cpu: number; memoryLimitMiB: number };
+      },
     ) => {
       const id = name.charAt(0).toUpperCase() + name.slice(1);
+      const size = isProd && options.prodSize ? options.prodSize : { cpu: 256, memoryLimitMiB: 512 };
       const task = new ecs.FargateTaskDefinition(this, `${id}Task`, {
-        cpu: 256,
-        memoryLimitMiB: 512,
+        ...size,
         runtimePlatform: {
           cpuArchitecture: ecs.CpuArchitecture.X86_64,
           operatingSystemFamily: ecs.OperatingSystemFamily.LINUX,
@@ -164,6 +196,7 @@ export class EscolarStack extends Stack {
         },
       });
       database.connections.allowDefaultPortFrom(service, `${name} -> Postgres`);
+      if (isProd) autoscale(service);
       return { task, service };
     };
 
@@ -181,6 +214,8 @@ export class EscolarStack extends Stack {
     const academic = backendService("academic", {
       port: 3002,
       environment: { IDENTITY_URL: "http://identity:3001" },
+      // Tableros y seguimiento recorren muchos datos: más CPU en prod.
+      prodSize: { cpu: 512, memoryLimitMiB: 1024 },
     });
     identityService.connections.allowFrom(academic.service, ec2.Port.tcp(3001), "academic -> identity");
 
@@ -191,8 +226,8 @@ export class EscolarStack extends Stack {
 
     const web = new ecsPatterns.ApplicationLoadBalancedFargateService(this, "Web", {
       cluster,
-      cpu: 256,
-      memoryLimitMiB: 512,
+      cpu: isProd ? 512 : 256,
+      memoryLimitMiB: isProd ? 1024 : 512,
       desiredCount: isProd ? 2 : 1,
       assignPublicIp: true,
       taskSubnets: { subnetType: ec2.SubnetType.PUBLIC },
@@ -230,12 +265,148 @@ export class EscolarStack extends Stack {
     web.service.enableServiceConnect();
     identityService.connections.allowFrom(web.service, ec2.Port.tcp(3001), "web -> identity");
     academic.service.connections.allowFrom(web.service, ec2.Port.tcp(3002), "web -> academic");
+    if (isProd) autoscale(web.service);
+
+    // ───────────────────────────── Protección (WAF, prod) ─────────────────────────────
+    if (isProd) {
+      const waf = new wafv2.CfnWebACL(this, "Waf", {
+        scope: "REGIONAL",
+        defaultAction: { allow: {} },
+        visibilityConfig: {
+          cloudWatchMetricsEnabled: true,
+          metricName: "escolar-waf",
+          sampledRequestsEnabled: true,
+        },
+        rules: [
+          {
+            // Además del bloqueo por cuenta: una IP no puede intentar iniciar sesión más de 100 veces en 5 min.
+            name: "limite-inicio-de-sesion",
+            priority: 0,
+            action: { block: {} },
+            statement: {
+              rateBasedStatement: {
+                limit: 100,
+                aggregateKeyType: "IP",
+                scopeDownStatement: {
+                  byteMatchStatement: {
+                    fieldToMatch: { uriPath: {} },
+                    positionalConstraint: "STARTS_WITH",
+                    searchString: "/login",
+                    textTransformations: [{ priority: 0, type: "LOWERCASE" }],
+                  },
+                },
+              },
+            },
+            visibilityConfig: {
+              cloudWatchMetricsEnabled: true,
+              metricName: "limite-login",
+              sampledRequestsEnabled: true,
+            },
+          },
+          ...["AWSManagedRulesAmazonIpReputationList", "AWSManagedRulesKnownBadInputsRuleSet"].map(
+            (rule, i) => ({
+              name: rule,
+              priority: i + 1,
+              overrideAction: { none: {} },
+              statement: { managedRuleGroupStatement: { vendorName: "AWS", name: rule } },
+              visibilityConfig: {
+                cloudWatchMetricsEnabled: true,
+                metricName: rule,
+                sampledRequestsEnabled: true,
+              },
+            }),
+          ),
+        ],
+      });
+      new wafv2.CfnWebACLAssociation(this, "WafAlb", {
+        resourceArn: web.loadBalancer.loadBalancerArn,
+        webAclArn: waf.attrArn,
+      });
+    }
+
+    // ───────────────────────────── Alarmas ─────────────────────────────
+    const alerts = new sns.Topic(this, "Alertas", { displayName: "Plataforma Escolar: alertas" });
+    if (props.alertEmail) alerts.addSubscription(new subscriptions.EmailSubscription(props.alertEmail));
+    const alarm = (
+      id: string,
+      description: string,
+      metric: cloudwatch.IMetric,
+      threshold: number,
+      periods = 3,
+    ) => {
+      const a = new cloudwatch.Alarm(this, id, {
+        alarmDescription: description,
+        metric,
+        threshold,
+        evaluationPeriods: periods,
+        comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
+        treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
+      });
+      a.addAlarmAction(new cwActions.SnsAction(alerts));
+      a.addOkAction(new cwActions.SnsAction(alerts));
+      return a;
+    };
+    const fiveMinutes = Duration.minutes(5);
+    alarm(
+      "AlarmaErrores5xx",
+      "El panel está respondiendo errores (5xx)",
+      web.loadBalancer.metrics.httpCodeTarget(elbv2.HttpCodeTarget.TARGET_5XX_COUNT, { period: fiveMinutes }),
+      20,
+      2,
+    );
+    alarm(
+      "AlarmaPanelCaido",
+      "El balanceador no tiene ninguna tarea sana del panel",
+      web.targetGroup.metrics.unhealthyHostCount({ period: Duration.minutes(1) }),
+      1,
+      5,
+    );
+    for (const [id, service] of [
+      ["Web", web.service],
+      ["Identity", identityService],
+      ["Academic", academic.service],
+    ] as const) {
+      alarm(
+        `AlarmaCpu${id}`,
+        `${id}: CPU alta por 15 minutos`,
+        service.metricCpuUtilization({ period: fiveMinutes }),
+        85,
+      );
+      alarm(
+        `AlarmaMemoria${id}`,
+        `${id}: memoria alta por 15 minutos`,
+        service.metricMemoryUtilization({ period: fiveMinutes }),
+        90,
+      );
+    }
+    alarm(
+      "AlarmaBaseCpu",
+      "Base de datos: CPU alta por 15 minutos",
+      database.metricCPUUtilization({ period: fiveMinutes }),
+      80,
+    );
+    new cloudwatch.Alarm(this, "AlarmaBaseDisco", {
+      alarmDescription: "Base de datos: queda poco disco (menos de 5 GB)",
+      metric: database.metricFreeStorageSpace({ period: fiveMinutes }),
+      threshold: 5 * 1024 ** 3,
+      evaluationPeriods: 1,
+      comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
+    }).addAlarmAction(new cwActions.SnsAction(alerts));
+    new cloudwatch.Alarm(this, "AlarmaBaseMemoria", {
+      alarmDescription: "Base de datos: queda poca memoria (menos de 150 MB)",
+      metric: database.metricFreeableMemory({ period: fiveMinutes }),
+      threshold: 150 * 1024 ** 2,
+      evaluationPeriods: 3,
+      comparisonOperator: cloudwatch.ComparisonOperator.LESS_THAN_THRESHOLD,
+    }).addAlarmAction(new cwActions.SnsAction(alerts));
 
     // ───────────────────────────── Salidas ─────────────────────────────
     new CfnOutput(this, "UrlPanel", {
       value: `${certificate ? "https" : "http"}://${web.loadBalancer.loadBalancerDnsName}`,
     });
     new CfnOutput(this, "NombreCluster", { value: cluster.clusterName });
+    new CfnOutput(this, "TemaAlertas", { value: alerts.topicArn });
+    new CfnOutput(this, "BaseDeDatos", { value: database.instanceIdentifier });
     new CfnOutput(this, "IdentityTaskDefinition", { value: identity.task.family });
     new CfnOutput(this, "IdentitySecurityGroup", {
       value: identityService.connections.securityGroups.map((sg) => sg.securityGroupId).join(","),
