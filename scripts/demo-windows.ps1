@@ -93,11 +93,31 @@ function Iniciar([string]$nombre, [string]$carpeta, [string[]]$argumentos) {
   $errores = Join-Path $Logs "$nombre.error.log"
   $proceso = Start-Process -FilePath "node" -ArgumentList $argumentos -WorkingDirectory (Join-Path $Raiz $carpeta) `
     -RedirectStandardOutput $salida -RedirectStandardError $errores -WindowStyle Hidden -PassThru
+  if (-not $proceso) { Falla "No se pudo iniciar $nombre (node no se encontró)." }
+  $null = $proceso.Handle  # sin esto Windows no guarda el código de salida
   Add-Content -Path $ArchivoPids -Value $proceso.Id
+  $script:Procesos[$nombre] = $proceso
+}
+
+function MostrarRegistro([string]$nombre) {
+  foreach ($archivo in "$nombre.log", "$nombre.error.log") {
+    $ruta = Join-Path $Logs $archivo
+    if ((Test-Path $ruta) -and (Get-Item $ruta).Length -gt 0) {
+      Write-Host ""
+      Write-Host "Últimas líneas de demo-logs\${archivo}:" -ForegroundColor Yellow
+      Get-Content $ruta -Tail 12 | ForEach-Object { Write-Host "   $_" }
+    }
+  }
 }
 
 function Esperar([string]$nombre, [string]$url) {
+  $proceso = $script:Procesos[$nombre]
   for ($i = 0; $i -lt 120; $i++) {
+    if ($proceso -and $proceso.HasExited) {
+      MostrarRegistro $nombre
+      ApagarServidores
+      Falla "$nombre se cerró al arrancar (código $($proceso.ExitCode)). Manda una captura de las líneas de arriba."
+    }
     try {
       $respuesta = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 2
       if ($respuesta.StatusCode -eq 200) {
@@ -107,12 +127,9 @@ function Esperar([string]$nombre, [string]$url) {
     } catch { }
     Start-Sleep -Seconds 1
   }
-  Write-Host ""
-  Write-Host "Últimas líneas del registro de ${nombre}:" -ForegroundColor Yellow
-  $registro = Join-Path $Logs "$nombre.error.log"
-  if (Test-Path $registro) { Get-Content $registro -Tail 15 | ForEach-Object { Write-Host "   $_" } }
+  MostrarRegistro $nombre
   ApagarServidores
-  Falla "$nombre no arrancó. Si el error habla de la contraseña de postgres, borra services\identity\.env y services\academic\.env y vuelve a ejecutar."
+  Falla "$nombre no respondió en 2 minutos. Manda una captura de las líneas de arriba."
 }
 
 function EscribirArchivo([string]$ruta, [string[]]$lineas) {
@@ -121,6 +138,7 @@ function EscribirArchivo([string]$ruta, [string[]]$lineas) {
 }
 
 New-Item -ItemType Directory -Force -Path $Logs | Out-Null
+$script:Procesos = @{}
 
 if ($Apagar) {
   ApagarServidores
@@ -205,13 +223,16 @@ if (-not ((Test-Path $EnvIdentity) -and (Test-Path $EnvAcademic))) {
   EscribirArchivo $EnvAcademic @(
     "DATABASE_URL=$url/escolar_academic",
     "PORT=3002",
-    "IDENTITY_URL=http://localhost:3001",
     "SEED_SUPERADMIN_EMAIL=superadmin@escolar.local",
     "SEED_SUPERADMIN_PASSWORD=$ClaveSuperadmin",
     "SEED_DEMO_PASSWORD=$ClaveDemo"
   )
   Write-Host "   Listo (guardado en services\identity\.env y services\academic\.env)"
 }
+
+# Los servicios se hablan por IPv4 (en Windows "localhost" puede ir primero a IPv6).
+$lineas = @(Get-Content $EnvAcademic | Where-Object { $_ -notlike "IDENTITY_URL=*" -and $_ -notlike "ACADEMIC_URL=*" })
+EscribirArchivo $EnvAcademic ($lineas + @("IDENTITY_URL=http://127.0.0.1:3001", "ACADEMIC_URL=http://127.0.0.1:3002"))
 
 if ($Reiniciar) {
   Paso "Borrando la demo anterior"
@@ -240,22 +261,24 @@ if (-not (Test-Path (Join-Path $Raiz "apps\web\.next\BUILD_ID"))) {
 # ───────────────────────────── Arranque y datos ─────────────────────────────
 Paso "Arrancando"
 Iniciar "identity" "services\identity" @("--env-file=.env", "dist/index.js")
-Esperar "identity" "http://localhost:3001/health"
+Esperar "identity" "http://127.0.0.1:3001/health"
 
 & pnpm --filter "@escolar/identity" db:seed
 Revisar "crear el usuario administrador"
 
 Iniciar "academic" "services\academic" @("--env-file=.env", "dist/index.js")
-Esperar "academic" "http://localhost:3002/health"
+Esperar "academic" "http://127.0.0.1:3002/health"
 
 Paso "Cargando la demo (si ya está cargada, no hace nada)"
 & pnpm --filter "@escolar/academic" db:seed:region
 Revisar "cargar la demo"
 
 $env:COOKIE_SECURE = "false"
+$env:IDENTITY_URL = "http://127.0.0.1:3001"
+$env:ACADEMIC_URL = "http://127.0.0.1:3002"
 $env:STANDALONE = "false"
 Iniciar "web" "apps\web" @("node_modules/next/dist/bin/next", "start", "--port", "3000")
-Esperar "web" "http://localhost:3000/api/health"
+Esperar "web" "http://127.0.0.1:3000/api/health"
 
 # ───────────────────────────── Lista ─────────────────────────────
 Write-Host ""
