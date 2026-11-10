@@ -7,6 +7,7 @@ import type {
   ImportSummaryDto,
   LoginResponseDto,
   MeResponseDto,
+  PasswordResetDto,
   RegionalUserInput,
   SchoolDto,
   SchoolImportRowDto,
@@ -31,6 +32,10 @@ export const identity = {
     call<TokenPairDto>("/auth/refresh", { method: "POST", body: { refreshToken } }),
   logout: (refreshToken: string) => call<void>("/auth/logout", { method: "POST", body: { refreshToken } }),
   me: (token: string) => call<MeResponseDto>("/me", { token }),
+  resetPassword: (token: string, userId: string) =>
+    call<PasswordResetDto>(`/accounts/${userId}/reset-password`, { method: "POST", token }),
+  schoolStaff: (token: string, schoolId: string) =>
+    call<UserDto[]>(`/scope/schools/${schoolId}/staff`, { token }),
   importStaff: (token: string, rows: Record<string, string>[], dryRun: boolean) =>
     call<ImportSummaryDto<StaffImportRowDto>>("/users/import", {
       method: "POST",

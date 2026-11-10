@@ -37,6 +37,14 @@ export interface UserDto {
   createdAt: string;
 }
 
+/** Contraseña temporal nueva para alguien que olvidó la suya (se muestra una sola vez). */
+export interface PasswordResetDto {
+  userId: string;
+  name: string;
+  login: string;
+  temporaryPassword: string;
+}
+
 /** Cuenta del portal de familias recién creada (o ya existente, enlazada a este centro). */
 export interface FamilyAccountDto {
   userId: string;

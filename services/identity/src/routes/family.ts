@@ -8,8 +8,7 @@ import type { DbOrTx } from "../db/client";
 import { memberships, type User, users } from "../db/schema";
 import type { IdentityDeps } from "../deps";
 import { audit } from "../lib/audit";
-import { hashPassword, temporaryPassword } from "../lib/passwords";
-import { provisionAccount } from "../lib/users";
+import { provisionAccount, resetToTemporary } from "../lib/users";
 
 const idParams = z.object({ id: z.uuid() });
 
@@ -80,13 +79,8 @@ export async function familyRoutes(app: FastifyInstance, { db, tokens }: Identit
         "Esta persona también trabaja en un centro: su contraseña la cambia ella misma desde su cuenta.",
       );
     }
-    const password = temporaryPassword();
-    const user = await db.transaction(async (tx) => {
-      const [updated] = await tx
-        .update(users)
-        .set({ passwordHash: await hashPassword(password), mustChangePassword: true, updatedAt: new Date() })
-        .where(eq(users.id, id))
-        .returning();
+    const { user, temporaryPassword: password } = await db.transaction(async (tx) => {
+      const result = await resetToTemporary(tx, id);
       await tokens.revokeAllForUser(tx, id);
       await audit(tx, request, {
         action: "family_account.password_reset",
@@ -95,9 +89,8 @@ export async function familyRoutes(app: FastifyInstance, { db, tokens }: Identit
         entityType: "user",
         entityId: id,
       });
-      return updated;
+      return result;
     });
-    if (!user) throw notFound("Cuenta de familia no encontrada");
     return { userId: id, login: loginOf(user), temporaryPassword: password, linkedExisting: true };
   });
 

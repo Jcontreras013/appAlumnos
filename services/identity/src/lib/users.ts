@@ -1,4 +1,4 @@
-import { badRequest, conflict, isUniqueViolation } from "@escolar/service-kit";
+import { badRequest, conflict, isUniqueViolation, notFound } from "@escolar/service-kit";
 import type { Role, SchoolDto, UserDto } from "@escolar/shared";
 import { and, eq, isNull } from "drizzle-orm";
 import type { DbOrTx } from "../db/client";
@@ -179,4 +179,25 @@ export async function membershipsInSchool(db: DbOrTx, userId: string, schoolId: 
     .select()
     .from(memberships)
     .where(and(eq(memberships.userId, userId), eq(memberships.schoolId, schoolId)));
+}
+
+/** Pone una contraseña temporal (y desbloquea la cuenta). Quien llama cierra las sesiones abiertas. */
+export async function resetToTemporary(
+  db: DbOrTx,
+  userId: string,
+): Promise<{ user: User; temporaryPassword: string }> {
+  const password = temporaryPassword();
+  const [user] = await db
+    .update(users)
+    .set({
+      passwordHash: await hashPassword(password),
+      mustChangePassword: true,
+      failedLogins: 0,
+      lockedUntil: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, userId))
+    .returning();
+  if (!user) throw notFound("Cuenta no encontrada");
+  return { user, temporaryPassword: password };
 }

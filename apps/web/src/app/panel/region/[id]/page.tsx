@@ -1,12 +1,22 @@
-import { COVERAGE_LABELS, formatDay, isIsoDate, LEAVE_TYPE_LABELS, todayInHonduras } from "@escolar/shared";
+import {
+  COVERAGE_LABELS,
+  formatDay,
+  formatNationalId,
+  isIsoDate,
+  LEAVE_TYPE_LABELS,
+  ROLE_LABELS,
+  todayInHonduras,
+} from "@escolar/shared";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Kpi } from "@/components/kpi";
+import { ResetPassword } from "@/components/reset-password";
 import { SchoolLogo } from "@/components/school-logo";
 import { academic } from "@/lib/academic";
 import { ServiceError } from "@/lib/api";
 import { requireRole } from "@/lib/dal";
+import { identity } from "@/lib/identity";
 
 export const metadata: Metadata = { title: "Detalle del centro" };
 
@@ -28,6 +38,8 @@ export default async function RegionSchoolPage({ params, searchParams }: PagePro
     throw err;
   });
   const { summary, coverage, sections } = detail;
+  // Personal del centro (para ayudar a quien olvidó su contraseña o quedó bloqueado).
+  const staff = await identity.schoolStaff(session.accessToken, id).catch(() => []);
   const rows = [...coverage.rows].sort(
     (a, b) =>
       ["sin_cubrir", "cubierta", "normal"].indexOf(a.status) -
@@ -141,6 +153,35 @@ export default async function RegionSchoolPage({ params, searchParams }: PagePro
               </tbody>
             </table>
           </div>
+        )}
+      </section>
+
+      <section className="card overflow-hidden">
+        <h2 className="border-b border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
+          Dirección y personal
+        </h2>
+        {staff.length === 0 ? (
+          <p className="p-6 text-center text-sm text-slate-500">
+            El centro todavía no tiene personal cargado.
+          </p>
+        ) : (
+          <ul className="divide-y divide-slate-100">
+            {staff.map((u) => (
+              <li
+                key={`${u.id}-${u.role}`}
+                className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 text-sm"
+              >
+                <span>
+                  <span className="font-medium text-slate-900">{u.name}</span>
+                  <span className="block text-xs text-slate-500">
+                    {ROLE_LABELS[u.role]} · {u.nationalId ? formatNationalId(u.nationalId) : u.email}
+                    {!u.active && " · desactivado"}
+                  </span>
+                </span>
+                {u.active && <ResetPassword userId={u.id} name={u.name} />}
+              </li>
+            ))}
+          </ul>
         )}
       </section>
 

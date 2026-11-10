@@ -1,6 +1,7 @@
-import { formatDate, ROLE_LABELS } from "@escolar/shared";
+import { formatDate, formatNationalId, ROLE_LABELS } from "@escolar/shared";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ResetPassword } from "@/components/reset-password";
 import { requireRole } from "@/lib/dal";
 import { identity } from "@/lib/identity";
 import { setUserActiveAction } from "./actions";
@@ -46,7 +47,9 @@ export default async function UsersPage() {
                   <tr key={u.id} className={u.active ? "" : "bg-slate-50 text-slate-400"}>
                     <td className="px-4 py-3">
                       <p className="font-medium text-slate-900">{u.name}</p>
-                      <p className="text-xs text-slate-500">{u.email}</p>
+                      <p className="text-xs text-slate-500">
+                        {u.nationalId ? formatNationalId(u.nationalId) : u.email}
+                      </p>
                     </td>
                     <td className="whitespace-nowrap px-4 py-3">{ROLE_LABELS[u.role]}</td>
                     <td className="whitespace-nowrap px-4 py-3 tabular-nums">{formatDate(u.createdAt)}</td>
@@ -59,7 +62,10 @@ export default async function UsersPage() {
                         {u.active ? "Activo" : "Desactivado"}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="space-y-1 px-4 py-3 text-right">
+                      {u.id !== session.user.id && u.active && u.role !== "admin" && (
+                        <ResetPassword userId={u.id} name={u.name} />
+                      )}
                       {u.id !== session.user.id && (
                         <form action={setUserActiveAction}>
                           <input type="hidden" name="id" value={u.id} />

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 import { Field, FormAlert, SubmitButton } from "@/components/form-controls";
 import { initialFormState } from "@/lib/form-state";
@@ -36,6 +37,11 @@ export function LoginForm({ expired }: { expired: boolean }) {
       <div className="pt-2 [&>button]:w-full">
         <SubmitButton pendingText="Entrando…">Iniciar sesión</SubmitButton>
       </div>
+      <p className="text-center text-sm">
+        <Link href="/login/olvide" className="font-medium text-brand-700 hover:underline">
+          ¿Olvidaste tu contraseña?
+        </Link>
+      </p>
     </form>
   );
 }

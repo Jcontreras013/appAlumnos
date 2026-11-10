@@ -43,6 +43,13 @@
       "when": 1794332554232,
       "tag": "0005_acceso_de_familias",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794343025927,
+      "tag": "0006_bloqueo_por_intentos",
+      "breakpoints": true
     }
   ]
 }

@@ -6,6 +6,7 @@ import { type Db, ping } from "./db/client";
 import type { IdentityDeps } from "./deps";
 import type { SigningKeys } from "./lib/keys";
 import { TokenService } from "./lib/tokens";
+import { accountRoutes } from "./routes/accounts";
 import { authRoutes } from "./routes/auth";
 import { familyRoutes } from "./routes/family";
 import { logoRoutes } from "./routes/logo";
@@ -38,6 +39,7 @@ export async function buildApp({ db, keys, settings, logger }: BuildAppOptions) 
     await regionRoutes(scope, deps);
     await familyRoutes(scope, deps);
     await onboardingRoutes(scope, deps);
+    await accountRoutes(scope, deps);
   });
 
   return app;

@@ -9,7 +9,7 @@ import {
   switchMembershipInputSchema,
   type TokenPairDto,
 } from "@escolar/shared";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { Tx } from "../db/client";
 import { schools, type User, users } from "../db/schema";
@@ -21,7 +21,11 @@ import { hashPassword, verifyPassword } from "../lib/passwords";
 import type { TokenService } from "../lib/tokens";
 import { toSchoolDto, toUserDto } from "../lib/users";
 
-const INVALID_CREDENTIALS = "Usuario o contraseña incorrectos";
+/** Intentos fallidos seguidos antes de bloquear la cuenta, y por cuánto tiempo. */
+export const MAX_FAILED_LOGINS = 5;
+export const LOCK_MINUTES = 15;
+
+const INVALID_CREDENTIALS = `Usuario o contraseña incorrectos. Después de ${MAX_FAILED_LOGINS} intentos fallidos la cuenta se bloquea ${LOCK_MINUTES} minutos.`;
 
 /** Abre una sesión con un acceso concreto y lo recuerda para el próximo inicio de sesión. */
 async function openSession(
@@ -62,18 +66,41 @@ export async function authRoutes(app: FastifyInstance, { db, keys, tokens, setti
         .from(users)
         .where("nationalId" in id ? eq(users.nationalId, id.nationalId) : eq(users.email, id.email))
         .limit(1);
-      const passwordOk = await verifyPassword(user?.passwordHash ?? null, input.password);
+      // Cuenta bloqueada por intentos fallidos: ni se mira la contraseña (pero se tarda lo mismo).
+      const locked = Boolean(user?.lockedUntil && user.lockedUntil > new Date());
+      const passwordOk = locked
+        ? await verifyPassword(null, input.password)
+        : await verifyPassword(user?.passwordHash ?? null, input.password);
 
-      // El mismo mensaje para "no existe", "contraseña incorrecta" y "desactivado":
-      // la pantalla de login no debe servir para averiguar qué correos están registrados.
+      // El mismo mensaje para "no existe", "contraseña incorrecta", "bloqueada" y "desactivado":
+      // la pantalla de login no debe servir para averiguar qué correos o identidades están registrados.
       if (!user || !passwordOk || !user.active) {
         if (user) {
+          if (!locked && !passwordOk) {
+            // En SQL para que dos intentos al mismo tiempo no se salten el límite.
+            const [after] = await db
+              .update(users)
+              .set({
+                failedLogins: sql`case when ${users.failedLogins} + 1 >= ${MAX_FAILED_LOGINS} then 0 else ${users.failedLogins} + 1 end`,
+                lockedUntil: sql`case when ${users.failedLogins} + 1 >= ${MAX_FAILED_LOGINS} then now() + make_interval(mins => ${LOCK_MINUTES}) else null end`,
+              })
+              .where(eq(users.id, user.id))
+              .returning({ lockedUntil: users.lockedUntil });
+            if (after?.lockedUntil) {
+              await audit(db, request, {
+                action: "auth.locked",
+                actorUserId: user.id,
+                entityType: "user",
+                entityId: user.id,
+              });
+            }
+          }
           await audit(db, request, {
             action: "auth.login_failed",
             actorUserId: user.id,
             entityType: "user",
             entityId: user.id,
-            data: { reason: passwordOk ? "inactive" : "bad_password" },
+            data: { reason: locked ? "locked" : passwordOk ? "inactive" : "bad_password" },
           });
         } else {
           request.log.warn({ login: input.email }, "Intento de login con un usuario no registrado");
@@ -81,6 +108,9 @@ export async function authRoutes(app: FastifyInstance, { db, keys, tokens, setti
         throw unauthorized(INVALID_CREDENTIALS);
       }
 
+      if (user.failedLogins > 0 || user.lockedUntil) {
+        await db.update(users).set({ failedLogins: 0, lockedUntil: null }).where(eq(users.id, user.id));
+      }
       const options = await usableMemberships(db, user.id);
       if (options.length === 0) {
         throw forbidden("Tu cuenta no tiene acceso activo a ningún centro. Comunícate con la dirección.");

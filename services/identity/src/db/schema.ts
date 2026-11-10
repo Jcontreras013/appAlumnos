@@ -5,6 +5,7 @@ import {
   check,
   customType,
   index,
+  integer,
   jsonb,
   pgEnum,
   pgTable,
@@ -98,6 +99,9 @@ export const users = pgTable(
     passwordHash: text("password_hash").notNull(),
     /** Contraseña temporal entregada por el centro: hay que cambiarla al entrar. */
     mustChangePassword: boolean("must_change_password").notNull().default(false),
+    /** Intentos fallidos seguidos; al llegar al límite la cuenta se bloquea unos minutos. */
+    failedLogins: integer("failed_logins").notNull().default(0),
+    lockedUntil: timestamp("locked_until", { withTimezone: true }),
     active: boolean("active").notNull().default(true),
     /** Último acceso usado: al iniciar sesión se entra directo a ese centro. */
     lastMembershipId: uuid("last_membership_id"),
