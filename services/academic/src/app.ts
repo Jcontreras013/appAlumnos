@@ -11,6 +11,7 @@ import type { AcademicDeps } from "./deps";
 import type { IdentityClient } from "./lib/identity-client";
 import { evaluationRoutes } from "./routes/evaluation";
 import { importRoutes } from "./routes/import";
+import { planRoutes } from "./routes/plans";
 import { regionalRoutes } from "./routes/regional";
 import { staffRoutes } from "./routes/staff";
 import { structureRoutes } from "./routes/structure";
@@ -50,6 +51,7 @@ export async function buildApp(options: BuildAppOptions) {
     await staffRoutes(scope, deps);
     await regionalRoutes(scope, deps);
     await evaluationRoutes(scope, deps);
+    await planRoutes(scope, deps);
   });
   return app;
 }

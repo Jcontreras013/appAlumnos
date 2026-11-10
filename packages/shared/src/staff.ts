@@ -129,6 +129,8 @@ export interface RegionalSchoolSummaryDto {
   gradeProgress: { complete: number; total: number };
   /** Faltan 7 días o menos para el cierre de notas (o ya pasó) y no están completas. */
   behindOnGrades: boolean;
+  /** Planificaciones de la semana entregadas a la dirección. */
+  plans: { delivered: number; total: number; overdue: number };
 }
 
 export interface RegionalOverviewDto {
@@ -145,6 +147,9 @@ export interface RegionalOverviewDto {
     schoolsWithUncoveredClasses: number;
     studentsAtRisk: number;
     schoolsBehindOnGrades: number;
+    plansDelivered: number;
+    plansTotal: number;
+    plansOverdue: number;
     /** Promedio ponderado por alumnos de los centros que registran asistencia. */
     attendanceRate7d: number | null;
   };

@@ -277,4 +277,16 @@ export interface SchoolFollowUpDto {
   gradeProgress: { complete: number; total: number; items: GradeProgressDto[] };
   attendance: { rate7d: number | null; sectionsRecordedToday: number; sections: number };
   studentsAtRisk: StudentRiskDto[];
+  /** Planificación semanal de la semana de `date`: entregadas = enviadas, devueltas o aprobadas. */
+  plans: PlansSummaryDto;
+}
+
+export interface PlansSummaryDto {
+  weekStart: string;
+  deadline: string;
+  total: number;
+  delivered: number;
+  approved: number;
+  /** Sin entregar y con la fecha límite vencida. */
+  overdue: number;
 }

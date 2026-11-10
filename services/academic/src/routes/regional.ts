@@ -48,6 +48,7 @@ async function summarize(
       periodClosesOn: null,
       gradeProgress: { complete: 0, total: 0 },
       behindOnGrades: false,
+      plans: { delivered: 0, total: 0, overdue: 0 },
     };
   }
   await ensureDefaultPeriods(db, year);
@@ -78,6 +79,7 @@ async function summarize(
     periodName: follow.period?.name ?? null,
     periodClosesOn: follow.period?.closesOn ?? null,
     gradeProgress: { complete: follow.gradeProgress.complete, total: follow.gradeProgress.total },
+    plans: { delivered: follow.plans.delivered, total: follow.plans.total, overdue: follow.plans.overdue },
     behindOnGrades:
       follow.daysToClose !== null &&
       follow.daysToClose <= 7 &&
@@ -119,6 +121,9 @@ export async function regionalRoutes(app: FastifyInstance, { db, identity, today
         schoolsWithUncoveredClasses: schools.filter((s) => s.uncoveredClasses > 0).length,
         studentsAtRisk: sum("studentsAtRisk"),
         schoolsBehindOnGrades: schools.filter((s) => s.behindOnGrades).length,
+        plansDelivered: schools.reduce((acc, s) => acc + s.plans.delivered, 0),
+        plansTotal: schools.reduce((acc, s) => acc + s.plans.total, 0),
+        plansOverdue: schools.reduce((acc, s) => acc + s.plans.overdue, 0),
         attendanceRate7d: (() => {
           const withData = schools.filter((s) => s.attendanceRate7d !== null && s.students > 0);
           const weight = withData.reduce((acc, s) => acc + s.students, 0);

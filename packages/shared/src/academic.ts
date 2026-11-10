@@ -193,7 +193,12 @@ export function missingRequiredFields(fields: readonly PlanField[], content: Pla
   });
 }
 
-export const savePlanInputSchema = z.object({ content: z.record(z.string(), z.unknown()) });
+export const savePlanInputSchema = z.object({
+  content: z.record(z.string(), z.unknown()),
+  /** Versión que se editó: si alguien guardó otra cosa mientras tanto, se avisa en vez de pisarla. */
+  version: z.number().int().positive().optional(),
+});
+export type SavePlanInput = z.infer<typeof savePlanInputSchema>;
 
 export const createPlanInputSchema = z.object({
   assignmentId: z.uuid(),
@@ -288,6 +293,15 @@ export interface PlanHistoryDto {
   comment: string | null;
   version: number;
   createdAt: string;
+}
+
+export interface PlanDetailDto {
+  plan: LessonPlanDto;
+  history: PlanHistoryDto[];
+  /** Quien la escribe (titular o sustituto) y solo mientras sea borrador o esté devuelta. */
+  canEdit: boolean;
+  /** Dirección o coordinación, cuando está en revisión. */
+  canReview: boolean;
 }
 
 export interface PlanBoardRowDto {

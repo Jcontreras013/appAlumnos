@@ -11,6 +11,7 @@ import {
   type GradebookDto,
   type GradeProgressDto,
   type GradingPeriodDto,
+  mondayOf,
   periodGrade,
   RISK_RULES,
   type SchoolFollowUpDto,
@@ -33,6 +34,7 @@ import {
   teacherLeaves,
   teachingAssignments,
 } from "../db/schema";
+import { weekBoard } from "./plans";
 import { findCurrentYear, listAssignments, listSections } from "./queries";
 
 export const toPeriodDto = (p: typeof gradingPeriods.$inferSelect): GradingPeriodDto => ({
@@ -279,6 +281,14 @@ export async function followUp(db: DbOrTx, schoolId: string, date: string): Prom
     gradeProgress: { complete: 0, total: 0, items: [] },
     attendance: { rate7d: null, sectionsRecordedToday: 0, sections: 0 },
     studentsAtRisk: [],
+    plans: {
+      weekStart: mondayOf(date),
+      deadline: mondayOf(date),
+      total: 0,
+      delivered: 0,
+      approved: 0,
+      overdue: 0,
+    },
   };
   const year = await findCurrentYear(db, schoolId);
   if (!year) return empty;
@@ -398,5 +408,23 @@ export async function followUp(db: DbOrTx, schoolId: string, date: string): Prom
     gradeProgress: { complete: items.filter((i) => i.complete).length, total: items.length, items },
     attendance: { rate7d, sectionsRecordedToday, sections: sectionList.length },
     studentsAtRisk,
+    plans: await plansSummary(db, schoolId, assignments, date),
+  };
+}
+
+async function plansSummary(
+  db: DbOrTx,
+  schoolId: string,
+  assignments: AssignmentDto[],
+  date: string,
+): Promise<SchoolFollowUpDto["plans"]> {
+  const board = await weekBoard(db, schoolId, assignments, mondayOf(date), date);
+  return {
+    weekStart: board.weekStart,
+    deadline: board.deadline,
+    total: board.rows.length,
+    delivered: board.rows.filter((r) => r.submittedAt !== null).length,
+    approved: board.totals.aprobada,
+    overdue: board.totals.atrasadas,
   };
 }

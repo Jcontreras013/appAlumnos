@@ -1,4 +1,11 @@
-import { ATTENDANCE_STATUSES, DEFAULT_PASSING_GRADE, LEAVE_TYPES } from "@escolar/shared";
+import {
+  ATTENDANCE_STATUSES,
+  DEFAULT_PASSING_GRADE,
+  LEAVE_TYPES,
+  PLAN_STATUSES,
+  type PlanContent,
+  type PlanField,
+} from "@escolar/shared";
 import { sql } from "drizzle-orm";
 import {
   boolean,
@@ -34,6 +41,14 @@ export const relationshipEnum = pgEnum("relationship", ["madre", "padre", "tutor
 export const enrollmentStatusEnum = pgEnum("enrollment_status", ["activa", "retirada"]);
 export const leaveTypeEnum = pgEnum("leave_type", LEAVE_TYPES);
 export const attendanceStatusEnum = pgEnum("attendance_status", ATTENDANCE_STATUSES);
+export const planStatusEnum = pgEnum("plan_status", PLAN_STATUSES);
+export const planActionEnum = pgEnum("plan_action", [
+  "creada",
+  "guardada",
+  "enviada",
+  "aprobada",
+  "devuelta",
+]);
 
 // ───────────────────────────── Estructura académica ─────────────────────────────
 
@@ -454,6 +469,83 @@ export const attendanceRecords = pgTable(
 );
 
 /** Bitácora de cambios. Solo inserción. */
+// ───────────────────────────── Planificación semanal ─────────────────────────────
+
+/** Plantilla de planificación del centro (si no tiene, se usa la del Currículo Nacional Básico). */
+export const planTemplates = pgTable(
+  "plan_templates",
+  {
+    schoolId: uuid("school_id").primaryKey(),
+    fields: jsonb("fields").$type<PlanField[]>().notNull(),
+    deadlineDaysBefore: integer("deadline_days_before").notNull(),
+    updatedByUserId: uuid("updated_by_user_id").notNull(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [check("plan_templates_deadline", sql`${t.deadlineDaysBefore} between 0 and 14`)],
+);
+
+/**
+ * Planificación de una clase en una semana. Guarda una copia de los campos de la plantilla con la que
+ * se creó: si el centro cambia la plantilla, las planificaciones ya hechas no se rompen.
+ */
+export const lessonPlans = pgTable(
+  "lesson_plans",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    schoolId: schoolId(),
+    assignmentId: uuid("assignment_id").notNull(),
+    weekStart: date("week_start", { mode: "string" }).notNull(),
+    status: planStatusEnum("status").notNull().default("borrador"),
+    fields: jsonb("fields").$type<PlanField[]>().notNull(),
+    content: jsonb("content").$type<PlanContent>().notNull().default({}),
+    /** Sube con cada guardado: evita que dos ventanas se pisen sin darse cuenta. */
+    version: integer("version").notNull().default(1),
+    authorUserId: uuid("author_user_id").notNull(),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    reviewerUserId: uuid("reviewer_user_id"),
+    reviewerName: text("reviewer_name"),
+    reviewComment: text("review_comment"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique("lesson_plans_tenant_key").on(t.schoolId, t.id),
+    uniqueIndex("lesson_plans_assignment_week_key").on(t.assignmentId, t.weekStart),
+    index("lesson_plans_school_week_idx").on(t.schoolId, t.weekStart),
+    check("lesson_plans_monday", sql`extract(isodow from ${t.weekStart}) = 1`),
+    foreignKey({
+      name: "lesson_plans_assignment_fk",
+      columns: [t.schoolId, t.assignmentId],
+      foreignColumns: [teachingAssignments.schoolId, teachingAssignments.id],
+    }).onDelete("cascade"),
+  ],
+);
+
+/** Historial de cada planificación: quién la creó, guardó, envió, aprobó o devolvió. */
+export const planEvents = pgTable(
+  "plan_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    schoolId: schoolId(),
+    planId: uuid("plan_id").notNull(),
+    action: planActionEnum("action").notNull(),
+    actorUserId: uuid("actor_user_id").notNull(),
+    actorName: text("actor_name").notNull(),
+    comment: text("comment"),
+    version: integer("version").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("plan_events_plan_idx").on(t.planId, t.createdAt),
+    foreignKey({
+      name: "plan_events_plan_fk",
+      columns: [t.schoolId, t.planId],
+      foreignColumns: [lessonPlans.schoolId, lessonPlans.id],
+    }).onDelete("cascade"),
+  ],
+);
+
 export const auditEvents = pgTable(
   "audit_events",
   {
