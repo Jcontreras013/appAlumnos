@@ -105,6 +105,19 @@ export const users = pgTable(
     active: boolean("active").notNull().default(true),
     /** Último acceso usado: al iniciar sesión se entra directo a ese centro. */
     lastMembershipId: uuid("last_membership_id"),
+    /** Último inicio de sesión con contraseña: mide qué cuentas se usan de verdad (indicadores del piloto). */
+    lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
+    /** Verificación en dos pasos (TOTP): clave activa, la que se está configurando y desde cuándo. */
+    totpSecret: text("totp_secret"),
+    totpPendingSecret: text("totp_pending_secret"),
+    totpEnabledAt: timestamp("totp_enabled_at", { withTimezone: true }),
+    /** Último paso de 30 s aceptado: el mismo código no sirve dos veces. */
+    totpLastStep: integer("totp_last_step"),
+    /** Hash de los códigos de recuperación que quedan (cada uno sirve una sola vez). */
+    recoveryCodeHashes: text("recovery_code_hashes").array().notNull().default(sql`'{}'::text[]`),
+    /** Segundo paso pendiente del inicio de sesión: hash del desafío y hasta cuándo vale. */
+    mfaChallengeHash: text("mfa_challenge_hash"),
+    mfaChallengeExpiresAt: timestamp("mfa_challenge_expires_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

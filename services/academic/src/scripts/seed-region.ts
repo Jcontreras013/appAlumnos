@@ -167,6 +167,12 @@ const rand = (n: number) => {
 };
 const pick = <T>(list: T[]) => list[rand(list.length)] as T;
 
+/** Otro generador para los datos del parcial cerrado: así no cambia la secuencia del resto. */
+let pastSeed = 11;
+const randPast = (n: number) => {
+  pastSeed = (pastSeed * 1103515245 + 12345) % 2 ** 31;
+  return Math.floor((pastSeed / 2 ** 31) * n);
+};
 const GRADES = [
   "Primer grado",
   "Segundo grado",
@@ -360,6 +366,8 @@ await idApi("/regional-users", "POST", {
 
 const today = todayInHonduras();
 let studentsTotal = 0;
+/** Identidades ficticias de los alumnos: "0000" (ningún municipio real), año de nacimiento y correlativo. */
+let studentSeq = 0;
 for (const [index, school] of SCHOOLS.entries()) {
   console.log(`${school.name}…`);
   const created = await idApi<{ school: { id: string } }>("/schools", "POST", {
@@ -393,6 +401,15 @@ for (const [index, school] of SCHOOLS.entries()) {
       }),
     );
   }
+  // Secretaría del centro. En las escuelas que ya usan la plataforma ya entró (cuenta en uso).
+  await idSchool<UserDto>("/users", "POST", {
+    name: `Secretaría ${school.name}`,
+    email: `secretaria@${school.slug}.hn`,
+    password: PASSWORD,
+    role: "secretaria",
+  });
+  if ((school.usage ?? "al_dia") !== "sin_uso") await login(`secretaria@${school.slug}.hn`, PASSWORD);
+
   // Una maestra que trabaja en dos escuelas de Roatán (matutina y vespertina)
   if (school.slug === "demo-coxen-hole" || school.slug === "demo-west-end") {
     teachers.push(
@@ -426,6 +443,7 @@ for (const [index, school] of SCHOOLS.entries()) {
     ],
   });
   const currentPeriodId = periods.find((p) => p.number === 4)?.id as string;
+  const closedPeriodId = periods.find((p) => p.number === 3)?.id as string;
   const subjects: Record<string, string> = {};
   for (const name of SUBJECTS)
     subjects[name] = (await acApi<{ id: string }>("/subjects", "POST", { name })).id;
@@ -458,7 +476,9 @@ for (const [index, school] of SCHOOLS.entries()) {
     const count = 6 + rand(9);
     for (let i = 0; i < count; i++) {
       const last = `${pick(LAST)} ${pick(LAST)}`;
+      studentSeq++;
       rows.push({
+        identidad: `0000${2019 - g}${String(studentSeq).padStart(5, "0")}`,
         nombres: pick(FIRST),
         apellidos: last,
         grado: gradeName,
@@ -589,6 +609,37 @@ for (const [index, school] of SCHOOLS.entries()) {
             if (a === 3 && i === ungraded) return { studentId: r.studentId, points: null };
             const ability = profile.get(r.studentId)?.ability ?? 0.8;
             const ratio = Math.max(0, Math.min(1, ability + (rand(13) - 6) / 100));
+            return { studentId: r.studentId, points: Math.round(ratio * activity.maxPoints * 2) / 2 };
+          }),
+        });
+      }
+    }
+
+    // III Parcial (ya cerrado): completo en las escuelas al día; en las atrasadas, una de cada
+    // tres clases quedó con un alumno sin la nota del examen. Con su propio generador para no
+    // cambiar el resto de la demo.
+    for (const [c, assignmentId] of (assignmentsBySection[sectionId] ?? []).entries()) {
+      const missing = usage === "atrasada" && (s + c) % 3 === 0 ? (s + c) % Math.max(roster.length, 1) : -1;
+      for (const [a, activity] of [
+        { name: "Tareas del parcial", maxPoints: 30, day: -100 },
+        { name: "Proyecto", maxPoints: 30, day: -80 },
+        { name: "Examen del parcial", maxPoints: 40, day: -60 },
+      ].entries()) {
+        const id = randomUUID();
+        await acApi(`/activities/${id}`, "PUT", {
+          id,
+          assignmentId,
+          periodId: closedPeriodId,
+          name: activity.name,
+          maxPoints: activity.maxPoints,
+          date: addDays(today, activity.day),
+        });
+        await acApi("/scores", "PUT", {
+          activityId: id,
+          entries: roster.map((r, i) => {
+            if (a === 2 && i === missing) return { studentId: r.studentId, points: null };
+            const ability = profile.get(r.studentId)?.ability ?? 0.8;
+            const ratio = Math.max(0, Math.min(1, ability + (randPast(13) - 6) / 100));
             return { studentId: r.studentId, points: Math.round(ratio * activity.maxPoints * 2) / 2 };
           }),
         });

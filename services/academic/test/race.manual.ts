@@ -17,6 +17,7 @@ const app = await buildApp({
   identity: {
     getUser: async () => null,
     getScopeSchools: async () => [],
+    getScopeActivity: async () => ({ schools: [], activatedFamilyUserIds: [] }),
     createFamilyAccount: async () => {
       throw new Error("no se usa en esta prueba");
     },

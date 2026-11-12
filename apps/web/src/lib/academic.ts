@@ -21,16 +21,19 @@ import type {
   LeaveInput,
   LessonPlanDto,
   PeriodsInput,
+  PilotIndicatorsDto,
   PlanBoardDto,
   PlanDetailDto,
   PlanTemplateDto,
   PlanTemplateInput,
   PortalAccessDto,
   PortalAccessInput,
+  RegionalExportDto,
   RegionalOverviewDto,
   RegionalSchoolDetailDto,
   ReviewPlanInput,
   SavePlanInput,
+  SchoolExportDto,
   SchoolFollowUpDto,
   SchoolYearDto,
   SchoolYearInput,
@@ -176,6 +179,12 @@ export const academic = {
     call<{ saved: number }>("/attendance", { method: "PUT", token, body: input }),
   followUp: (token: string, fecha?: string) =>
     call<SchoolFollowUpDto>(fecha ? `/follow-up?fecha=${fecha}` : "/follow-up", { token }),
+  pilotIndicators: (token: string, from?: string, to?: string) => {
+    const query = new URLSearchParams({ ...(from ? { desde: from } : {}), ...(to ? { hasta: to } : {}) });
+    return call<PilotIndicatorsDto>(`/regional/pilot${query.size ? `?${query}` : ""}`, { token });
+  },
+  exportSchool: (token: string) => call<SchoolExportDto>("/export/school", { token }),
+  exportRegion: (token: string) => call<RegionalExportDto>("/regional/export", { token }),
   gradesReport: (token: string, sectionId: string, periodId?: string) =>
     call<{
       section: SectionDto;

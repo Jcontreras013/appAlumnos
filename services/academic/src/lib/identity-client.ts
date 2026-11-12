@@ -1,5 +1,11 @@
 import { ApiError } from "@escolar/service-kit";
-import type { FamilyAccountDto, FamilyAccountInput, ScopedSchoolDto, UserDto } from "@escolar/shared";
+import type {
+  FamilyAccountDto,
+  FamilyAccountInput,
+  ScopeActivityDto,
+  ScopedSchoolDto,
+  UserDto,
+} from "@escolar/shared";
 import type { FastifyRequest } from "fastify";
 
 /**
@@ -11,6 +17,8 @@ export interface IdentityClient {
   getUser(bearerToken: string, userId: string): Promise<UserDto | null>;
   /** Centros que la sesión puede ver (todo el departamento, el distrito o su propio centro). */
   getScopeSchools(bearerToken: string): Promise<ScopedSchoolDto[]>;
+  /** Qué cuentas ya se usan en los centros del ámbito (indicadores del piloto). */
+  getScopeActivity(bearerToken: string): Promise<ScopeActivityDto>;
   /** Cuenta del portal de familias (la crea o enlaza identity con los permisos de quien pide). */
   createFamilyAccount(bearerToken: string, input: FamilyAccountInput): Promise<FamilyAccountDto>;
   resetFamilyPassword(bearerToken: string, userId: string): Promise<FamilyAccountDto>;
@@ -94,6 +102,11 @@ export function httpIdentityClient(baseUrl: string): IdentityClient {
     getUser: (bearerToken, userId) => get<UserDto>(`${baseUrl}/users/${userId}`, bearerToken),
     getScopeSchools: async (bearerToken) =>
       (await get<ScopedSchoolDto[]>(`${baseUrl}/scope/schools`, bearerToken)) ?? [],
+    getScopeActivity: async (bearerToken) =>
+      (await get<ScopeActivityDto>(`${baseUrl}/scope/activity`, bearerToken)) ?? {
+        schools: [],
+        activatedFamilyUserIds: [],
+      },
     createFamilyAccount: (bearerToken, input) =>
       send<FamilyAccountDto>(`${baseUrl}/family-accounts`, bearerToken, "POST", input),
     resetFamilyPassword: (bearerToken, userId) =>

@@ -220,7 +220,7 @@ export default async function FollowUpPage({ searchParams }: PageProps<"/panel/s
           <h2 className="font-semibold text-slate-900">Cuadro de calificaciones para el SACE</h2>
           <p className="mt-1 text-sm text-slate-500">
             Descarga la nota de cada alumno por materia (con su número de identidad) para pasarla al SACE o
-            imprimirla. Se abre en Excel.
+            imprimirla. Se descarga en Excel, con la identidad completa (sin perder el cero inicial).
           </p>
           <form action="/panel/seguimiento/cuadro" className="mt-4 flex flex-wrap items-end gap-3">
             <div>

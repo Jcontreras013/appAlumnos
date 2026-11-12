@@ -1,17 +1,25 @@
-import { forbidden, notFound, parseOrThrow, unauthorized } from "@escolar/service-kit";
+import { createHash, randomBytes } from "node:crypto";
+import { badRequest, conflict, forbidden, notFound, parseOrThrow, unauthorized } from "@escolar/service-kit";
 import {
   changePasswordInputSchema,
+  formatNationalId,
   type LoginResponseDto,
+  type LoginResultDto,
   loginIdentifier,
   loginInputSchema,
   type MeResponseDto,
+  type MfaEnabledDto,
+  type MfaSetupDto,
+  mfaCodeInputSchema,
+  mfaLoginInputSchema,
   refreshInputSchema,
+  requiresMfa,
   switchMembershipInputSchema,
   type TokenPairDto,
 } from "@escolar/shared";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, gt, sql } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import type { Tx } from "../db/client";
+import type { Db, Tx } from "../db/client";
 import { schools, type User, users } from "../db/schema";
 import type { IdentityDeps } from "../deps";
 import { type ResolvedMembership, usableMemberships } from "../lib/access";
@@ -19,6 +27,7 @@ import { audit } from "../lib/audit";
 import { publicJwks } from "../lib/keys";
 import { hashPassword, verifyPassword } from "../lib/passwords";
 import type { TokenService } from "../lib/tokens";
+import { hashRecoveryCode, newRecoveryCodes, newTotpSecret, otpauthUrl, verifyTotp } from "../lib/totp";
 import { toSchoolDto, toUserDto } from "../lib/users";
 
 /** Intentos fallidos seguidos antes de bloquear la cuenta, y por cuánto tiempo. */
@@ -48,6 +57,43 @@ async function openSession(
   return { ...pair, user: toUserDto(user, chosen.membership) };
 }
 
+/** El desafío del segundo paso dura 5 minutos. */
+const MFA_CHALLENGE_MINUTES = 5;
+const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
+
+/**
+ * Un intento fallido (contraseña o código): suma al contador y, al llegar al límite, bloquea la
+ * cuenta. En SQL para que dos intentos al mismo tiempo no se salten el límite.
+ */
+async function registerFailure(db: Db, request: FastifyRequest, user: User, reason: string) {
+  const [after] = await db
+    .update(users)
+    .set({
+      failedLogins: sql`case when ${users.failedLogins} + 1 >= ${MAX_FAILED_LOGINS} then 0 else ${users.failedLogins} + 1 end`,
+      lockedUntil: sql`case when ${users.failedLogins} + 1 >= ${MAX_FAILED_LOGINS} then now() + make_interval(mins => ${LOCK_MINUTES}) else null end`,
+    })
+    .where(eq(users.id, user.id))
+    .returning({ lockedUntil: users.lockedUntil });
+  if (after?.lockedUntil) {
+    await audit(db, request, {
+      action: "auth.locked",
+      actorUserId: user.id,
+      entityType: "user",
+      entityId: user.id,
+    });
+  }
+  await audit(db, request, {
+    action: "auth.login_failed",
+    actorUserId: user.id,
+    entityType: "user",
+    entityId: user.id,
+    data: { reason },
+  });
+}
+
+/** Con qué entra la persona (para la app de autenticación). */
+const loginOf = (user: User) => user.email ?? (user.nationalId ? formatNationalId(user.nationalId) : user.id);
+
 export async function authRoutes(app: FastifyInstance, { db, keys, tokens, settings }: IdentityDeps) {
   const jwks = await publicJwks(keys);
   app.get("/.well-known/jwks.json", async (_request, reply) => {
@@ -58,7 +104,7 @@ export async function authRoutes(app: FastifyInstance, { db, keys, tokens, setti
   app.post(
     "/auth/login",
     { config: { rateLimit: { max: settings.loginRateLimitPerMinute, timeWindow: "1 minute" } } },
-    async (request): Promise<LoginResponseDto> => {
+    async (request): Promise<LoginResultDto> => {
       const input = parseOrThrow(loginInputSchema, request.body);
       const id = loginIdentifier(input.email);
       const [user] = await db
@@ -77,31 +123,16 @@ export async function authRoutes(app: FastifyInstance, { db, keys, tokens, setti
       if (!user || !passwordOk || !user.active) {
         if (user) {
           if (!locked && !passwordOk) {
-            // En SQL para que dos intentos al mismo tiempo no se salten el límite.
-            const [after] = await db
-              .update(users)
-              .set({
-                failedLogins: sql`case when ${users.failedLogins} + 1 >= ${MAX_FAILED_LOGINS} then 0 else ${users.failedLogins} + 1 end`,
-                lockedUntil: sql`case when ${users.failedLogins} + 1 >= ${MAX_FAILED_LOGINS} then now() + make_interval(mins => ${LOCK_MINUTES}) else null end`,
-              })
-              .where(eq(users.id, user.id))
-              .returning({ lockedUntil: users.lockedUntil });
-            if (after?.lockedUntil) {
-              await audit(db, request, {
-                action: "auth.locked",
-                actorUserId: user.id,
-                entityType: "user",
-                entityId: user.id,
-              });
-            }
+            await registerFailure(db, request, user, "bad_password");
+          } else {
+            await audit(db, request, {
+              action: "auth.login_failed",
+              actorUserId: user.id,
+              entityType: "user",
+              entityId: user.id,
+              data: { reason: locked ? "locked" : "inactive" },
+            });
           }
-          await audit(db, request, {
-            action: "auth.login_failed",
-            actorUserId: user.id,
-            entityType: "user",
-            entityId: user.id,
-            data: { reason: locked ? "locked" : passwordOk ? "inactive" : "bad_password" },
-          });
         } else {
           // Solo el inicio de lo que escribió: puede ser la identidad o el correo de una persona real.
           request.log.warn(
@@ -112,19 +143,148 @@ export async function authRoutes(app: FastifyInstance, { db, keys, tokens, setti
         throw unauthorized(INVALID_CREDENTIALS);
       }
 
-      if (user.failedLogins > 0 || user.lockedUntil) {
-        await db.update(users).set({ failedLogins: 0, lockedUntil: null }).where(eq(users.id, user.id));
-      }
       const options = await usableMemberships(db, user.id);
       if (options.length === 0) {
         throw forbidden("Tu cuenta no tiene acceso activo a ningún centro. Comunícate con la dirección.");
       }
+
+      // Con verificación en dos pasos: todavía no hay sesión, solo un desafío para el código.
+      if (user.totpEnabledAt && user.totpSecret) {
+        const challenge = randomBytes(32).toString("base64url");
+        await db
+          .update(users)
+          .set({
+            failedLogins: 0,
+            lockedUntil: null,
+            mfaChallengeHash: sha256(challenge),
+            mfaChallengeExpiresAt: new Date(Date.now() + MFA_CHALLENGE_MINUTES * 60_000),
+          })
+          .where(eq(users.id, user.id));
+        return { mfaRequired: true, challenge };
+      }
+
+      await db
+        .update(users)
+        .set({ failedLogins: 0, lockedUntil: null, lastLoginAt: new Date() })
+        .where(eq(users.id, user.id));
       // Se entra directo al último centro usado; desde el panel se puede cambiar.
       const chosen = options.find((o) => o.membership.id === user.lastMembershipId) ?? options[0];
       if (!chosen) throw forbidden();
       return db.transaction((tx) => openSession(tx, tokens, request, user, chosen, "auth.login"));
     },
   );
+
+  /**
+   * Segundo paso: el código de 6 dígitos de la app o un código de recuperación. Los fallos cuentan
+   * para el mismo bloqueo que la contraseña (5 intentos, 15 minutos).
+   */
+  app.post(
+    "/auth/login/mfa",
+    { config: { rateLimit: { max: settings.loginRateLimitPerMinute, timeWindow: "1 minute" } } },
+    async (request): Promise<LoginResponseDto> => {
+      const input = parseOrThrow(mfaLoginInputSchema, request.body);
+      const [user] = await db
+        .select()
+        .from(users)
+        .where(
+          and(
+            eq(users.mfaChallengeHash, sha256(input.challenge)),
+            gt(users.mfaChallengeExpiresAt, new Date()),
+          ),
+        )
+        .limit(1);
+      if (!user?.totpSecret || !user.active) {
+        throw unauthorized("La verificación venció. Vuelve a escribir tu usuario y contraseña.");
+      }
+      if (user.lockedUntil && user.lockedUntil > new Date()) throw unauthorized(INVALID_CREDENTIALS);
+
+      const step = verifyTotp(user.totpSecret, input.code, new Date(), user.totpLastStep);
+      const recoveryHash = step === null ? hashRecoveryCode(input.code) : null;
+      const usedRecovery = recoveryHash !== null && user.recoveryCodeHashes.includes(recoveryHash);
+      if (step === null && !usedRecovery) {
+        await registerFailure(db, request, user, "bad_mfa_code");
+        throw unauthorized(
+          "Código incorrecto. Revisa que sea el de esta cuenta y que la hora del teléfono esté bien.",
+        );
+      }
+
+      const options = await usableMemberships(db, user.id);
+      const chosen = options.find((o) => o.membership.id === user.lastMembershipId) ?? options[0];
+      if (!chosen)
+        throw forbidden("Tu cuenta no tiene acceso activo a ningún centro. Comunícate con la dirección.");
+      return db.transaction(async (tx) => {
+        await tx
+          .update(users)
+          .set({
+            failedLogins: 0,
+            lockedUntil: null,
+            lastLoginAt: new Date(),
+            mfaChallengeHash: null,
+            mfaChallengeExpiresAt: null,
+            ...(step !== null ? { totpLastStep: step } : {}),
+            ...(usedRecovery
+              ? { recoveryCodeHashes: user.recoveryCodeHashes.filter((h) => h !== recoveryHash) }
+              : {}),
+          })
+          .where(eq(users.id, user.id));
+        if (usedRecovery) {
+          await audit(tx, request, {
+            action: "auth.mfa_recovery_used",
+            actorUserId: user.id,
+            entityType: "user",
+            entityId: user.id,
+            data: { left: user.recoveryCodeHashes.length - 1 },
+          });
+        }
+        return openSession(tx, tokens, request, user, chosen, "auth.login");
+      });
+    },
+  );
+
+  /** Empezar a configurar la verificación en dos pasos: clave nueva y enlace para el código QR. */
+  app.post("/auth/mfa/setup", { preHandler: app.authenticate }, async (request): Promise<MfaSetupDto> => {
+    const [user] = await db.select().from(users).where(eq(users.id, request.auth.userId));
+    if (!user?.active) throw unauthorized();
+    if (user.totpEnabledAt) throw conflict("Ya tienes activada la verificación en dos pasos");
+    const secret = newTotpSecret();
+    await db.update(users).set({ totpPendingSecret: secret }).where(eq(users.id, user.id));
+    return { secret, otpauthUrl: otpauthUrl(secret, loginOf(user)) };
+  });
+
+  /** Activarla con el primer código que muestra la app: así se comprueba que quedó bien configurada. */
+  app.post("/auth/mfa/enable", { preHandler: app.authenticate }, async (request): Promise<MfaEnabledDto> => {
+    const { code } = parseOrThrow(mfaCodeInputSchema, request.body);
+    const [user] = await db.select().from(users).where(eq(users.id, request.auth.userId));
+    if (!user?.active) throw unauthorized();
+    if (user.totpEnabledAt) throw conflict("Ya tienes activada la verificación en dos pasos");
+    if (!user.totpPendingSecret) throw badRequest("Primero escanea el código QR");
+    const step = verifyTotp(user.totpPendingSecret, code, new Date());
+    if (step === null) {
+      throw badRequest(
+        "El código no coincide. Revisa que la hora del teléfono esté en automático e intenta de nuevo.",
+      );
+    }
+    const recoveryCodes = newRecoveryCodes();
+    await db.transaction(async (tx) => {
+      await tx
+        .update(users)
+        .set({
+          totpSecret: user.totpPendingSecret,
+          totpPendingSecret: null,
+          totpEnabledAt: new Date(),
+          totpLastStep: step,
+          recoveryCodeHashes: recoveryCodes.map(hashRecoveryCode),
+        })
+        .where(eq(users.id, user.id));
+      await audit(tx, request, {
+        action: "auth.mfa_enabled",
+        actorUserId: user.id,
+        entityType: "user",
+        entityId: user.id,
+      });
+    });
+    return { recoveryCodes };
+  });
 
   /** Cambiar la contraseña propia (obligatorio la primera vez si el centro entregó una temporal). */
   app.post(
@@ -218,11 +378,18 @@ export async function authRoutes(app: FastifyInstance, { db, keys, tokens, setti
     );
     if (!current) throw unauthorized("Ese acceso ya no está activo");
     const [school] = schoolId ? await db.select().from(schools).where(eq(schools.id, schoolId)) : [];
+    const enabled = Boolean(user.totpEnabledAt);
     return {
       user: toUserDto(user, current.membership),
       school: school ? toSchoolDto(school) : null,
       current: current.dto,
       memberships: options.map((o) => o.dto),
+      mfa: {
+        enabled,
+        setupRequired:
+          settings.requireMfa !== false && !enabled && requiresMfa(options.map((o) => o.membership.role)),
+        recoveryCodesLeft: user.recoveryCodeHashes.length,
+      },
     };
   });
 }

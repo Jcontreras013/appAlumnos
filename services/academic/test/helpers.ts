@@ -6,7 +6,7 @@ import {
   createAccessTokenVerifier,
   JWT_ALGORITHM,
 } from "@escolar/service-kit";
-import type { Role, ScopedSchoolDto, UserDto } from "@escolar/shared";
+import type { Role, ScopeActivityDto, ScopedSchoolDto, UserDto } from "@escolar/shared";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import { generateKeyPair, SignJWT } from "jose";
@@ -37,6 +37,8 @@ export async function setupAcademic(options: { today?: string } = {}) {
   const directory = new Map<string, UserDto>();
   /** Qué centros "ve" cada token regional (lo que en producción responde identity). */
   const scopes = new Map<string, ScopedSchoolDto[]>();
+  /** Qué cuentas ya se usan en esos centros (lo que respondería identity en /scope/activity). */
+  const activity = new Map<string, ScopeActivityDto>();
   /** Cuentas de familia creadas en identity (por identidad o correo), como las guardaría identity. */
   const familyAccounts = new Map<string, { userId: string; password: string; active: boolean }>();
   const identity: IdentityClient = {
@@ -45,6 +47,9 @@ export async function setupAcademic(options: { today?: string } = {}) {
     },
     async getScopeSchools(token) {
       return scopes.get(token) ?? [];
+    },
+    async getScopeActivity(token) {
+      return activity.get(token) ?? { schools: [], activatedFamilyUserIds: [] };
     },
     async createFamilyAccount(_token, input) {
       const key = input.nationalId ?? input.email ?? "";
@@ -216,6 +221,7 @@ export async function setupAcademic(options: { today?: string } = {}) {
     regionalUser,
     call,
     familyAccounts,
+    activity,
     seedStructure,
     directory,
     setToday: (value: string) => {

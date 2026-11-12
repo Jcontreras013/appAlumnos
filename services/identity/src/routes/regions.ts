@@ -29,7 +29,7 @@ const idParams = z.object({ id: z.uuid() });
  * Centros que puede ver la sesión según su ámbito:
  * plataforma => todos; departamento => los de sus distritos; distrito => los suyos; centro => el propio.
  */
-async function schoolsInScope(db: Db, request: FastifyRequest): Promise<ScopedSchoolDto[]> {
+export async function schoolsInScope(db: Db, request: FastifyRequest): Promise<ScopedSchoolDto[]> {
   const { role, schoolId, districtId, departmentId } = request.auth;
   const base = db
     .select({ school: schools, districtName: districts.name })

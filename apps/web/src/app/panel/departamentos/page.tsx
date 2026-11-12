@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { requireRole } from "@/lib/dal";
 import { identity } from "@/lib/identity";
-import { DepartmentForm, DistrictForm, RegionalUserForm } from "./forms";
+import { DepartmentForm, DistrictForm, RegionalUserForm, ResetMfaForm } from "./forms";
 
 export const metadata: Metadata = { title: "Departamentos" };
 
@@ -76,6 +76,10 @@ export default async function DepartmentsPage() {
               <RegionalUserForm scopes={scopes} />
             </div>
           )}
+          <div className="card p-5">
+            <h2 className="mb-4 font-semibold text-slate-900">Verificación en dos pasos</h2>
+            <ResetMfaForm />
+          </div>
         </aside>
       </div>
     </div>

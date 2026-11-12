@@ -16,6 +16,8 @@ export interface IdentityConfig extends TokenSettings {
   databaseUrl: string;
   runMigrationsOnStart: boolean;
   loginRateLimitPerMinute: number;
+  /** REQUIRE_MFA=false solo en demos: la verificación en dos pasos queda opcional para todos. */
+  requireMfa: boolean;
   jwtKeyId: string;
   jwtPrivateKeyPem: string;
   jwtPublicKeyPem: string;
@@ -33,6 +35,7 @@ export function loadConfig(): IdentityConfig {
     databaseUrl: databaseUrlFromEnv(),
     runMigrationsOnStart: optionalEnv("RUN_MIGRATIONS", "true") === "true",
     loginRateLimitPerMinute: intEnv("LOGIN_RATE_LIMIT_PER_MINUTE", 10),
+    requireMfa: optionalEnv("REQUIRE_MFA", "true") !== "false",
     accessTokenTtlSeconds: intEnv("ACCESS_TOKEN_TTL_SECONDS", DEFAULT_TOKEN_SETTINGS.accessTokenTtlSeconds),
     refreshTokenTtlSeconds: intEnv(
       "REFRESH_TOKEN_TTL_SECONDS",

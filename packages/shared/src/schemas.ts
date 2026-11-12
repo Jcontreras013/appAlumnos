@@ -220,3 +220,20 @@ export const roleChangeSchema = z.object({
   to: z.enum(STAFF_ROLES, { error: "Elige el cargo nuevo" }),
 });
 export type RoleChange = z.infer<typeof roleChangeSchema>;
+
+/** Segundo paso del inicio de sesión: el código de la app (6 dígitos) o uno de recuperación. */
+export const mfaLoginInputSchema = z.object({
+  challenge: z.string().min(20).max(200),
+  code: z
+    .string({ error: "Escribe el código" })
+    .trim()
+    .min(6, { error: "Escribe el código de 6 dígitos de tu app" })
+    .max(20, { error: "Código inválido" }),
+});
+
+export const mfaCodeInputSchema = z.object({
+  code: z
+    .string({ error: "Escribe el código" })
+    .trim()
+    .regex(/^\d{6}$/, { error: "Escribe los 6 dígitos que muestra la app" }),
+});

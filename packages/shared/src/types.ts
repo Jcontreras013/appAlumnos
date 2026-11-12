@@ -74,6 +74,28 @@ export interface LoginResponseDto extends TokenPairDto {
   user: UserDto;
 }
 
+/** La contraseña estuvo bien, pero la cuenta usa verificación en dos pasos: falta el código. */
+export interface MfaChallengeDto {
+  mfaRequired: true;
+  /** Vale 5 minutos y una sola vez; se manda con el código a /auth/login/mfa. */
+  challenge: string;
+}
+
+export type LoginResultDto = LoginResponseDto | MfaChallengeDto;
+
+export const isMfaChallenge = (r: LoginResultDto): r is MfaChallengeDto => "mfaRequired" in r;
+
+/** Para configurar la app de autenticación: la clave (para escribirla) y el enlace del código QR. */
+export interface MfaSetupDto {
+  secret: string;
+  otpauthUrl: string;
+}
+
+export interface MfaEnabledDto {
+  /** Se muestran una sola vez: sirven si se pierde el teléfono. */
+  recoveryCodes: string[];
+}
+
 /** Un acceso de la persona: su rol en un centro, distrito o departamento. */
 export interface MembershipDto {
   id: string;
@@ -93,6 +115,8 @@ export interface MeResponseDto {
   current: MembershipDto;
   /** Todos los accesos activos de la persona (para cambiar de centro sin volver a iniciar sesión). */
   memberships: MembershipDto[];
+  /** Verificación en dos pasos: si la tiene y si su cargo la exige y todavía no la activó. */
+  mfa: { enabled: boolean; setupRequired: boolean; recoveryCodesLeft: number };
 }
 
 export interface DistrictDto {

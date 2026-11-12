@@ -10,6 +10,7 @@ import { type Db, ping } from "./db/client";
 import type { AcademicDeps } from "./deps";
 import type { IdentityClient } from "./lib/identity-client";
 import { evaluationRoutes } from "./routes/evaluation";
+import { exportRoutes } from "./routes/exports";
 import { familyRoutes } from "./routes/family";
 import { importRoutes } from "./routes/import";
 import { planRoutes } from "./routes/plans";
@@ -54,6 +55,7 @@ export async function buildApp(options: BuildAppOptions) {
     await evaluationRoutes(scope, deps);
     await planRoutes(scope, deps);
     await familyRoutes(scope, deps);
+    await exportRoutes(scope, deps);
   });
   return app;
 }

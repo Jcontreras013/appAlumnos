@@ -16,7 +16,7 @@ export const PASSWORD = "contraseña-de-prueba-1";
  * Levanta el servicio completo contra un Postgres real en memoria (PGlite) con las migraciones
  * reales. No necesita Docker ni una base externa, así que corre igual en local y en CI.
  */
-export async function setupIdentity(settings: Partial<TokenSettings> = {}) {
+export async function setupIdentity(settings: Partial<TokenSettings> & { requireMfa?: boolean } = {}) {
   const client = new PGlite();
   const db = drizzle(client, { schema }) as unknown as Db;
   await migrate(drizzle(client, { schema }), { migrationsFolder: migrationsFolder() });

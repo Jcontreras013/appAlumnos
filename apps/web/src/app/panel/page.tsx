@@ -10,9 +10,10 @@ import { MODULES } from "@/lib/modules";
 export const metadata: Metadata = { title: "Inicio" };
 
 export default async function PanelHome() {
-  const { user, school, accessToken } = await getSession();
+  const { user, school, accessToken, mfa } = await getSession();
   // Las direcciones departamental y distrital empiezan en su tablero de centros.
-  if (isRegionalRole(user.role)) redirect("/panel/region");
+  // Mientras falte activar la verificación en dos pasos, el panel (el layout) la pide aquí.
+  if (isRegionalRole(user.role) && !mfa.setupRequired) redirect("/panel/region");
   // Las familias van directo a ver a sus hijos.
   if (user.role === "padre" && !user.mustChangePassword) redirect("/panel/familia");
   const firstName = user.name.split(" ")[0];

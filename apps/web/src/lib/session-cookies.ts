@@ -5,6 +5,8 @@
  */
 export const ACCESS_COOKIE = "esc_access";
 export const REFRESH_COOKIE = "esc_refresh";
+/** Desafío del segundo paso del inicio de sesión (verificación en dos pasos): dura 5 minutos. */
+export const MFA_COOKIE = "esc_mfa";
 
 export function cookieOptions(maxAgeSeconds: number) {
   const secure = process.env.COOKIE_SECURE

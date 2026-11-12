@@ -1,14 +1,21 @@
 "use server";
 
-import { accountUpdateSchema, changePasswordInputSchema, type PasswordResetDto } from "@escolar/shared";
+import {
+  accountUpdateSchema,
+  changePasswordInputSchema,
+  mfaCodeInputSchema,
+  type PasswordResetDto,
+} from "@escolar/shared";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { z } from "zod";
 import { academic } from "@/lib/academic";
 import { getSession, requireRole } from "@/lib/dal";
 import type { FormState } from "@/lib/form-state";
 import { formValues, fromServiceError, fromZodError, runFormAction } from "@/lib/forms";
 import { identity } from "@/lib/identity";
+import { qrPath } from "@/lib/qr";
 import { clearSessionCookies, setSessionCookies } from "@/lib/session";
 import { REFRESH_COOKIE } from "@/lib/session-cookies";
 
@@ -92,6 +99,57 @@ export async function updateAccountAction(_prev: FormState, formData: FormData):
       }
       revalidatePath("/panel", "layout");
       return `Datos de ${user.name} guardados.`;
+    },
+  });
+}
+
+// ── Verificación en dos pasos ──
+
+export interface MfaSetupState {
+  setup?: { secret: string; qr: { size: number; d: string } };
+  error?: string;
+}
+
+/** Clave nueva para la app del teléfono, con su código QR. */
+export async function startMfaSetupAction(): Promise<MfaSetupState> {
+  const { accessToken } = await getSession();
+  try {
+    const setup = await identity.setupMfa(accessToken);
+    return { setup: { secret: setup.secret, qr: qrPath(setup.otpauthUrl) } };
+  } catch (err) {
+    return { error: fromServiceError(err).error };
+  }
+}
+
+export interface MfaEnableState {
+  error?: string;
+  recoveryCodes?: string[];
+}
+
+/**
+ * Activarla con el primer código de la app. No se refresca la página aquí: primero se muestran los
+ * códigos de recuperación (una sola vez) y la persona sigue cuando los guardó.
+ */
+export async function enableMfaAction(_prev: MfaEnableState, formData: FormData): Promise<MfaEnableState> {
+  const { accessToken } = await getSession();
+  const parsed = mfaCodeInputSchema.safeParse({ code: formData.get("code") });
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message };
+  try {
+    return { recoveryCodes: (await identity.enableMfa(accessToken, parsed.data.code)).recoveryCodes };
+  } catch (err) {
+    return { error: fromServiceError(err).error };
+  }
+}
+
+/** Equipo de la plataforma: quitar la verificación de alguien que perdió el teléfono y sus códigos. */
+export async function resetMfaAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const { accessToken } = await requireRole("superadmin");
+  return runFormAction(formData, {
+    schema: z.object({ login: z.string().trim().min(3, { error: "Escribe el correo o la identidad" }) }),
+    fields: ["login"],
+    submit: async ({ login }) => {
+      await identity.resetMfa(accessToken, login);
+      return `Listo: ${login} vuelve a entrar solo con su contraseña y activa la verificación de nuevo.`;
     },
   });
 }

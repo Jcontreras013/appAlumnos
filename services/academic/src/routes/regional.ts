@@ -1,6 +1,10 @@
-import { notFound, parseOrThrow, requireRole } from "@escolar/service-kit";
+import { badRequest, notFound, parseOrThrow, requireRole } from "@escolar/service-kit";
 import {
+  addDays,
   isIsoDate,
+  PILOT_INDICATORS,
+  type PilotIndicatorsDto,
+  type PilotSchoolDto,
   type RegionalOverviewDto,
   type RegionalSchoolDetailDto,
   type RegionalSchoolSummaryDto,
@@ -14,13 +18,18 @@ import { enrollments } from "../db/schema";
 import type { AcademicDeps } from "../deps";
 import { ensureDefaultPeriods, followUp } from "../lib/evaluation";
 import { bearerOf } from "../lib/identity-client";
+import { pilotForSchool } from "../lib/pilot";
 import { findCurrentYear, listAssignments, listSections } from "../lib/queries";
 import { coverageFor } from "../lib/staff";
 
 const dateQuery = z.object({ fecha: z.string().refine(isIsoDate).optional() });
+const rangeQuery = z.object({
+  desde: z.string().refine(isIsoDate, { error: "Fecha inválida" }).optional(),
+  hasta: z.string().refine(isIsoDate, { error: "Fecha inválida" }).optional(),
+});
 const idParams = z.object({ id: z.uuid() });
 
-async function summarize(
+export async function summarize(
   db: DbOrTx,
   school: ScopedSchoolDto,
   date: string,
@@ -147,5 +156,44 @@ export async function regionalRoutes(app: FastifyInstance, { db, identity, today
       coverage: await coverageFor(db, id, date),
       sections: year ? await listSections(db, id, year.id) : [],
     };
+  });
+
+  /** Indicadores del piloto por centro y en total, en un período (por defecto, las últimas 4 semanas). */
+  app.get("/regional/pilot", guard, async (request): Promise<PilotIndicatorsDto> => {
+    const { desde, hasta } = parseOrThrow(rangeQuery, request.query);
+    const to = hasta ?? today();
+    const from = desde ?? addDays(to, -27);
+    if (from > to) throw badRequest("La fecha inicial debe ser anterior a la final");
+    const token = bearerOf(request);
+    const [scope, activity] = await Promise.all([
+      identity.getScopeSchools(token),
+      identity.getScopeActivity(token),
+    ]);
+    const families = new Set(activity.activatedFamilyUserIds);
+    const schools: PilotSchoolDto[] = [];
+    let days = 0;
+    for (const school of scope.filter((s) => s.active)) {
+      const result = await pilotForSchool(
+        db,
+        school,
+        activity.schools.find((a) => a.schoolId === school.id),
+        families,
+        from,
+        to,
+        today(),
+      );
+      schools.push(result.school);
+      days = Math.max(days, result.businessDays);
+    }
+    const totals = Object.fromEntries(
+      PILOT_INDICATORS.map((k) => [
+        k,
+        {
+          met: schools.reduce((acc, s) => acc + s.measures[k].met, 0),
+          total: schools.reduce((acc, s) => acc + s.measures[k].total, 0),
+        },
+      ]),
+    ) as PilotIndicatorsDto["totals"];
+    return { from, to, businessDays: days, schools, totals };
   });
 }

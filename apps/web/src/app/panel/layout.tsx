@@ -2,6 +2,7 @@ import { isRegionalRole, ROLE_LABELS, type Role } from "@escolar/shared";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { ChangePasswordForm } from "@/components/change-password-form";
+import { MfaSetup } from "@/components/mfa-setup";
 import { Nav, type NavItem } from "@/components/nav";
 import { OfflineAgent } from "@/components/offline";
 import { SchoolLogo } from "@/components/school-logo";
@@ -11,12 +12,16 @@ import { MODULES } from "@/lib/modules";
 import { logoutAction, switchMembershipAction } from "./actions";
 
 export default async function PanelLayout({ children }: { children: ReactNode }) {
-  const { user, school, current, memberships } = await getSession();
+  const { user, school, current, memberships, mfa } = await getSession();
+  // Antes de usar el panel: cambiar la contraseña temporal y, en los cargos que lo exigen, activar
+  // la verificación en dos pasos.
+  const gated = user.mustChangePassword || mfa.setupRequired;
 
   const is = (...roles: Role[]) => roles.includes(user.role);
   const items: NavItem[] = [];
   if (isRegionalRole(user.role)) {
     items.push({ href: "/panel/region", label: "Tablero de centros" });
+    items.push({ href: "/panel/region/indicadores", label: "Indicadores del piloto" });
   } else if (is("padre")) {
     items.push({ href: "/panel/familia", label: "Mis hijos" });
   } else {
@@ -39,6 +44,9 @@ export default async function PanelLayout({ children }: { children: ReactNode })
     items.push({ href: "/panel/licencias", label: "Licencias y sustitutos" });
     items.push({ href: "/panel/estructura", label: "Estructura académica" });
   }
+  if (is("admin", "coordinador", "secretaria")) {
+    items.push({ href: "/panel/exportar", label: "Exportar datos" });
+  }
   if (is("admin")) {
     items.push({ href: "/panel/usuarios", label: "Personal y usuarios" });
     items.push({ href: "/panel/colegio", label: "Mi colegio" });
@@ -59,10 +67,7 @@ export default async function PanelLayout({ children }: { children: ReactNode })
           </span>
           <span className="truncate">{APP_NAME}</span>
         </div>
-        <Nav
-          items={user.mustChangePassword ? [] : items}
-          upcoming={user.mustChangePassword ? [] : upcoming}
-        />
+        <Nav items={gated ? [] : items} upcoming={gated ? [] : upcoming} />
       </aside>
 
       <div className="flex min-w-0 flex-col">
@@ -138,6 +143,19 @@ export default async function PanelLayout({ children }: { children: ReactNode })
               </div>
               <div className="card p-5">
                 <ChangePasswordForm temporary />
+              </div>
+            </div>
+          ) : mfa.setupRequired ? (
+            <div className="space-y-4">
+              <div>
+                <h1 className="text-2xl font-semibold text-slate-900">Activa la verificación en dos pasos</h1>
+                <p className="mt-1 max-w-2xl text-sm text-slate-500">
+                  Tu cuenta ve los datos de muchos centros. Para protegerla, además de la contraseña te
+                  pediremos un código de tu teléfono al entrar. Toma un par de minutos y se hace una sola vez.
+                </p>
+              </div>
+              <div className="card p-5">
+                <MfaSetup />
               </div>
             </div>
           ) : (

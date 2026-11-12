@@ -27,9 +27,14 @@ export const getSession = cache(async (): Promise<Session> => {
   }
 });
 
-/** Exige uno de los roles; si no, manda al inicio del panel. */
+/**
+ * Exige uno de los roles; si no, manda al inicio del panel. También manda al inicio a quien todavía
+ * debe cambiar su contraseña temporal o activar la verificación en dos pasos: ahí el panel le pide
+ * hacerlo, y ninguna otra página, acción ni descarga funciona antes.
+ */
 export async function requireRole(...roles: Role[]): Promise<Session> {
   const session = await getSession();
   if (!roles.includes(session.user.role)) redirect("/panel");
+  if (session.user.mustChangePassword || session.mfa.setupRequired) redirect("/panel");
   return session;
 }

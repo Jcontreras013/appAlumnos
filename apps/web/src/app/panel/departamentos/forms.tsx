@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { resetMfaAction } from "@/app/panel/actions";
 import { Field, FormAlert, SelectField, SubmitButton } from "@/components/form-controls";
 import { initialFormState } from "@/lib/form-state";
 import { createDepartmentAction, createDistrictAction, createRegionalUserAction } from "./actions";
@@ -56,6 +57,25 @@ export function RegionalUserForm({ scopes }: { scopes: Option[] }) {
         state={state}
       />
       <SubmitButton pendingText="Creando…">Dar acceso</SubmitButton>
+    </form>
+  );
+}
+
+/** Para quien perdió el teléfono y sus códigos de recuperación. */
+export function ResetMfaForm() {
+  const [state, action] = useActionState(resetMfaAction, initialFormState);
+  return (
+    <form action={action} className="space-y-3" noValidate>
+      <FormAlert state={state} />
+      <Field
+        name="login"
+        label="Correo o identidad de la persona"
+        idPrefix="restablecer-2fa"
+        required
+        state={state}
+        hint="Vuelve a entrar solo con su contraseña y activa la verificación de nuevo."
+      />
+      <SubmitButton pendingText="Restableciendo…">Restablecer verificación</SubmitButton>
     </form>
   );
 }

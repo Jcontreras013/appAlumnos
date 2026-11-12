@@ -252,8 +252,9 @@ if (-not ((Test-Path $EnvIdentity) -and (Test-Path $EnvAcademic))) {
 }
 
 # La carga de la demo inicia sesión con cada maestro: en esta demo local se sube el límite por minuto.
-$lineas = @(Get-Content $EnvIdentity | Where-Object { $_ -notlike "LOGIN_RATE_LIMIT_PER_MINUTE=*" })
-EscribirArchivo $EnvIdentity ($lineas + @("LOGIN_RATE_LIMIT_PER_MINUTE=300"))
+# Y la verificación en dos pasos queda opcional (se puede mostrar desde "Mi cuenta").
+$lineas = @(Get-Content $EnvIdentity | Where-Object { $_ -notlike "LOGIN_RATE_LIMIT_PER_MINUTE=*" -and $_ -notlike "REQUIRE_MFA=*" })
+EscribirArchivo $EnvIdentity ($lineas + @("LOGIN_RATE_LIMIT_PER_MINUTE=300", "REQUIRE_MFA=false"))
 
 # Los servicios se hablan por IPv4 (en Windows "localhost" puede ir primero a IPv6).
 $lineas = @(Get-Content $EnvAcademic | Where-Object { $_ -notlike "IDENTITY_URL=*" -and $_ -notlike "ACADEMIC_URL=*" })

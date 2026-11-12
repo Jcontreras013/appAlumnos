@@ -7,6 +7,7 @@ import type { IdentityDeps } from "./deps";
 import type { SigningKeys } from "./lib/keys";
 import { TokenService } from "./lib/tokens";
 import { accountRoutes } from "./routes/accounts";
+import { activityRoutes } from "./routes/activity";
 import { authRoutes } from "./routes/auth";
 import { familyRoutes } from "./routes/family";
 import { logoRoutes } from "./routes/logo";
@@ -18,7 +19,11 @@ import { userRoutes } from "./routes/users";
 export interface BuildAppOptions {
   db: Db;
   keys: SigningKeys;
-  settings: TokenSettings & { loginRateLimitPerMinute: number };
+  settings: TokenSettings & {
+    loginRateLimitPerMinute: number;
+    /** Exigir verificación en dos pasos a los cargos regionales y de la plataforma (por defecto, sí). */
+    requireMfa?: boolean;
+  };
   logger?: FastifyServerOptions["logger"];
 }
 
@@ -40,6 +45,7 @@ export async function buildApp({ db, keys, settings, logger }: BuildAppOptions) 
     await familyRoutes(scope, deps);
     await onboardingRoutes(scope, deps);
     await accountRoutes(scope, deps);
+    await activityRoutes(scope, deps);
   });
 
   return app;

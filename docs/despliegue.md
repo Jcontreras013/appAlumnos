@@ -124,5 +124,6 @@ cuánto tarda y que el procedimiento funciona.
 
 ## Pendiente antes de abrir a las 100 escuelas
 
-Ver [docs/seguridad.md](seguridad.md): segundo factor para la departamental y la plataforma, prueba de
-penetración externa y convenio de protección de datos con la Secretaría de Educación.
+Ver [docs/seguridad.md](seguridad.md): prueba de penetración externa y convenio de protección de datos
+con la Secretaría de Educación. La verificación en dos pasos ya está activa: en producción no se define
+`REQUIRE_MFA` (vale `true`); `REQUIRE_MFA=false` es solo para las demos.

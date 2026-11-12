@@ -59,3 +59,16 @@ export function isSchoolRole(role: Role): role is SchoolRole {
 export function isRegionalRole(role: Role): role is RegionalRole {
   return (REGIONAL_ROLES as readonly string[]).includes(role);
 }
+
+/**
+ * Roles que ven datos de muchos centros: deben usar verificación en dos pasos (2FA). La primera vez
+ * entran con la contraseña y el panel les pide activarla antes de seguir.
+ */
+export const MFA_ROLES = [
+  "superadmin",
+  "director_departamental",
+  "director_distrital",
+] as const satisfies readonly Role[];
+
+export const requiresMfa = (roles: readonly Role[]) =>
+  roles.some((r) => (MFA_ROLES as readonly Role[]).includes(r));

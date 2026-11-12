@@ -6,7 +6,13 @@ import {
   parseOrThrow,
   requireRole,
 } from "@escolar/service-kit";
-import { accountUpdateSchema, formatNationalId, type PasswordResetDto, type UserDto } from "@escolar/shared";
+import {
+  accountUpdateSchema,
+  formatNationalId,
+  loginIdentifier,
+  type PasswordResetDto,
+  type UserDto,
+} from "@escolar/shared";
 import { and, asc, eq, ne } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
@@ -17,6 +23,12 @@ import { audit } from "../lib/audit";
 import { resetToTemporary, toUserDto } from "../lib/users";
 
 const idParams = z.object({ id: z.uuid() });
+const mfaResetSchema = z.object({
+  login: z
+    .string({ error: "Escribe el correo o la identidad" })
+    .trim()
+    .min(3, { error: "Escribe el correo o la identidad" }),
+});
 const SCHOOL_STAFF_ROLES = ["docente", "coordinador", "secretaria", "finanzas", "padre"];
 
 /** Centros sobre los que tiene autoridad quien pide (null = todos, solo el equipo de la plataforma). */
@@ -151,6 +163,51 @@ export async function accountRoutes(app: FastifyInstance, { db, tokens }: Identi
       throw err;
     }
   });
+
+  /**
+   * Quitar la verificación en dos pasos de alguien que perdió el teléfono y sus códigos de
+   * recuperación. Solo el equipo de la plataforma; la persona la vuelve a activar al entrar.
+   */
+  app.post(
+    "/accounts/mfa/reset",
+    { preHandler: [app.authenticate, requireRole("superadmin")] },
+    async (request, reply) => {
+      const { login } = parseOrThrow(mfaResetSchema, request.body);
+      const who = loginIdentifier(login);
+      const [user] = await db
+        .select()
+        .from(users)
+        .where("nationalId" in who ? eq(users.nationalId, who.nationalId) : eq(users.email, who.email));
+      if (!user) throw notFound("No hay ninguna cuenta con ese correo o identidad");
+      if (user.id === request.auth.userId) {
+        throw forbidden("Tu propia verificación la restablece otra persona del equipo");
+      }
+      const id = user.id;
+      await db.transaction(async (tx) => {
+        await tx
+          .update(users)
+          .set({
+            totpSecret: null,
+            totpPendingSecret: null,
+            totpEnabledAt: null,
+            totpLastStep: null,
+            recoveryCodeHashes: [],
+            mfaChallengeHash: null,
+            mfaChallengeExpiresAt: null,
+          })
+          .where(eq(users.id, id));
+        await tokens.revokeAllForUser(tx, id);
+        await audit(tx, request, {
+          action: "account.mfa_reset",
+          schoolId: null,
+          actorUserId: request.auth.userId,
+          entityType: "user",
+          entityId: id,
+        });
+      });
+      return reply.status(204).send();
+    },
+  );
 
   /** Personal de un centro del ámbito (para que la departamental vea y ayude a sus directores). */
   app.get(

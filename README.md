@@ -29,6 +29,7 @@ Para colegios privados quedan además facturación (con CAI) y wallet de cafeter
 | 3    | Cuaderno del maestro sin internet (asistencia y notas por actividad), alerta temprana, cuadro para el SACE  | ✅ Listo |
 | 4    | Planificación semanal con la plantilla del centro, revisión de dirección/coordinación e historial           | ✅ Listo |
 | 5    | Portal de familias: notas, asistencia y tareas de sus hijos; acceso con identidad; boleta imprimible        | ✅ Listo |
+| 6    | Piloto: corregir datos sin perder notas, Excel, indicadores del piloto, verificación en dos pasos (2FA)     | ✅ Listo |
 | —    | Para colegios privados: facturación con CAI y wallet de cafetería                                           | Después  |
 
 ## Arquitectura
@@ -76,9 +77,13 @@ SACE): cubre lo que pasa _antes_ de que las notas lleguen ahí.
 | Los problemas se ven cuando el parcial ya cerró        | **Alerta temprana**: alumnos en riesgo por faltas o por la proyección de sus notas, antes del cierre     |
 | La dirección no sabe qué maestros van atrasados        | Avance de notas por clase y aviso cuando el cierre está a 7 días o menos                                 |
 | La departamental ve los datos cuando ya son históricos | Tablero con asistencia, alumnos en riesgo y centros atrasados, al día                                    |
-| Las notas se transcriben a mano desde cuadernos        | **Cuadro de calificaciones** por sección (identidad, alumno, nota por materia) para pasar al SACE        |
+| Las notas se transcriben a mano desde cuadernos        | **Cuadro de calificaciones** en Excel por sección (identidad, alumno, nota por materia) para el SACE     |
 
 ## Decisiones importantes
+
+- **Verificación en dos pasos para quien ve muchos centros.** La departamental, la distrital y la
+  plataforma activan un código de su teléfono (TOTP) la primera vez que entran; hasta entonces el
+  panel no muestra nada más. En las demos queda opcional (`REQUIRE_MFA=false`).
 
 - **Puesta en marcha sin correo.** La departamental carga sus centros (con cada director) y cada
   dirección a su personal desde Excel; todos entran con su número de identidad y una contraseña

@@ -16,10 +16,17 @@ export interface UpcomingItem {
 
 export function Nav({ items, upcoming }: { items: NavItem[]; upcoming: UpcomingItem[] }) {
   const pathname = usePathname();
+  // La opción más específica que coincide: en /panel/region/indicadores se marca "Indicadores", no
+  // también "Tablero de centros".
+  const matches = (href: string) => (href === "/panel" ? pathname === "/panel" : pathname.startsWith(href));
+  const activeHref = items
+    .map((i) => i.href as string)
+    .filter(matches)
+    .sort((a, b) => b.length - a.length)[0];
   return (
     <nav aria-label="Principal" className="flex gap-1 overflow-x-auto md:flex-col md:overflow-visible">
       {items.map((item) => {
-        const active = item.href === "/panel" ? pathname === "/panel" : pathname.startsWith(item.href);
+        const active = item.href === activeHref;
         return (
           <Link
             key={item.href}

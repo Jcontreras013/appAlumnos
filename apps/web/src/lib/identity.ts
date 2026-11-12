@@ -7,7 +7,10 @@ import type {
   DepartmentDto,
   ImportSummaryDto,
   LoginResponseDto,
+  LoginResultDto,
   MeResponseDto,
+  MfaEnabledDto,
+  MfaSetupDto,
   PasswordResetDto,
   RegionalUserInput,
   RoleChange,
@@ -29,7 +32,14 @@ const call = <T>(path: string, init?: Parameters<typeof serviceCall>[2]) =>
 
 export const identity = {
   login: (email: string, password: string) =>
-    call<LoginResponseDto>("/auth/login", { method: "POST", body: { email, password } }),
+    call<LoginResultDto>("/auth/login", { method: "POST", body: { email, password } }),
+  loginMfa: (challenge: string, code: string) =>
+    call<LoginResponseDto>("/auth/login/mfa", { method: "POST", body: { challenge, code } }),
+  setupMfa: (token: string) => call<MfaSetupDto>("/auth/mfa/setup", { method: "POST", token }),
+  enableMfa: (token: string, code: string) =>
+    call<MfaEnabledDto>("/auth/mfa/enable", { method: "POST", token, body: { code } }),
+  resetMfa: (token: string, login: string) =>
+    call<void>("/accounts/mfa/reset", { method: "POST", token, body: { login } }),
   refresh: (refreshToken: string) =>
     call<TokenPairDto>("/auth/refresh", { method: "POST", body: { refreshToken } }),
   logout: (refreshToken: string) => call<void>("/auth/logout", { method: "POST", body: { refreshToken } }),

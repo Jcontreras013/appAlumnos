@@ -49,6 +49,12 @@ export default async function RegionPage({ searchParams }: PageProps<"/panel/reg
               Cargar centros
             </Link>
           )}
+          <Link href="/panel/region/indicadores" className="btn-secondary">
+            Indicadores del piloto
+          </Link>
+          <a href="/panel/region/exportar" className="btn-secondary" download>
+            Descargar Excel
+          </a>
           {districts.length > 1 && (
             <select name="distrito" defaultValue={distrito} aria-label="Distrito" className="input w-48">
               <option value="">Todos los distritos</option>
