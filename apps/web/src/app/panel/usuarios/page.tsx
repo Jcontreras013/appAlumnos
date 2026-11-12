@@ -1,11 +1,13 @@
 import { formatDate, formatNationalId, ROLE_LABELS } from "@escolar/shared";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { AccountEditor } from "@/components/account-editor";
 import { ResetPassword } from "@/components/reset-password";
 import { requireRole } from "@/lib/dal";
 import { identity } from "@/lib/identity";
 import { setUserActiveAction } from "./actions";
 import { CreateUserForm } from "./create-user-form";
+import { RoleEditor } from "./role-editor";
 
 export const metadata: Metadata = { title: "Usuarios" };
 
@@ -44,7 +46,7 @@ export default async function UsersPage() {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {users.map((u) => (
-                  <tr key={u.id} className={u.active ? "" : "bg-slate-50 text-slate-400"}>
+                  <tr key={`${u.id}-${u.role}`} className={u.active ? "" : "bg-slate-50 text-slate-400"}>
                     <td className="px-4 py-3">
                       <p className="font-medium text-slate-900">{u.name}</p>
                       <p className="text-xs text-slate-500">
@@ -65,6 +67,16 @@ export default async function UsersPage() {
                     <td className="space-y-1 px-4 py-3 text-right">
                       {u.id !== session.user.id && u.active && u.role !== "admin" && (
                         <ResetPassword userId={u.id} name={u.name} />
+                      )}
+                      {u.id !== session.user.id && u.active && u.role !== "admin" && (
+                        <div>
+                          <AccountEditor user={u} />
+                        </div>
+                      )}
+                      {u.id !== session.user.id && u.active && (
+                        <div>
+                          <RoleEditor user={u} />
+                        </div>
                       )}
                       {u.id !== session.user.id && (
                         <form action={setUserActiveAction}>

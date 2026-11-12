@@ -50,6 +50,14 @@ export function isUniqueViolation(error: unknown, constraint?: string): boolean 
   return false;
 }
 
+/** Postgres: violación de llave foránea (por ejemplo, borrar algo que otros registros usan). */
+export function isForeignKeyViolation(error: unknown): boolean {
+  for (let current: unknown = error; current; current = (current as { cause?: unknown }).cause) {
+    if ((current as { code?: string }).code === "23503") return true;
+  }
+  return false;
+}
+
 function body(code: string, message: string, details?: unknown): ApiErrorDto {
   return { error: details === undefined ? { code, message } : { code, message, details } };
 }

@@ -15,10 +15,6 @@ let root: string;
 let departmental: string;
 let department: DepartmentDto;
 
-type ErrorBody = {
-  error: { message: string; details: ImportSummaryDto<SchoolImportRowDto & StaffImportRowDto> };
-};
-
 beforeAll(async () => {
   ctx = await setupIdentity();
   root = await ctx.tokenFor(SUPERADMIN.email, SUPERADMIN.password);

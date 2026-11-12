@@ -10,6 +10,7 @@ import {
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { AccountEditor } from "@/components/account-editor";
 import { Kpi } from "@/components/kpi";
 import { ResetPassword } from "@/components/reset-password";
 import { SchoolLogo } from "@/components/school-logo";
@@ -178,7 +179,12 @@ export default async function RegionSchoolPage({ params, searchParams }: PagePro
                     {!u.active && " · desactivado"}
                   </span>
                 </span>
-                {u.active && <ResetPassword userId={u.id} name={u.name} />}
+                {u.active && (
+                  <span className="space-y-1 text-right">
+                    <ResetPassword userId={u.id} name={u.name} />
+                    <AccountEditor user={u} />
+                  </span>
+                )}
               </li>
             ))}
           </ul>

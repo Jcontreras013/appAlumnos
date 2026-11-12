@@ -4,7 +4,8 @@ import type { ReactNode } from "react";
 import { academic } from "@/lib/academic";
 import { requireRole } from "@/lib/dal";
 import { identity } from "@/lib/identity";
-import { deleteAssignmentAction, setCurrentYearAction } from "./actions";
+import { setCurrentYearAction } from "./actions";
+import { AssignmentEditor, GradeEditor, SectionEditor, SubjectEditor } from "./editors";
 import {
   AssignmentForm,
   GradeForm,
@@ -133,22 +134,30 @@ export default async function StructurePage() {
               const own = sections.filter((s) => s.gradeId === g.id);
               return (
                 <li key={g.id} className="flex flex-wrap items-center gap-2 px-4 py-3">
-                  <span className="mr-2 min-w-36 font-medium text-slate-900">{g.name}</span>
+                  <span className="min-w-36 font-medium text-slate-900">{g.name}</span>
+                  {canEdit && (
+                    <span className="mr-2">
+                      <GradeEditor grade={g} />
+                    </span>
+                  )}
                   {own.length === 0 && <span className="text-sm text-slate-400">Sin secciones este año</span>}
                   {own.map((s) => {
                     const full = s.capacity !== null && s.enrolledCount >= s.capacity;
                     return (
                       <span
                         key={s.id}
-                        className={`rounded-lg border px-2.5 py-1 text-sm tabular-nums ${
+                        className={`inline-flex flex-wrap items-center gap-2 rounded-lg border px-2.5 py-1 text-sm tabular-nums ${
                           full
                             ? "border-amber-300 bg-amber-50 text-amber-800"
                             : "border-slate-200 bg-slate-50"
                         }`}
                         title={full ? "Sección llena" : undefined}
                       >
-                        <strong className="font-semibold">{s.name}</strong> · {s.enrolledCount}
-                        {s.capacity !== null ? `/${s.capacity}` : ""} alumnos
+                        <span>
+                          <strong className="font-semibold">{s.name}</strong> · {s.enrolledCount}
+                          {s.capacity !== null ? `/${s.capacity}` : ""} alumnos
+                        </span>
+                        {canEdit && <SectionEditor section={s} />}
                       </span>
                     );
                   })}
@@ -181,8 +190,12 @@ export default async function StructurePage() {
         {subjects.length > 0 && (
           <div className="flex flex-wrap gap-2 border-b border-slate-100 px-4 py-3">
             {subjects.map((s) => (
-              <span key={s.id} className="rounded-full bg-slate-100 px-2.5 py-1 text-sm text-slate-700">
+              <span
+                key={s.id}
+                className="inline-flex flex-wrap items-center gap-2 rounded-full bg-slate-100 px-2.5 py-1 text-sm text-slate-700"
+              >
                 {s.name}
+                {canEdit && <SubjectEditor subject={s} />}
               </span>
             ))}
           </div>
@@ -200,15 +213,14 @@ export default async function StructurePage() {
                 <td className="px-4 py-3 font-medium text-slate-900">{a.teacherName}</td>
                 <td className="px-4 py-3 text-right">
                   {canEdit && (
-                    <form action={deleteAssignmentAction}>
-                      <input type="hidden" name="id" value={a.id} />
-                      <button
-                        type="submit"
-                        className="text-xs font-semibold text-slate-500 hover:text-red-700"
-                      >
-                        Quitar
-                      </button>
-                    </form>
+                    <AssignmentEditor
+                      assignment={a}
+                      teachers={
+                        teachers.some((t) => t.value === a.teacherUserId)
+                          ? teachers
+                          : [{ value: a.teacherUserId, label: `${a.teacherName} (inactivo)` }, ...teachers]
+                      }
+                    />
                   )}
                 </td>
               </tr>

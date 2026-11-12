@@ -1,11 +1,10 @@
-import { randomInt } from "node:crypto";
-import { conflict, forbidden, notFound, parseOrThrow, requireRole, tenantOf } from "@escolar/service-kit";
+import { forbidden, notFound, parseOrThrow, requireRole, tenantOf } from "@escolar/service-kit";
 import { type FamilyAccountDto, familyAccountInputSchema, formatNationalId } from "@escolar/shared";
 import { and, eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { DbOrTx } from "../db/client";
-import { memberships, type User, users } from "../db/schema";
+import { memberships, type User } from "../db/schema";
 import type { IdentityDeps } from "../deps";
 import { audit } from "../lib/audit";
 import { provisionAccount, resetToTemporary } from "../lib/users";

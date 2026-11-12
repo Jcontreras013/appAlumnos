@@ -1,5 +1,6 @@
 import "server-only";
 import type {
+  AccountUpdate,
   CreatedUserDto,
   CreateSchoolInput,
   CreateUserInput,
@@ -9,6 +10,7 @@ import type {
   MeResponseDto,
   PasswordResetDto,
   RegionalUserInput,
+  RoleChange,
   SchoolDto,
   SchoolImportRowDto,
   SchoolRole,
@@ -55,6 +57,10 @@ export const identity = {
     call<UserDto[]>(role ? `/users?role=${role}` : "/users", { token }),
   createUser: (token: string, input: CreateUserInput) =>
     call<CreatedUserDto>("/users", { method: "POST", token, body: input }),
+  updateAccount: (token: string, id: string, input: AccountUpdate) =>
+    call<UserDto>(`/accounts/${id}`, { method: "PUT", token, body: input }),
+  changeRole: (token: string, id: string, input: RoleChange) =>
+    call<UserDto>(`/users/${id}/role`, { method: "PUT", token, body: input }),
   setUserActive: (token: string, id: string, active: boolean) =>
     call<UserDto>(`/users/${id}/status`, { method: "POST", token, body: { active } }),
 

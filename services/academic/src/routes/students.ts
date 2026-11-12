@@ -11,6 +11,7 @@ import {
   createStudentInputSchema,
   enrollInputSchema,
   guardianInputSchema,
+  guardianUpdateSchema,
   type StudentDetailDto,
   type StudentListItemDto,
   studentFieldsSchema,
@@ -218,6 +219,46 @@ export async function studentRoutes(app: FastifyInstance, { db, today }: Academi
         data: { guardianId: guardian.id },
       });
     });
+    return getStudentDetail(db, schoolId, id);
+  });
+
+  app.put("/students/:id/guardians/:guardianId", write, async (request): Promise<StudentDetailDto> => {
+    const schoolId = tenantOf(request);
+    const { id, guardianId } = parseOrThrow(guardianParams, request.params);
+    const input = parseOrThrow(guardianUpdateSchema, request.body);
+    const detail = await getStudentDetail(db, schoolId, id);
+    if (!detail.guardians.some((g) => g.id === guardianId)) throw notFound("Responsable no encontrado");
+    try {
+      await db.transaction(async (tx) => {
+        await tx
+          .update(guardians)
+          .set({
+            fullName: input.fullName,
+            nationalId: input.nationalId ?? null,
+            phone: input.phone ?? null,
+            email: input.email ?? null,
+            updatedAt: new Date(),
+          })
+          .where(and(eq(guardians.schoolId, schoolId), eq(guardians.id, guardianId)));
+        await tx
+          .update(studentGuardians)
+          .set({ relationship: input.relationship })
+          .where(and(eq(studentGuardians.studentId, id), eq(studentGuardians.guardianId, guardianId)));
+        await audit(tx, request, {
+          action: "guardian.updated",
+          entityType: "guardian",
+          entityId: guardianId,
+          data: { studentId: id },
+        });
+      });
+    } catch (err) {
+      if (isUniqueViolation(err, "guardians_national_id_unique")) {
+        throw conflict(
+          "Ya hay otro responsable con esa identidad en el centro: agrégalo como responsable en vez de corregir este",
+        );
+      }
+      throw err;
+    }
     return getStudentDetail(db, schoolId, id);
   });
 

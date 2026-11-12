@@ -4,6 +4,7 @@ import {
   createStudentInputSchema,
   enrollInputSchema,
   guardianInputSchema,
+  guardianUpdateSchema,
   type ImportResultDto,
   type PortalAccessDto,
   portalAccessInputSchema,
@@ -101,6 +102,24 @@ export async function addGuardianAction(
 }
 
 const guardianTarget = z.object({ studentId: z.uuid(), guardianId: z.uuid() });
+
+/** Corregir los datos de un responsable (valen para todos sus hijos en el centro) y su parentesco. */
+export async function updateGuardianAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const { accessToken } = await writer();
+  const { studentId, guardianId } = guardianTarget.parse({
+    studentId: formData.get("studentId"),
+    guardianId: formData.get("id"),
+  });
+  return runFormAction(formData, {
+    schema: guardianUpdateSchema,
+    fields: GUARDIAN_FIELDS,
+    submit: async (input) => {
+      await academic.updateGuardian(accessToken, studentId, guardianId, input);
+      revalidatePath(`/panel/alumnos/${studentId}`);
+      return `Datos de ${input.fullName} guardados.`;
+    },
+  });
+}
 
 export async function setPrimaryGuardianAction(formData: FormData) {
   const { accessToken } = await writer();

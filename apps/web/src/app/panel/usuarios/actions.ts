@@ -1,12 +1,18 @@
 "use server";
 
-import { createUserInputSchema, formatNationalId, ROLE_LABELS, STAFF_IMPORT_COLUMNS } from "@escolar/shared";
+import {
+  createUserInputSchema,
+  formatNationalId,
+  ROLE_LABELS,
+  roleChangeSchema,
+  STAFF_IMPORT_COLUMNS,
+} from "@escolar/shared";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ServiceError } from "@/lib/api";
 import { requireRole } from "@/lib/dal";
 import type { FormState } from "@/lib/form-state";
-import { formValues, fromServiceError, fromZodError } from "@/lib/forms";
+import { formValues, fromServiceError, fromZodError, runFormAction } from "@/lib/forms";
 import { identity } from "@/lib/identity";
 import type { AccountImportState } from "@/lib/import-state";
 import { readSpreadsheet, SpreadsheetError } from "@/lib/spreadsheet";
@@ -85,4 +91,19 @@ export async function confirmStaffImportAction(
     }
     return { error: fromServiceError(err).error };
   }
+}
+
+/** Cambiar el cargo de alguien en este centro (un acceso a la vez). */
+export async function changeRoleAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const session = await requireRole("admin");
+  const id = String(formData.get("id") ?? "");
+  return runFormAction(formData, {
+    schema: roleChangeSchema,
+    fields: ["from", "to"],
+    submit: async (input) => {
+      const user = await identity.changeRole(session.accessToken, id, input);
+      revalidatePath("/panel/usuarios");
+      return `${user.name} ahora es ${ROLE_LABELS[user.role]}.`;
+    },
+  });
 }

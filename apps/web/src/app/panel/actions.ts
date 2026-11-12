@@ -1,12 +1,13 @@
 "use server";
 
-import { changePasswordInputSchema, type PasswordResetDto } from "@escolar/shared";
+import { accountUpdateSchema, changePasswordInputSchema, type PasswordResetDto } from "@escolar/shared";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/dal";
+import { academic } from "@/lib/academic";
+import { getSession, requireRole } from "@/lib/dal";
 import type { FormState } from "@/lib/form-state";
-import { formValues, fromServiceError, fromZodError } from "@/lib/forms";
+import { formValues, fromServiceError, fromZodError, runFormAction } from "@/lib/forms";
 import { identity } from "@/lib/identity";
 import { clearSessionCookies, setSessionCookies } from "@/lib/session";
 import { REFRESH_COOKIE } from "@/lib/session-cookies";
@@ -71,4 +72,26 @@ export async function resetPasswordAction(
   } catch (err) {
     return { error: fromServiceError(err).error };
   }
+}
+
+/**
+ * Corregir nombre, identidad o correo de alguien del ámbito (la dirección, a su personal; la
+ * distrital o departamental, a los centros de su ámbito). identity revisa el permiso.
+ */
+export async function updateAccountAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const session = await requireRole("admin", "director_distrital", "director_departamental", "superadmin");
+  const id = String(formData.get("id") ?? "");
+  return runFormAction(formData, {
+    schema: accountUpdateSchema,
+    fields: ["name", "nationalId", "email"],
+    submit: async (input) => {
+      const user = await identity.updateAccount(session.accessToken, id, input);
+      // Las clases y licencias del centro guardan una copia del nombre del docente.
+      if (session.user.role === "admin") {
+        await academic.refreshPersonName(session.accessToken, id).catch(() => {});
+      }
+      revalidatePath("/panel", "layout");
+      return `Datos de ${user.name} guardados.`;
+    },
+  });
 }

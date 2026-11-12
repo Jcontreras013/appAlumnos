@@ -18,15 +18,18 @@ export function Field({
   label,
   state,
   hint,
+  idPrefix = "campo",
   ...input
 }: {
   name: string;
   label: string;
   state: FormState;
   hint?: string;
+  /** Para que dos formularios en la misma página no repitan ids (por ejemplo, editar en línea). */
+  idPrefix?: string;
 } & React.InputHTMLAttributes<HTMLInputElement>) {
   const error = state.fields?.[name];
-  const id = `campo-${name}`;
+  const id = `${idPrefix}-${name}`;
   return (
     <div>
       <label htmlFor={id} className="label">
@@ -80,6 +83,7 @@ export function SelectField({
   options,
   placeholder,
   defaultValue,
+  idPrefix = "campo",
   ...select
 }: {
   name: string;
@@ -87,9 +91,10 @@ export function SelectField({
   state: FormState;
   options: Array<{ value: string; label: string }>;
   placeholder?: string;
+  idPrefix?: string;
 } & React.SelectHTMLAttributes<HTMLSelectElement>) {
   const error = state.fields?.[name];
-  const id = `campo-${name}`;
+  const id = `${idPrefix}-${name}`;
   const value = state.values?.[name] ?? (defaultValue as string | undefined) ?? "";
   return (
     <div>

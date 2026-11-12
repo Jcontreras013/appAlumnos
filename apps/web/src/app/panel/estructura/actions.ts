@@ -2,10 +2,12 @@
 
 import {
   assignmentInputSchema,
+  assignmentTeacherSchema,
   gradeInputSchema,
   periodsInputSchema,
   schoolYearInputSchema,
   sectionInputSchema,
+  sectionUpdateSchema,
   subjectInputSchema,
 } from "@escolar/shared";
 import { revalidatePath } from "next/cache";
@@ -20,6 +22,16 @@ const done = (message: string) => {
   revalidatePath("/panel/estructura");
   return message;
 };
+const idOf = (formData: FormData) => z.uuid().parse(formData.get("id"));
+
+/** Eliminar o cambiar algo que el servicio puede rechazar con una explicación (por ejemplo, tiene alumnos). */
+async function attempt(run: () => Promise<string>): Promise<FormState> {
+  try {
+    return { ok: true, message: await run() };
+  } catch (err) {
+    return fromServiceError(err);
+  }
+}
 
 export async function createYearAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const { accessToken } = await writer();
@@ -80,10 +92,88 @@ export async function createAssignmentAction(_prev: FormState, formData: FormDat
   });
 }
 
-export async function deleteAssignmentAction(formData: FormData) {
+export async function deleteAssignmentAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const { accessToken } = await writer();
-  await academic.deleteAssignment(accessToken, z.uuid().parse(formData.get("id")));
-  revalidatePath("/panel/estructura");
+  const id = idOf(formData);
+  return attempt(async () => {
+    await academic.deleteAssignment(accessToken, id);
+    return done("Clase quitada.");
+  });
+}
+
+export async function changeTeacherAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const { accessToken } = await writer();
+  const id = idOf(formData);
+  return runFormAction(formData, {
+    schema: assignmentTeacherSchema,
+    fields: ["teacherUserId"],
+    submit: async ({ teacherUserId }) => {
+      const a = await academic.changeAssignmentTeacher(accessToken, id, teacherUserId);
+      return done(`${a.subjectName} en ${a.sectionLabel} ahora la da ${a.teacherName}.`);
+    },
+  });
+}
+
+// ── Corregir grados, secciones y materias ──
+
+export async function updateGradeAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const { accessToken } = await writer();
+  const id = idOf(formData);
+  return runFormAction(formData, {
+    schema: gradeInputSchema,
+    fields: ["name", "sortOrder"],
+    submit: async (input) =>
+      done(`Grado "${(await academic.updateGrade(accessToken, id, input)).name}" guardado.`),
+  });
+}
+
+export async function deleteGradeAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const { accessToken } = await writer();
+  const id = idOf(formData);
+  return attempt(async () => {
+    await academic.deleteGrade(accessToken, id);
+    return done("Grado eliminado.");
+  });
+}
+
+export async function updateSectionAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const { accessToken } = await writer();
+  const id = idOf(formData);
+  return runFormAction(formData, {
+    schema: sectionUpdateSchema,
+    fields: ["name", "capacity"],
+    submit: async (input) =>
+      done(`Sección ${(await academic.updateSection(accessToken, id, input)).label} guardada.`),
+  });
+}
+
+export async function deleteSectionAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const { accessToken } = await writer();
+  const id = idOf(formData);
+  return attempt(async () => {
+    await academic.deleteSection(accessToken, id);
+    return done("Sección eliminada.");
+  });
+}
+
+export async function updateSubjectAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const { accessToken } = await writer();
+  const id = idOf(formData);
+  return runFormAction(formData, {
+    schema: subjectInputSchema,
+    fields: ["name"],
+    submit: async ({ name }) =>
+      done(`Materia "${(await academic.updateSubject(accessToken, id, name)).name}" guardada.`),
+  });
+}
+
+export async function deleteSubjectAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const { accessToken } = await writer();
+  const id = idOf(formData);
+  return attempt(async () => {
+    await academic.deleteSubject(accessToken, id);
+    return done("Materia eliminada.");
+  });
 }
 
 export async function updatePeriodsAction(_prev: FormState, formData: FormData): Promise<FormState> {

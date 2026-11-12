@@ -15,6 +15,7 @@ import type {
   GradeInput,
   GradingPeriodDto,
   GuardianInput,
+  GuardianUpdate,
   ImportResultDto,
   LeaveDto,
   LeaveInput,
@@ -36,6 +37,7 @@ import type {
   ScoresInput,
   SectionDto,
   SectionInput,
+  SectionUpdate,
   StudentDetailDto,
   StudentFields,
   StudentListItemDto,
@@ -67,19 +69,30 @@ export const academic = {
   listGrades: (token: string) => call<GradeDto[]>("/grades", { token }),
   createGrade: (token: string, input: GradeInput) =>
     call<GradeDto>("/grades", { method: "POST", token, body: input }),
+  updateGrade: (token: string, id: string, input: GradeInput) =>
+    call<GradeDto>(`/grades/${id}`, { method: "PUT", token, body: input }),
+  deleteGrade: (token: string, id: string) => call<void>(`/grades/${id}`, { method: "DELETE", token }),
 
   listSections: (token: string, schoolYearId?: string) =>
     call<SectionDto[]>(schoolYearId ? `/sections?schoolYearId=${schoolYearId}` : "/sections", { token }),
   createSection: (token: string, input: SectionInput) =>
     call<SectionDto>("/sections", { method: "POST", token, body: input }),
+  updateSection: (token: string, id: string, input: SectionUpdate) =>
+    call<SectionDto>(`/sections/${id}`, { method: "PUT", token, body: input }),
+  deleteSection: (token: string, id: string) => call<void>(`/sections/${id}`, { method: "DELETE", token }),
 
   listSubjects: (token: string) => call<SubjectDto[]>("/subjects", { token }),
   createSubject: (token: string, name: string) =>
     call<SubjectDto>("/subjects", { method: "POST", token, body: { name } }),
+  updateSubject: (token: string, id: string, name: string) =>
+    call<SubjectDto>(`/subjects/${id}`, { method: "PUT", token, body: { name } }),
+  deleteSubject: (token: string, id: string) => call<void>(`/subjects/${id}`, { method: "DELETE", token }),
 
   listAssignments: (token: string) => call<AssignmentDto[]>("/assignments", { token }),
   createAssignment: (token: string, input: AssignmentInput) =>
     call<AssignmentDto>("/assignments", { method: "POST", token, body: input }),
+  changeAssignmentTeacher: (token: string, id: string, teacherUserId: string) =>
+    call<AssignmentDto>(`/assignments/${id}`, { method: "PUT", token, body: { teacherUserId } }),
   deleteAssignment: (token: string, id: string) =>
     call<void>(`/assignments/${id}`, { method: "DELETE", token }),
 
@@ -97,6 +110,11 @@ export const academic = {
     call<StudentDetailDto>(`/students/${id}/guardians`, { method: "POST", token, body: input }),
   setPrimaryGuardian: (token: string, id: string, guardianId: string) =>
     call<StudentDetailDto>(`/students/${id}/guardians/${guardianId}/primary`, { method: "POST", token }),
+  updateGuardian: (token: string, id: string, guardianId: string, input: GuardianUpdate) =>
+    call<StudentDetailDto>(`/students/${id}/guardians/${guardianId}`, { method: "PUT", token, body: input }),
+  /** Tras corregir el nombre de alguien en identity: actualiza la copia en sus clases y licencias. */
+  refreshPersonName: (token: string, userId: string) =>
+    call<{ name: string }>(`/people/${userId}/refresh-name`, { method: "POST", token }),
   removeGuardian: (token: string, id: string, guardianId: string) =>
     call<StudentDetailDto>(`/students/${id}/guardians/${guardianId}`, { method: "DELETE", token }),
 

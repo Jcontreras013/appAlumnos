@@ -102,6 +102,30 @@ export const guardianInputSchema = z
   });
 export type GuardianInput = z.infer<typeof guardianInputSchema>;
 
+/**
+ * Corregir a un responsable desde la ficha de un alumno. Sus datos son los mismos para todos sus
+ * hijos en el centro; el parentesco es con este alumno. Un dato vacío se borra.
+ */
+export const guardianUpdateSchema = z
+  .object({
+    fullName: z.string().trim().min(3, { error: "Escribe el nombre completo" }).max(150),
+    nationalId: optional(nationalIdSchema),
+    phone: optional(phoneSchema),
+    email: optional(
+      z
+        .string()
+        .trim()
+        .toLowerCase()
+        .pipe(z.email({ error: "Correo inválido" })),
+    ),
+    relationship: z.enum(RELATIONSHIPS, { error: "Elige el parentesco" }),
+  })
+  .refine((g) => g.phone || g.email, {
+    error: "Indica al menos un teléfono o un correo para contactarlo",
+    path: ["phone"],
+  });
+export type GuardianUpdate = z.infer<typeof guardianUpdateSchema>;
+
 export const createStudentInputSchema = studentFieldsSchema.extend({
   guardians: z
     .array(guardianInputSchema)

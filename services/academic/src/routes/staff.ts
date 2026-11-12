@@ -21,6 +21,7 @@ import { z } from "zod";
 import { substitutions, teacherLeaves, teachingAssignments } from "../db/schema";
 import type { AcademicDeps } from "../deps";
 import { audit } from "../lib/audit";
+import { bearerOf } from "../lib/identity-client";
 import {
   coverageFor,
   getLeave,
@@ -216,4 +217,35 @@ export async function staffRoutes(app: FastifyInstance, { db, identity, today }:
     const { fecha } = parseOrThrow(dateQuery, request.query);
     return coverageFor(db, tenantOf(request), fecha ?? today());
   });
+
+  /**
+   * Las clases, licencias y sustituciones guardan una copia del nombre del docente (para no llamar a
+   * identity en cada pantalla). Cuando la dirección corrige un nombre, se actualizan esas copias; el
+   * historial (quién aprobó, quién registró) queda como se escribió.
+   */
+  app.post(
+    "/people/:id/refresh-name",
+    { preHandler: [app.authenticate, requireRole("admin")] },
+    async (request) => {
+      const schoolId = tenantOf(request);
+      const { id } = parseOrThrow(idParams, request.params);
+      const person = await identity.getUser(bearerOf(request), id);
+      if (!person) throw notFound("Persona no encontrada");
+      await db.transaction(async (tx) => {
+        await tx
+          .update(teachingAssignments)
+          .set({ teacherName: person.name })
+          .where(and(eq(teachingAssignments.schoolId, schoolId), eq(teachingAssignments.teacherUserId, id)));
+        await tx
+          .update(teacherLeaves)
+          .set({ teacherName: person.name })
+          .where(and(eq(teacherLeaves.schoolId, schoolId), eq(teacherLeaves.teacherUserId, id)));
+        await tx
+          .update(substitutions)
+          .set({ substituteName: person.name })
+          .where(and(eq(substitutions.schoolId, schoolId), eq(substitutions.substituteUserId, id)));
+      });
+      return { name: person.name };
+    },
+  );
 }

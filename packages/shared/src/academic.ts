@@ -36,6 +36,10 @@ export const sectionInputSchema = z.object({
 });
 export type SectionInput = z.infer<typeof sectionInputSchema>;
 
+/** Corregir una sección: nombre y cupo (el grado y el año no cambian: tiene alumnos de ese grado). */
+export const sectionUpdateSchema = sectionInputSchema.pick({ name: true, capacity: true });
+export type SectionUpdate = z.infer<typeof sectionUpdateSchema>;
+
 export const subjectInputSchema = z.object({ name: nameSchema() });
 export type SubjectInput = z.infer<typeof subjectInputSchema>;
 
@@ -45,6 +49,9 @@ export const assignmentInputSchema = z.object({
   teacherUserId: z.uuid({ error: "Elige el docente" }),
 });
 export type AssignmentInput = z.infer<typeof assignmentInputSchema>;
+
+/** Cambiar el docente de una clase conservando sus actividades, notas y planificaciones. */
+export const assignmentTeacherSchema = assignmentInputSchema.pick({ teacherUserId: true });
 
 // ───────────────────────────── Plantilla de planificación ─────────────────────────────
 

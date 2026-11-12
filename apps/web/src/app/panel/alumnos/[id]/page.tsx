@@ -14,6 +14,7 @@ import { academic } from "@/lib/academic";
 import { ServiceError } from "@/lib/api";
 import { requireRole } from "@/lib/dal";
 import { removeGuardianAction, setPrimaryGuardianAction } from "../actions";
+import { GuardianEditor } from "./guardian-editor";
 import { PortalAccess } from "./portal-access";
 import { AddGuardianForm, EnrollForm, StudentDataForm, TransferForm, WithdrawForm } from "./student-forms";
 
@@ -210,6 +211,11 @@ export default async function StudentPage({ params, searchParams }: PageProps<"/
                     .filter(Boolean)
                     .join(" · ")}
                 </p>
+                {canEdit && (
+                  <div className="mt-1">
+                    <GuardianEditor studentId={student.id} guardian={g} />
+                  </div>
+                )}
                 {canEdit && (
                   <PortalAccess studentId={student.id} guardian={g} schoolName={session.school?.name ?? ""} />
                 )}

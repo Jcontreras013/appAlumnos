@@ -181,3 +181,42 @@ export const familyAccountInputSchema = z
     path: ["nationalId"],
   });
 export type FamilyAccountInput = z.infer<typeof familyAccountInputSchema>;
+
+const blankToNull = (v: unknown) =>
+  v === undefined || (typeof v === "string" && v.trim() === "") ? null : v;
+
+/**
+ * Corregir los datos de una cuenta (un nombre mal escrito, una identidad equivocada). Vacío = quitar
+ * ese dato, pero siempre debe quedar con qué entrar: el correo o la identidad.
+ */
+export const accountUpdateSchema = z
+  .object({
+    name: personNameSchema,
+    email: z.preprocess(blankToNull, emailSchema.nullable()),
+    nationalId: z.preprocess(
+      blankToNull,
+      z
+        .string()
+        .trim()
+        .transform((v) => v.replace(/\D/g, ""))
+        .pipe(z.string().regex(/^\d{13}$/, { error: "La identidad debe tener 13 dígitos" }))
+        .nullable(),
+    ),
+  })
+  .refine((v) => v.email || v.nationalId, {
+    error: "Debe quedar el correo o el número de identidad (con eso entra)",
+    path: ["nationalId"],
+  });
+export type AccountUpdate = z.infer<typeof accountUpdateSchema>;
+
+/** Cargos del personal de un centro (las familias se manejan aparte, desde la ficha del alumno). */
+export const STAFF_ROLES = SCHOOL_ROLES.filter((r) => r !== "padre") as Exclude<
+  (typeof SCHOOL_ROLES)[number],
+  "padre"
+>[];
+
+export const roleChangeSchema = z.object({
+  from: z.enum(STAFF_ROLES, { error: "Cargo inválido" }),
+  to: z.enum(STAFF_ROLES, { error: "Elige el cargo nuevo" }),
+});
+export type RoleChange = z.infer<typeof roleChangeSchema>;
