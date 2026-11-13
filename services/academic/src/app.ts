@@ -9,12 +9,16 @@ import type { FastifyServerOptions } from "fastify";
 import { type Db, ping } from "./db/client";
 import type { AcademicDeps } from "./deps";
 import type { IdentityClient } from "./lib/identity-client";
+import { announcementRoutes } from "./routes/announcements";
+import { auditLogRoutes } from "./routes/audit-log";
 import { evaluationRoutes } from "./routes/evaluation";
 import { exportRoutes } from "./routes/exports";
 import { familyRoutes } from "./routes/family";
+import { followUpRoutes } from "./routes/followups";
 import { importRoutes } from "./routes/import";
 import { planRoutes } from "./routes/plans";
 import { regionalRoutes } from "./routes/regional";
+import { scheduleRoutes } from "./routes/schedule";
 import { staffRoutes } from "./routes/staff";
 import { structureRoutes } from "./routes/structure";
 import { studentRoutes } from "./routes/students";
@@ -56,6 +60,10 @@ export async function buildApp(options: BuildAppOptions) {
     await planRoutes(scope, deps);
     await familyRoutes(scope, deps);
     await exportRoutes(scope, deps);
+    await followUpRoutes(scope, deps);
+    await announcementRoutes(scope, deps);
+    await auditLogRoutes(scope, deps);
+    await scheduleRoutes(scope, deps);
   });
   return app;
 }

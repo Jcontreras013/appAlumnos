@@ -326,3 +326,61 @@ export interface PlanBoardDto {
   rows: PlanBoardRowDto[];
   totals: Record<PlanStatus | "sin_iniciar" | "atrasadas", number>;
 }
+
+// ───────────────────────────── Horario de clases ─────────────────────────────
+
+/** Días de clase del horario: 1 = lunes … 5 = viernes (el nombre está en WEEKDAY_LABELS de weeks.ts). */
+export const SCHOOL_DAYS = [1, 2, 3, 4, 5] as const;
+
+const timeSchema = z
+  .string({ error: "Escribe la hora" })
+  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, { error: "Hora inválida (usa HH:MM)" });
+
+/** Los bloques (horas de clase) del centro, en orden. */
+export const scheduleBlocksInputSchema = z.object({
+  blocks: z
+    .array(z.object({ startsAt: timeSchema, endsAt: timeSchema }))
+    .max(12, { error: "Máximo 12 bloques" })
+    .refine((list) => list.every((b) => b.startsAt < b.endsAt), {
+      error: "Cada bloque debe terminar después de empezar",
+    })
+    .refine((list) => list.every((b, i) => i === 0 || (list[i - 1] as typeof b).endsAt <= b.startsAt), {
+      error: "Los bloques no pueden encimarse: cada uno empieza cuando termina el anterior o después",
+    }),
+});
+export type ScheduleBlocksInput = z.infer<typeof scheduleBlocksInputSchema>;
+
+/** El horario completo de una sección: qué clase va en cada día y bloque (vacío = libre). */
+export const sectionScheduleInputSchema = z.object({
+  slots: z
+    .array(
+      z.object({
+        weekday: z.number().int().min(1).max(5),
+        block: z.number().int().min(1).max(12),
+        assignmentId: z.uuid(),
+      }),
+    )
+    .max(60),
+});
+export type SectionScheduleInput = z.infer<typeof sectionScheduleInputSchema>;
+
+export interface ScheduleBlockDto {
+  number: number;
+  startsAt: string;
+  endsAt: string;
+}
+
+export interface ScheduleSlotDto {
+  weekday: number;
+  block: number;
+  assignmentId: string;
+  subjectName: string;
+  teacherName: string;
+  sectionId: string;
+  sectionLabel: string;
+}
+
+export interface ScheduleDto {
+  blocks: ScheduleBlockDto[];
+  slots: ScheduleSlotDto[];
+}

@@ -1,7 +1,8 @@
-import { formatDay, isIsoDate, RISK_RULES, todayInHonduras } from "@escolar/shared";
+import { FOLLOW_UP_LABELS, formatDay, isIsoDate, RISK_RULES, todayInHonduras } from "@escolar/shared";
 import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { FollowUpEditor } from "@/components/follow-up-editor";
 import { Kpi } from "@/components/kpi";
 import { academic } from "@/lib/academic";
 import { requireRole } from "@/lib/dal";
@@ -13,6 +14,7 @@ const pct = (rate: number | null) => (rate === null ? "—" : `${Math.round(rate
 export default async function FollowUpPage({ searchParams }: PageProps<"/panel/seguimiento">) {
   const session = await requireRole("admin", "coordinador", "secretaria");
   const token = session.accessToken;
+  const canFollowUp = session.user.role !== "secretaria";
   const query = await searchParams;
   const raw = Array.isArray(query.fecha) ? query.fecha[0] : query.fecha;
   const fecha = raw && isIsoDate(raw) ? raw : todayInHonduras();
@@ -117,7 +119,7 @@ export default async function FollowUpPage({ searchParams }: PageProps<"/panel/s
         {studentsAtRisk.length === 0 ? (
           <Empty>Ningún alumno en riesgo con lo registrado hasta ahora.</Empty>
         ) : (
-          <Table head={["Alumno", "Sección", "Asistencia", "Faltas", "Va reprobando"]}>
+          <Table head={["Alumno", "Sección", "Asistencia", "Faltas", "Va reprobando", "Seguimiento"]}>
             {studentsAtRisk.map((s) => (
               <tr key={s.studentId}>
                 <td className="px-4 py-3 font-medium text-slate-900">
@@ -153,6 +155,17 @@ export default async function FollowUpPage({ searchParams }: PageProps<"/panel/s
                       </span>
                     ))
                   )}
+                </td>
+                <td className="px-4 py-3">
+                  {s.lastFollowUp ? (
+                    <span className="block text-xs text-slate-600">
+                      {FOLLOW_UP_LABELS[s.lastFollowUp.kind]} · {formatDay(s.lastFollowUp.date)}
+                      {s.followUps > 1 && ` (${s.followUps} acciones)`}
+                    </span>
+                  ) : (
+                    <span className="block text-xs font-semibold text-amber-700">Sin seguimiento</span>
+                  )}
+                  {canFollowUp && <FollowUpEditor studentId={s.studentId} studentName={s.name} />}
                 </td>
               </tr>
             ))}

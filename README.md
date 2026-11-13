@@ -279,6 +279,10 @@ pnpm test
   security groups, secretos fuera de variables en claro, rollback automático).
 - CI (GitHub Actions) corre lint, tipos, tests, build, `cdk synth` y construye las tres imágenes
   Docker en cada push y pull request.
+- **Prueba de carga con un departamento completo:** `SEED_EXTRA_SCHOOLS=93 pnpm db:seed:region` (con
+  `LOGIN_RATE_LIMIT_PER_MINUTE=5000` en identity) carga 100 centros y ~5,900 alumnos con un mes de
+  asistencia y notas. Medido en una computadora: tablero departamental ~1.4 s, indicadores del piloto
+  ~0.6 s, Excel del departamento ~1.5 s (los centros se calculan de 4 en 4).
 
 ## Despliegue en AWS
 

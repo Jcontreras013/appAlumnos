@@ -128,15 +128,17 @@ export function TextAreaField({
   label,
   state,
   hint,
+  idPrefix = "campo",
   ...textarea
 }: {
   name: string;
   label: string;
   state: FormState;
   hint?: string;
+  idPrefix?: string;
 } & React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
   const error = state.fields?.[name];
-  const id = `campo-${name}`;
+  const id = `${idPrefix}-${name}`;
   return (
     <div>
       <label htmlFor={id} className="label">

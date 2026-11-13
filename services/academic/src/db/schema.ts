@@ -1,6 +1,8 @@
 import {
+  ANNOUNCEMENT_AUDIENCES,
   ATTENDANCE_STATUSES,
   DEFAULT_PASSING_GRADE,
+  FOLLOW_UP_KINDS,
   LEAVE_TYPES,
   PLAN_STATUSES,
   type PlanContent,
@@ -42,6 +44,8 @@ export const enrollmentStatusEnum = pgEnum("enrollment_status", ["activa", "reti
 export const leaveTypeEnum = pgEnum("leave_type", LEAVE_TYPES);
 export const attendanceStatusEnum = pgEnum("attendance_status", ATTENDANCE_STATUSES);
 export const planStatusEnum = pgEnum("plan_status", PLAN_STATUSES);
+export const followUpKindEnum = pgEnum("follow_up_kind", FOLLOW_UP_KINDS);
+export const announcementAudienceEnum = pgEnum("announcement_audience", ANNOUNCEMENT_AUDIENCES);
 export const planActionEnum = pgEnum("plan_action", [
   "creada",
   "guardada",
@@ -468,6 +472,96 @@ export const attendanceRecords = pgTable(
   ],
 );
 
+/** Lo que se hizo con un alumno en riesgo: llamada a la familia, reunión, referido a orientación… */
+export const studentFollowUps = pgTable(
+  "student_follow_ups",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    schoolId: schoolId(),
+    studentId: uuid("student_id").notNull(),
+    kind: followUpKindEnum("kind").notNull(),
+    date: date("date", { mode: "string" }).notNull(),
+    notes: text("notes").notNull(),
+    authorUserId: uuid("author_user_id").notNull(),
+    authorName: text("author_name").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique("student_follow_ups_tenant_key").on(t.schoolId, t.id),
+    index("student_follow_ups_student_idx").on(t.schoolId, t.studentId, t.date),
+    foreignKey({
+      name: "student_follow_ups_student_fk",
+      columns: [t.schoolId, t.studentId],
+      foreignColumns: [students.schoolId, students.id],
+    }).onDelete("cascade"),
+  ],
+);
+
+/** Avisos del centro para el personal, las familias o una sección. Vencen solos. */
+export const announcements = pgTable(
+  "announcements",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    schoolId: schoolId(),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    audience: announcementAudienceEnum("audience").notNull(),
+    sectionId: uuid("section_id"),
+    authorUserId: uuid("author_user_id").notNull(),
+    authorName: text("author_name").notNull(),
+    expiresOn: date("expires_on", { mode: "string" }).notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique("announcements_tenant_key").on(t.schoolId, t.id),
+    index("announcements_school_idx").on(t.schoolId, t.expiresOn),
+    foreignKey({
+      name: "announcements_section_fk",
+      columns: [t.schoolId, t.sectionId],
+      foreignColumns: [sections.schoolId, sections.id],
+    }).onDelete("cascade"),
+  ],
+);
+
+/** Horas de clase del centro (bloques): 1 = primera hora. */
+export const scheduleBlocks = pgTable(
+  "schedule_blocks",
+  {
+    schoolId: schoolId(),
+    number: integer("number").notNull(),
+    startsAt: text("starts_at").notNull(),
+    endsAt: text("ends_at").notNull(),
+  },
+  (t) => [primaryKey({ name: "schedule_blocks_pk", columns: [t.schoolId, t.number] })],
+);
+
+/** Qué clase tiene cada sección en cada día (1 = lunes) y bloque. */
+export const scheduleSlots = pgTable(
+  "schedule_slots",
+  {
+    schoolId: schoolId(),
+    sectionId: uuid("section_id").notNull(),
+    weekday: integer("weekday").notNull(),
+    block: integer("block").notNull(),
+    assignmentId: uuid("assignment_id").notNull(),
+  },
+  (t) => [
+    primaryKey({ name: "schedule_slots_pk", columns: [t.sectionId, t.weekday, t.block] }),
+    index("schedule_slots_assignment_idx").on(t.assignmentId),
+    check("schedule_slots_weekday", sql`${t.weekday} between 1 and 5`),
+    foreignKey({
+      name: "schedule_slots_section_fk",
+      columns: [t.schoolId, t.sectionId],
+      foreignColumns: [sections.schoolId, sections.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "schedule_slots_assignment_fk",
+      columns: [t.schoolId, t.assignmentId],
+      foreignColumns: [teachingAssignments.schoolId, teachingAssignments.id],
+    }).onDelete("cascade"),
+  ],
+);
+
 /** Bitácora de cambios. Solo inserción. */
 // ───────────────────────────── Planificación semanal ─────────────────────────────
 
@@ -575,3 +669,5 @@ export type TeacherLeave = typeof teacherLeaves.$inferSelect;
 export type Substitution = typeof substitutions.$inferSelect;
 export type GradingPeriod = typeof gradingPeriods.$inferSelect;
 export type Activity = typeof activities.$inferSelect;
+export type StudentFollowUp = typeof studentFollowUps.$inferSelect;
+export type Announcement = typeof announcements.$inferSelect;

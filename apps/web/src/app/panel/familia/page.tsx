@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { AnnouncementList } from "@/components/announcement-list";
 import { academic } from "@/lib/academic";
 import { requireRole } from "@/lib/dal";
 
@@ -9,7 +10,10 @@ const pct = (rate: number | null) => (rate === null ? "—" : `${Math.round(rate
 
 export default async function FamilyHomePage() {
   const session = await requireRole("padre");
-  const children = await academic.familyChildren(session.accessToken);
+  const [children, announcements] = await Promise.all([
+    academic.familyChildren(session.accessToken),
+    academic.familyAnnouncements(session.accessToken).catch(() => []),
+  ]);
   const firstName = session.user.name.split(" ")[0];
 
   return (
@@ -20,6 +24,15 @@ export default async function FamilyHomePage() {
           Notas, asistencia y tareas de tus hijos en {session.school?.name}.
         </p>
       </div>
+
+      {announcements.length > 0 && (
+        <section aria-labelledby="avisos" className="space-y-3">
+          <h2 id="avisos" className="font-semibold text-slate-900">
+            Avisos del centro
+          </h2>
+          <AnnouncementList items={announcements} />
+        </section>
+      )}
 
       {children.length === 0 ? (
         <div className="card p-8 text-center text-sm text-slate-500">

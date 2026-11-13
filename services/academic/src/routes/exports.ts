@@ -3,10 +3,11 @@ import type { RegionalExportDto, SchoolExportDto } from "@escolar/shared";
 import type { FastifyInstance } from "fastify";
 import type { AcademicDeps } from "../deps";
 import { audit } from "../lib/audit";
+import { mapLimit } from "../lib/concurrency";
 import { schoolExport, studentRows } from "../lib/exports";
 import { bearerOf } from "../lib/identity-client";
 import { findCurrentYear } from "../lib/queries";
-import { summarize } from "./regional";
+import { REGIONAL_CONCURRENCY, summarize } from "./regional";
 
 /**
  * Descarga de los datos para Excel. Son datos de menores: cada descarga queda en la bitácora con
@@ -38,19 +39,23 @@ export async function exportRoutes(app: FastifyInstance, { db, identity, today }
     async (request): Promise<RegionalExportDto> => {
       const date = today();
       const scope = (await identity.getScopeSchools(bearerOf(request))).filter((s) => s.active);
-      const result: RegionalExportDto = { generatedOn: date, schools: [], students: [] };
-      for (const school of scope) {
-        result.schools.push({ ...(await summarize(db, school, date)), schoolCode: school.code });
+      const perSchool = await mapLimit(scope, REGIONAL_CONCURRENCY, async (school) => {
         const year = await findCurrentYear(db, school.id);
-        for (const row of await studentRows(db, school.id, year?.id ?? null)) {
-          result.students.push({
+        return {
+          summary: { ...(await summarize(db, school, date)), schoolCode: school.code },
+          students: (await studentRows(db, school.id, year?.id ?? null)).map((row) => ({
             schoolName: school.name,
             schoolCode: school.code,
             districtName: school.districtName,
             ...row,
-          });
-        }
-      }
+          })),
+        };
+      });
+      const result: RegionalExportDto = {
+        generatedOn: date,
+        schools: perSchool.map((p) => p.summary),
+        students: perSchool.flatMap((p) => p.students),
+      };
       await audit(db, request, {
         action: "export.regional",
         data: { schools: result.schools.length, students: result.students.length },

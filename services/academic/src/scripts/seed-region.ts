@@ -240,6 +240,19 @@ const SCHOOLS: Array<{
   },
 ];
 
+// Prueba de carga: SEED_EXTRA_SCHOOLS=93 agrega escuelas generadas para llegar a 100 centros.
+const EXTRA_DISTRICTS = ["Roatán", "José Santos Guardiola", "Utila", "Guanaja"];
+for (let i = 1; i <= Number(process.env.SEED_EXTRA_SCHOOLS ?? 0); i++) {
+  SCHOOLS.push({
+    slug: `carga-${String(i).padStart(3, "0")}`,
+    name: `Escuela Carga ${i}`,
+    district: EXTRA_DISTRICTS[i % EXTRA_DISTRICTS.length] as string,
+    grades: 6,
+    color: [(i * 47) % 200, (i * 83) % 200, (i * 131) % 200],
+    usage: i % 10 === 0 ? "sin_uso" : i % 4 === 0 ? "atrasada" : "al_dia",
+  });
+}
+
 /** Inicia sesión y, si la persona trabaja en varios centros, se pasa al centro indicado. */
 async function loginAt(email: string, schoolId: string): Promise<string> {
   const token = await login(email, PASSWORD);

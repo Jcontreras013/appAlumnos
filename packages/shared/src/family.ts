@@ -95,3 +95,50 @@ export interface FamilyChildSummaryDto {
   subjectsAtRisk: string[];
   homeworkThisWeek: number;
 }
+
+// ───────────────────────────── Avisos del centro ─────────────────────────────
+
+export const ANNOUNCEMENT_AUDIENCES = ["todos", "personal", "familias"] as const;
+export type AnnouncementAudience = (typeof ANNOUNCEMENT_AUDIENCES)[number];
+export const ANNOUNCEMENT_AUDIENCE_LABELS: Record<AnnouncementAudience, string> = {
+  todos: "Personal y familias",
+  personal: "Solo el personal",
+  familias: "Solo las familias",
+};
+
+const blankToUndefinedAnnouncement = (v: unknown) =>
+  v === null || (typeof v === "string" && v.trim() === "") ? undefined : v;
+
+export const announcementInputSchema = z.object({
+  title: z.string({ error: "Escribe el título" }).trim().min(3, { error: "Escribe el título" }).max(120),
+  body: z
+    .string({ error: "Escribe el aviso" })
+    .trim()
+    .min(3, { error: "Escribe el aviso" })
+    .max(2000, { error: "Máximo 2000 caracteres" }),
+  audience: z.enum(ANNOUNCEMENT_AUDIENCES, { error: "Elige para quién es" }),
+  /** Solo para una sección (sus familias y su personal). Vacío = todo el centro. */
+  sectionId: z.preprocess(blankToUndefinedAnnouncement, z.uuid().optional()),
+  /** Hasta cuándo se muestra. Vacío = 30 días. */
+  expiresOn: z.preprocess(
+    blankToUndefinedAnnouncement,
+    z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, { error: "Fecha inválida" })
+      .optional(),
+  ),
+});
+export type AnnouncementInput = z.infer<typeof announcementInputSchema>;
+
+export interface AnnouncementDto {
+  id: string;
+  title: string;
+  body: string;
+  audience: AnnouncementAudience;
+  sectionId: string | null;
+  sectionLabel: string | null;
+  authorName: string;
+  createdAt: string;
+  expiresOn: string;
+  canDelete: boolean;
+}

@@ -16,12 +16,15 @@ import { z } from "zod";
 import type { DbOrTx } from "../db/client";
 import { enrollments } from "../db/schema";
 import type { AcademicDeps } from "../deps";
+import { mapLimit } from "../lib/concurrency";
 import { ensureDefaultPeriods, followUp } from "../lib/evaluation";
 import { bearerOf } from "../lib/identity-client";
 import { pilotForSchool } from "../lib/pilot";
 import { findCurrentYear, listAssignments, listSections } from "../lib/queries";
 import { coverageFor } from "../lib/staff";
 
+/** Centros que se calculan a la vez en las vistas regionales (el pool de la base tiene 10 conexiones). */
+export const REGIONAL_CONCURRENCY = 4;
 const dateQuery = z.object({ fecha: z.string().refine(isIsoDate).optional() });
 const rangeQuery = z.object({
   desde: z.string().refine(isIsoDate, { error: "Fecha inválida" }).optional(),
@@ -110,9 +113,10 @@ export async function regionalRoutes(app: FastifyInstance, { db, identity, today
     const { fecha } = parseOrThrow(dateQuery, request.query);
     const date = fecha ?? today();
     const scope = (await identity.getScopeSchools(bearerOf(request))).filter((s) => s.active);
-    // Un centro a la vez: con cientos de escuelas sigue siendo rápido; si crece, se agrupa en SQL.
-    const schools: RegionalSchoolSummaryDto[] = [];
-    for (const school of scope) schools.push(await summarize(db, school, date));
+    // Varios centros a la vez (sin agotar las conexiones): con 100 centros baja de segundos a menos.
+    const schools: RegionalSchoolSummaryDto[] = await mapLimit(scope, REGIONAL_CONCURRENCY, (school) =>
+      summarize(db, school, date),
+    );
 
     const sum = (key: keyof RegionalSchoolSummaryDto) =>
       schools.reduce((acc, s) => acc + (typeof s[key] === "number" ? (s[key] as number) : 0), 0);
@@ -170,21 +174,22 @@ export async function regionalRoutes(app: FastifyInstance, { db, identity, today
       identity.getScopeActivity(token),
     ]);
     const families = new Set(activity.activatedFamilyUserIds);
-    const schools: PilotSchoolDto[] = [];
-    let days = 0;
-    for (const school of scope.filter((s) => s.active)) {
-      const result = await pilotForSchool(
-        db,
-        school,
-        activity.schools.find((a) => a.schoolId === school.id),
-        families,
-        from,
-        to,
-        today(),
-      );
-      schools.push(result.school);
-      days = Math.max(days, result.businessDays);
-    }
+    const results = await mapLimit(
+      scope.filter((s) => s.active),
+      REGIONAL_CONCURRENCY,
+      (school) =>
+        pilotForSchool(
+          db,
+          school,
+          activity.schools.find((a) => a.schoolId === school.id),
+          families,
+          from,
+          to,
+          today(),
+        ),
+    );
+    const schools: PilotSchoolDto[] = results.map((r) => r.school);
+    const days = Math.max(0, ...results.map((r) => r.businessDays));
     const totals = Object.fromEntries(
       PILOT_INDICATORS.map((k) => [
         k,

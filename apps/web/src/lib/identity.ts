@@ -1,6 +1,7 @@
 import "server-only";
 import type {
   AccountUpdate,
+  AuditEventDto,
   CreatedUserDto,
   CreateSchoolInput,
   CreateUserInput,
@@ -71,6 +72,10 @@ export const identity = {
     call<UserDto>(`/accounts/${id}`, { method: "PUT", token, body: input }),
   changeRole: (token: string, id: string, input: RoleChange) =>
     call<UserDto>(`/users/${id}/role`, { method: "PUT", token, body: input }),
+  auditLog: (token: string, before?: string) =>
+    call<AuditEventDto[]>(`/audit?limite=50${before ? `&antes=${encodeURIComponent(before)}` : ""}`, {
+      token,
+    }),
   setUserActive: (token: string, id: string, active: boolean) =>
     call<UserDto>(`/users/${id}/status`, { method: "POST", token, body: { active } }),
 

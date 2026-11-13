@@ -19,7 +19,7 @@ import {
   type StudentRiskDto,
   type TeacherClassDto,
 } from "@escolar/shared";
-import { and, asc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
 import type { DbOrTx } from "../db/client";
 import {
   activities,
@@ -29,6 +29,7 @@ import {
   gradingPeriods,
   type SchoolYear,
   scores,
+  studentFollowUps,
   students,
   substitutions,
   teacherLeaves,
@@ -215,6 +216,7 @@ export async function gradebook(
           ),
         )
     : [];
+  const pointsOf = new Map(marks.map((m) => [`${m.activityId}:${m.studentId}`, m.points]));
   const activityDtos = acts.map((a) => ({ id: a.id, name: a.name, maxPoints: a.maxPoints, date: a.date }));
 
   return {
@@ -228,7 +230,7 @@ export async function gradebook(
     students: roster.map((r) => {
       const own: Record<string, number | null> = {};
       for (const a of acts) {
-        own[a.id] = marks.find((m) => m.activityId === a.id && m.studentId === r.studentId)?.points ?? null;
+        own[a.id] = pointsOf.get(`${a.id}:${r.studentId}`) ?? null;
       }
       const result = periodGrade(activityDtos, own);
       return {
@@ -323,8 +325,10 @@ export async function followUp(db: DbOrTx, schoolId: string, date: string): Prom
           ),
         )
     : [];
+  // Con cientos de alumnos y actividades, buscar en listas se vuelve cuadrático: se indexa una vez.
+  const pointsByKey = new Map(marks.map((m) => [`${m.activityId}:${m.studentId}`, m.points]));
   const scoreOf = (activityId: string, studentId: string) =>
-    marks.find((m) => m.activityId === activityId && m.studentId === studentId)?.points ?? null;
+    pointsByKey.get(`${activityId}:${studentId}`) ?? null;
 
   const items: GradeProgressDto[] = assignments.map((assignment) => {
     const own = acts.filter((a) => a.assignmentId === assignment.id);
@@ -356,11 +360,17 @@ export async function followUp(db: DbOrTx, schoolId: string, date: string): Prom
   const last7 = addDays(date, -6);
   const rate7d = attendanceRate(records.filter((r) => r.date >= last7).map((r) => r.status));
   const sectionsRecordedToday = new Set(records.filter((r) => r.date === date).map((r) => r.sectionId)).size;
+  const recordsByStudent = new Map<string, AttendanceStatus[]>();
+  for (const r of records) {
+    const list = recordsByStudent.get(r.studentId);
+    if (list) list.push(r.status);
+    else recordsByStudent.set(r.studentId, [r.status]);
+  }
 
   // ── Alumnos en riesgo ──
   const studentsAtRisk: StudentRiskDto[] = [];
   for (const kid of roster) {
-    const own = records.filter((r) => r.studentId === kid.studentId).map((r) => r.status);
+    const own = recordsByStudent.get(kid.studentId) ?? [];
     const rate = attendanceRate(own);
     const absences = own.filter((s) => s === "ausente").length;
     const counted = own.filter((s) => s !== "justificada").length;
@@ -392,7 +402,35 @@ export async function followUp(db: DbOrTx, schoolId: string, date: string): Prom
         attendanceRate: rate,
         absences,
         failing,
+        lastFollowUp: null,
+        followUps: 0,
       });
+    }
+  }
+
+  // ── Qué se ha hecho con cada alumno en riesgo ──
+  if (studentsAtRisk.length) {
+    const actions = await db
+      .select({
+        studentId: studentFollowUps.studentId,
+        kind: studentFollowUps.kind,
+        date: studentFollowUps.date,
+      })
+      .from(studentFollowUps)
+      .where(
+        and(
+          eq(studentFollowUps.schoolId, schoolId),
+          inArray(
+            studentFollowUps.studentId,
+            studentsAtRisk.map((s) => s.studentId),
+          ),
+        ),
+      )
+      .orderBy(desc(studentFollowUps.date), desc(studentFollowUps.createdAt));
+    for (const s of studentsAtRisk) {
+      const own = actions.filter((a) => a.studentId === s.studentId);
+      s.followUps = own.length;
+      s.lastFollowUp = own[0] ? { kind: own[0].kind, date: own[0].date } : null;
     }
   }
 

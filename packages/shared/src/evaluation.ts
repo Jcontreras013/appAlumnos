@@ -257,6 +257,44 @@ export interface StudentRiskDto {
   attendanceRate: number | null;
   absences: number;
   failing: Array<{ subjectName: string; projected: number }>;
+  /** Lo último que se hizo con el alumno (llamada, reunión…) y cuántas acciones lleva. */
+  lastFollowUp: { kind: FollowUpKind; date: string } | null;
+  followUps: number;
+}
+
+// ───────────────────────────── Seguimiento de alumnos en riesgo ─────────────────────────────
+
+export const FOLLOW_UP_KINDS = ["llamada", "reunion", "visita", "orientacion", "compromiso", "otro"] as const;
+export type FollowUpKind = (typeof FOLLOW_UP_KINDS)[number];
+export const FOLLOW_UP_LABELS: Record<FollowUpKind, string> = {
+  llamada: "Llamada a la familia",
+  reunion: "Reunión con la familia",
+  visita: "Visita al hogar",
+  orientacion: "Referido a orientación",
+  compromiso: "Compromiso del alumno",
+  otro: "Otra acción",
+};
+
+export const followUpInputSchema = z.object({
+  kind: z.enum(FOLLOW_UP_KINDS, { error: "Elige qué se hizo" }),
+  date: z.string().refine(isIsoDate, { error: "Fecha inválida" }),
+  notes: z
+    .string({ error: "Escribe qué se acordó" })
+    .trim()
+    .min(3, { error: "Escribe qué se acordó" })
+    .max(1000, { error: "Máximo 1000 caracteres" }),
+});
+export type FollowUpInput = z.infer<typeof followUpInputSchema>;
+
+export interface FollowUpDto {
+  id: string;
+  kind: FollowUpKind;
+  date: string;
+  notes: string;
+  authorName: string;
+  createdAt: string;
+  /** Quien lo registró (o la dirección) lo puede borrar si se equivocó. */
+  canDelete: boolean;
 }
 
 export interface GradeProgressDto {

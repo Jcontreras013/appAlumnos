@@ -1,15 +1,20 @@
 import "server-only";
 import type {
   ActivityInput,
+  AnnouncementDto,
+  AnnouncementInput,
   AssignmentDto,
   AssignmentInput,
   AttendanceInput,
   AttendanceSheetDto,
+  AuditEventDto,
   CoverageDto,
   CreatePlanInput,
   CreateStudentInput,
   FamilyChildDto,
   FamilyChildSummaryDto,
+  FollowUpDto,
+  FollowUpInput,
   GradebookDto,
   GradeDto,
   GradeInput,
@@ -183,6 +188,21 @@ export const academic = {
     const query = new URLSearchParams({ ...(from ? { desde: from } : {}), ...(to ? { hasta: to } : {}) });
     return call<PilotIndicatorsDto>(`/regional/pilot${query.size ? `?${query}` : ""}`, { token });
   },
+  listFollowUps: (token: string, studentId: string) =>
+    call<FollowUpDto[]>(`/students/${studentId}/follow-ups`, { token }),
+  addFollowUp: (token: string, studentId: string, input: FollowUpInput) =>
+    call<FollowUpDto>(`/students/${studentId}/follow-ups`, { method: "POST", token, body: input }),
+  deleteFollowUp: (token: string, id: string) => call<void>(`/follow-ups/${id}`, { method: "DELETE", token }),
+  announcements: (token: string) => call<AnnouncementDto[]>("/announcements", { token }),
+  familyAnnouncements: (token: string) => call<AnnouncementDto[]>("/family/announcements", { token }),
+  publishAnnouncement: (token: string, input: AnnouncementInput) =>
+    call<AnnouncementDto>("/announcements", { method: "POST", token, body: input }),
+  removeAnnouncement: (token: string, id: string) =>
+    call<void>(`/announcements/${id}`, { method: "DELETE", token }),
+  auditLog: (token: string, before?: string) =>
+    call<AuditEventDto[]>(`/audit?limite=50${before ? `&antes=${encodeURIComponent(before)}` : ""}`, {
+      token,
+    }),
   exportSchool: (token: string) => call<SchoolExportDto>("/export/school", { token }),
   exportRegion: (token: string) => call<RegionalExportDto>("/regional/export", { token }),
   gradesReport: (token: string, sectionId: string, periodId?: string) =>

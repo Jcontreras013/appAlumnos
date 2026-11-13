@@ -36,6 +36,27 @@
       "when": 1794330663424,
       "tag": "0004_planificacion_semanal",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794605503953,
+      "tag": "0005_seguimiento_de_alumnos",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794605641883,
+      "tag": "0006_avisos",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1794605895924,
+      "tag": "0007_horario",
+      "breakpoints": true
     }
   ]
 }

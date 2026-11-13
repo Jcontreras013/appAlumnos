@@ -1,4 +1,5 @@
 import {
+  FOLLOW_UP_LABELS,
   formatDay,
   formatNationalId,
   formatPhone,
@@ -10,6 +11,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
+import { deleteFollowUpAction } from "@/app/panel/seguimiento/actions";
+import { FollowUpEditor } from "@/components/follow-up-editor";
 import { academic } from "@/lib/academic";
 import { ServiceError } from "@/lib/api";
 import { requireRole } from "@/lib/dal";
@@ -34,13 +37,15 @@ export default async function StudentPage({ params, searchParams }: PageProps<"/
   const { id } = await params;
   const { nuevo } = await searchParams;
 
-  const [student, years, sections] = await Promise.all([
+  const canFollowUp = session.user.role !== "secretaria";
+  const [student, years, sections, followUps] = await Promise.all([
     academic.getStudent(session.accessToken, id).catch((err) => {
       if (err instanceof ServiceError && (err.status === 404 || err.status === 400)) notFound();
       throw err;
     }),
     academic.listYears(session.accessToken),
     academic.listSections(session.accessToken),
+    academic.listFollowUps(session.accessToken, id).catch(() => []),
   ]);
   const currentYear = years.find((y) => y.isCurrent);
   const current = student.enrollments.find((e) => e.schoolYearId === currentYear?.id);
@@ -74,6 +79,14 @@ export default async function StudentPage({ params, searchParams }: PageProps<"/
               <Link href={`/panel/alumnos/${student.id}/boleta`} className="btn-secondary px-3 py-1 text-xs">
                 Boleta
               </Link>
+              {canEdit && (
+                <Link
+                  href={`/panel/alumnos/${student.id}/constancia`}
+                  className="btn-secondary px-3 py-1 text-xs"
+                >
+                  Constancia de matrícula
+                </Link>
+              )}
             </>
           ) : (
             <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-sm font-medium text-amber-800">
@@ -247,6 +260,52 @@ export default async function StudentPage({ params, searchParams }: PageProps<"/
           )}
         </Card>
       </div>
+
+      {(followUps.length > 0 || canFollowUp) && (
+        <Card title="Seguimiento">
+          {followUps.length === 0 ? (
+            <p className="text-sm text-slate-500">
+              Sin anotaciones. Si el alumno está en riesgo, registra aquí lo que se hizo y lo que se acordó.
+            </p>
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              {followUps.map((f) => (
+                <li key={f.id} className="py-3 first:pt-0">
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <p className="text-sm font-semibold text-slate-900">
+                      {FOLLOW_UP_LABELS[f.kind]}{" "}
+                      <span className="font-normal text-slate-500">
+                        · {formatDay(f.date)} · {f.authorName}
+                      </span>
+                    </p>
+                    {f.canDelete && canFollowUp && (
+                      <form action={deleteFollowUpAction}>
+                        <input type="hidden" name="id" value={f.id} />
+                        <input type="hidden" name="studentId" value={student.id} />
+                        <button
+                          type="submit"
+                          className="text-xs font-semibold text-slate-500 hover:text-red-700"
+                        >
+                          Borrar
+                        </button>
+                      </form>
+                    )}
+                  </div>
+                  <p className="mt-1 whitespace-pre-line text-sm text-slate-700">{f.notes}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+          {canFollowUp && (
+            <div className="mt-3">
+              <FollowUpEditor
+                studentId={student.id}
+                studentName={`${student.firstNames} ${student.lastNames}`}
+              />
+            </div>
+          )}
+        </Card>
+      )}
 
       {canEdit ? (
         <Card title="Datos del alumno">
