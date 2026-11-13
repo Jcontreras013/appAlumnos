@@ -1,34 +1,15 @@
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { NextConfig } from "next";
+import { contentSecurityPolicy } from "./src/lib/csp";
 
 const here = dirname(fileURLToPath(import.meta.url));
-
-/**
- * Política de contenido: solo código, estilos e imágenes del propio panel; nada de iframes ajenos ni
- * formularios que envíen datos a otro sitio. Next necesita scripts en línea (los datos de cada página
- * viajan en el HTML). En desarrollo no se aplica: la recarga en caliente usa eval.
- */
-const contentSecurityPolicy = [
-  "default-src 'self'",
-  "script-src 'self' 'unsafe-inline'",
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
-  "font-src 'self' data:",
-  "connect-src 'self'",
-  "worker-src 'self'",
-  "frame-ancestors 'none'",
-  "form-action 'self'",
-  "base-uri 'self'",
-  "object-src 'none'",
-].join("; ");
 
 const isProduction = process.env.NODE_ENV === "production";
 
 const securityHeaders = [
   ...(isProduction
     ? [
-        { key: "Content-Security-Policy", value: contentSecurityPolicy },
         // Solo tiene efecto con HTTPS (en AWS con dominio); por HTTP el navegador lo ignora.
         { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
       ]
@@ -54,7 +35,18 @@ const nextConfig: NextConfig = {
     serverActions: { bodySizeLimit: "5mb" },
   },
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    return [
+      { source: "/:path*", headers: securityHeaders },
+      // El panel y el ingreso reciben su política (con nonce) del proxy; el resto, una fija.
+      ...(isProduction
+        ? [
+            {
+              source: "/((?!panel|login).*)",
+              headers: [{ key: "Content-Security-Policy", value: contentSecurityPolicy() }],
+            },
+          ]
+        : []),
+    ];
   },
 };
 

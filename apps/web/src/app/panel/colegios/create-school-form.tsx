@@ -67,7 +67,7 @@ export function CreateSchoolForm({ districts }: { districts: Array<{ value: stri
           label="Contraseña temporal"
           type="password"
           autoComplete="new-password"
-          hint="Mínimo 10 caracteres."
+          hint="Mínimo 10 caracteres; no se aceptan las más usadas ni solo números."
           required
           state={state}
         />

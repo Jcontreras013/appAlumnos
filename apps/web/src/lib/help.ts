@@ -24,7 +24,7 @@ const FIRST_LOGIN: HelpSection = {
   steps: [
     "Abre la dirección de la plataforma en el navegador del teléfono o la computadora.",
     "Escribe tu número de identidad (con o sin guiones) o tu correo, y la contraseña temporal que te entregaron en papel.",
-    "La plataforma te pide elegir una contraseña nueva de al menos 10 caracteres. Desde ahí entras siempre con ella.",
+    "La plataforma te pide elegir una contraseña nueva de al menos 10 caracteres (no sirven las más usadas, como «Honduras2026», ni solo números). Desde ahí entras siempre con ella.",
     "Si olvidas la contraseña, pide a quien te dio el acceso una «Nueva contraseña temporal».",
   ],
   tip: "Tras 5 intentos fallidos la cuenta se bloquea 15 minutos. Es para proteger los datos de los alumnos.",
@@ -73,6 +73,21 @@ export const HELP_GUIDES: HelpGuide[] = [
           "Guarda las veces que quieras. Cuando esté lista, toca «Enviar a revisión» antes del plazo de la semana.",
           "Si te la devuelven, verás las observaciones: corrígela y vuelve a enviarla.",
           "Puedes copiar la planificación de una semana anterior para no empezar de cero.",
+        ],
+      },
+      {
+        title: "Fin de año: notas finales y recuperación",
+        steps: [
+          "En las notas de la clase, toca «Notas finales y recuperación».",
+          "Verás la nota de cada parcial, el promedio y el resultado. La nota final es el promedio de los parciales.",
+          "A quien no alcanzó la nota mínima, escríbele la nota de recuperación y toca «Guardar recuperación». Si alcanza la nota mínima, aprueba la materia.",
+        ],
+      },
+      {
+        title: "Horario y avisos",
+        steps: [
+          "En «Horario» ves tus clases de la semana, en todas tus secciones.",
+          "En «Avisos» ves lo que la dirección publica para el personal.",
         ],
       },
       {
@@ -127,6 +142,54 @@ export const HELP_GUIDES: HelpGuide[] = [
           "Cuando faltan 7 días o menos para el cierre de notas, aparece un aviso con las clases atrasadas.",
           "Al cierre del parcial, descarga el «Cuadro de calificaciones para el SACE» de cada sección: un Excel con la identidad y la nota de cada alumno por materia.",
           "En «Planificación» revisas las planificaciones de la semana: «Aprobar» o «Devolver con observaciones».",
+        ],
+      },
+      {
+        title: "Alumnos en riesgo: seguimiento",
+        steps: [
+          "En «Seguimiento», cada alumno en riesgo dice si ya tiene seguimiento.",
+          "«Registrar seguimiento»: anota qué se hizo (llamada, reunión, visita, referido a orientación…) y qué se acordó.",
+          "Todo queda en la ficha del alumno, con la fecha y quién lo registró.",
+        ],
+      },
+      {
+        title: "Horario de clases",
+        steps: [
+          "En «Horario», escribe las horas de clase del centro (los recreos no se escriben).",
+          "Elige una sección y, en cada día y hora, la clase que va. El sistema no deja poner a un docente en dos secciones a la misma hora.",
+          "Los docentes ven su horario y las familias el de la sección de su hijo.",
+        ],
+      },
+      {
+        title: "Avisos",
+        steps: [
+          "En «Avisos», publica reuniones, entrega de boletas o suspensiones de clase.",
+          "Elige si es para el personal, para las familias o para ambos, y si es solo para una sección. Vence solo (30 días si no dices otra fecha).",
+          "Las familias lo ven en «Mis hijos».",
+        ],
+      },
+      {
+        title: "Traslados entre centros",
+        steps: [
+          "Para un alumno que se va: en su ficha, «Trasladar a otro centro» y elige el centro de destino. Se retira su matrícula aquí.",
+          "El otro centro lo ve en «Traslados» con sus datos, sus responsables y sus notas del año, y lo «Recibe» en una sección.",
+          "Para un alumno que llega: en «Traslados», elige la sección y toca «Recibir».",
+        ],
+      },
+      {
+        title: "Constancias y bitácora",
+        steps: [
+          "En la ficha del alumno, «Constancia de matrícula» abre la constancia lista para imprimir, firmar y sellar.",
+          "«Bitácora» muestra quién hizo qué y cuándo en el centro. Nadie la puede modificar.",
+        ],
+      },
+      {
+        title: "Cierre del año y paso de grado",
+        steps: [
+          "Crea en «Estructura académica» el año lectivo siguiente. En «Cierre del año» puedes crear de una vez las mismas secciones.",
+          "«Cierre del año» muestra cada sección: quiénes pasan de grado y quiénes repiten, según las notas finales y las recuperaciones.",
+          "Decide los casos pendientes alumno por alumno, toca «Revisar» y luego «Matricular» en el año siguiente.",
+          "Al final, marca el año nuevo como vigente en «Estructura académica».",
         ],
       },
       {
@@ -194,8 +257,19 @@ export const HELP_GUIDES: HelpGuide[] = [
         ],
       },
       {
-        title: "Boleta",
-        steps: ["En la ficha del alumno, «Boleta» abre la boleta informativa lista para imprimir."],
+        title: "Boleta y constancia",
+        steps: [
+          "En la ficha del alumno, «Boleta» abre la boleta informativa lista para imprimir.",
+          "«Constancia de matrícula» abre la constancia para firmar y sellar.",
+        ],
+      },
+      {
+        title: "Traslados y avisos",
+        steps: [
+          "Si un alumno se va a otro centro del departamento: en su ficha, «Trasladar a otro centro».",
+          "Los alumnos que llegan aparecen en «Traslados»: elige la sección y «Recibir».",
+          "En «Avisos» puedes publicar avisos para las familias o el personal.",
+        ],
       },
     ],
   },
@@ -220,6 +294,8 @@ export const HELP_GUIDES: HelpGuide[] = [
           "Verás sus notas por materia y parcial, su asistencia, las faltas recientes y las tareas de la semana.",
           "Si aparece «Conviene hablar con sus maestros», acércate al centro: es una alerta temprana, todavía hay tiempo de ayudarlo.",
           "«Ver boleta» abre la boleta informativa para imprimir.",
+          "Más abajo está el horario de clases de su sección.",
+          "Arriba de «Mis hijos» aparecen los avisos del centro.",
         ],
       },
     ],

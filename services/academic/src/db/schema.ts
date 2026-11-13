@@ -7,6 +7,7 @@ import {
   PLAN_STATUSES,
   type PlanContent,
   type PlanField,
+  type TransferSnapshot,
 } from "@escolar/shared";
 import { sql } from "drizzle-orm";
 import {
@@ -46,6 +47,7 @@ export const attendanceStatusEnum = pgEnum("attendance_status", ATTENDANCE_STATU
 export const planStatusEnum = pgEnum("plan_status", PLAN_STATUSES);
 export const followUpKindEnum = pgEnum("follow_up_kind", FOLLOW_UP_KINDS);
 export const announcementAudienceEnum = pgEnum("announcement_audience", ANNOUNCEMENT_AUDIENCES);
+export const transferStatusEnum = pgEnum("transfer_status", ["pendiente", "recibido", "cancelado"]);
 export const planActionEnum = pgEnum("plan_action", [
   "creada",
   "guardada",
@@ -562,6 +564,71 @@ export const scheduleSlots = pgTable(
   ],
 );
 
+/**
+ * Traslado de un alumno a otro centro. Es el único dato que cruza de un centro a otro: el de origen
+ * lo envía (con una copia de sus datos, responsables y notas) y el de destino lo recibe.
+ */
+export const studentTransfers = pgTable(
+  "student_transfers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    fromSchoolId: uuid("from_school_id").notNull(),
+    fromSchoolName: text("from_school_name").notNull(),
+    fromStudentId: uuid("from_student_id").notNull(),
+    toSchoolId: uuid("to_school_id").notNull(),
+    toSchoolName: text("to_school_name").notNull(),
+    toStudentId: uuid("to_student_id"),
+    status: transferStatusEnum("status").notNull().default("pendiente"),
+    date: date("date", { mode: "string" }).notNull(),
+    notes: text("notes"),
+    snapshot: jsonb("snapshot").$type<TransferSnapshot>().notNull(),
+    createdByUserId: uuid("created_by_user_id").notNull(),
+    createdByName: text("created_by_name").notNull(),
+    createdAt: createdAt(),
+    receivedAt: timestamp("received_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("student_transfers_from_idx").on(t.fromSchoolId, t.status),
+    index("student_transfers_to_idx").on(t.toSchoolId, t.status),
+    // Un solo traslado pendiente por alumno.
+    uniqueIndex("student_transfers_one_pending")
+      .on(t.fromSchoolId, t.fromStudentId)
+      .where(sql`${t.status} = 'pendiente'`),
+    foreignKey({
+      name: "student_transfers_from_student_fk",
+      columns: [t.fromSchoolId, t.fromStudentId],
+      foreignColumns: [students.schoolId, students.id],
+    }),
+  ],
+);
+
+/** Nota de recuperación de un alumno en una clase (cuando el promedio del año no alcanza). */
+export const recoveryGrades = pgTable(
+  "recovery_grades",
+  {
+    schoolId: schoolId(),
+    assignmentId: uuid("assignment_id").notNull(),
+    studentId: uuid("student_id").notNull(),
+    score: numeric("score", { precision: 5, scale: 2, mode: "number" }).notNull(),
+    updatedByUserId: uuid("updated_by_user_id").notNull(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    primaryKey({ name: "recovery_grades_pk", columns: [t.assignmentId, t.studentId] }),
+    check("recovery_grades_score", sql`${t.score} >= 0 and ${t.score} <= 100`),
+    foreignKey({
+      name: "recovery_grades_assignment_fk",
+      columns: [t.schoolId, t.assignmentId],
+      foreignColumns: [teachingAssignments.schoolId, teachingAssignments.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "recovery_grades_student_fk",
+      columns: [t.schoolId, t.studentId],
+      foreignColumns: [students.schoolId, students.id],
+    }),
+  ],
+);
+
 /** Bitácora de cambios. Solo inserción. */
 // ───────────────────────────── Planificación semanal ─────────────────────────────
 
@@ -671,3 +738,4 @@ export type GradingPeriod = typeof gradingPeriods.$inferSelect;
 export type Activity = typeof activities.$inferSelect;
 export type StudentFollowUp = typeof studentFollowUps.$inferSelect;
 export type Announcement = typeof announcements.$inferSelect;
+export type StudentTransfer = typeof studentTransfers.$inferSelect;

@@ -42,8 +42,11 @@ export function AccessSheet({ title, entries }: { title: string; entries: Access
 <style>body{font-family:system-ui,sans-serif;margin:24px;color:#0f172a}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .slip{border:2px dashed #94a3b8;border-radius:10px;padding:12px 16px;break-inside:avoid}.slip p{margin:4px 0}
 .name{font-size:17px;font-weight:700}.muted{color:#475569}.small{font-size:12px}.mono{font-family:ui-monospace,monospace;font-weight:700;font-size:16px}</style></head>
-<body><div class="grid">${slips}</div><script>window.onload=()=>window.print()</script></body></html>`);
+<body><div class="grid">${slips}</div></body></html>`);
     win.document.close();
+    // Se imprime desde el panel: la política de contenido no deja scripts en línea en la ventana nueva.
+    win.focus();
+    win.print();
   }
 
   function download() {

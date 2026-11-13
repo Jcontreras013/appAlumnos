@@ -119,6 +119,9 @@ export default async function StructurePage() {
                   <SectionForm
                     schoolYearId={current.id}
                     grades={grades.map((g) => ({ value: g.id, label: g.name }))}
+                    years={years
+                      .filter((y) => y.startsOn >= current.startsOn)
+                      .map((y) => ({ value: y.id, label: y.name }))}
                   />
                 </div>
               )}

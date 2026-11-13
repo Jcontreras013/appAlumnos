@@ -30,8 +30,11 @@ ${access.children.map((c) => `<strong>${escapeHtml(c)}</strong>`).join(", ")} de
 <ol><li>Escriba su usuario y la contraseña temporal.</li><li>El sistema le pedirá crear una contraseña nueva que solo usted conozca.</li>
 <li>Si la olvida, pida en la secretaría una nueva contraseña temporal.</li></ol>
 <p class="muted">No comparta esta hoja. La contraseña temporal deja de servir cuando usted la cambia.</p>
-<script>window.onload=()=>window.print()</script></body></html>`);
+</body></html>`);
   win.document.close();
+  // Se imprime desde el panel: la política de contenido no deja scripts en línea en la ventana nueva.
+  win.focus();
+  win.print();
 }
 
 export function PortalAccess({

@@ -12,10 +12,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { deleteFollowUpAction } from "@/app/panel/seguimiento/actions";
+import { cancelTransferAction } from "@/app/panel/traslados/actions";
+import { SendTransferForm } from "@/app/panel/traslados/forms";
 import { FollowUpEditor } from "@/components/follow-up-editor";
+import { TransferHistory } from "@/components/transfer-history";
 import { academic } from "@/lib/academic";
 import { ServiceError } from "@/lib/api";
 import { requireRole } from "@/lib/dal";
+import { identity } from "@/lib/identity";
 import { removeGuardianAction, setPrimaryGuardianAction } from "../actions";
 import { GuardianEditor } from "./guardian-editor";
 import { PortalAccess } from "./portal-access";
@@ -38,7 +42,7 @@ export default async function StudentPage({ params, searchParams }: PageProps<"/
   const { nuevo } = await searchParams;
 
   const canFollowUp = session.user.role !== "secretaria";
-  const [student, years, sections, followUps] = await Promise.all([
+  const [student, years, sections, followUps, transfers, transferTargets] = await Promise.all([
     academic.getStudent(session.accessToken, id).catch((err) => {
       if (err instanceof ServiceError && (err.status === 404 || err.status === 400)) notFound();
       throw err;
@@ -46,7 +50,11 @@ export default async function StudentPage({ params, searchParams }: PageProps<"/
     academic.listYears(session.accessToken),
     academic.listSections(session.accessToken),
     academic.listFollowUps(session.accessToken, id).catch(() => []),
+    canEdit ? academic.studentTransfers(session.accessToken, id).catch(() => []) : Promise.resolve([]),
+    canEdit ? identity.transferTargets(session.accessToken).catch(() => []) : Promise.resolve([]),
   ]);
+  const cameFrom = transfers.find((t) => t.direction === "entrada" && t.status === "recibido");
+  const leaving = transfers.find((t) => t.direction === "salida" && t.status === "pendiente");
   const currentYear = years.find((y) => y.isCurrent);
   const current = student.enrollments.find((e) => e.schoolYearId === currentYear?.id);
   const sectionOptions = sections
@@ -140,6 +148,15 @@ export default async function StudentPage({ params, searchParams }: PageProps<"/
                   <Collapsible summary="Registrar retiro">
                     <WithdrawForm target={target} />
                   </Collapsible>
+                  <Collapsible summary="Trasladar a otro centro">
+                    <SendTransferForm
+                      studentId={student.id}
+                      schools={transferTargets.map((t) => ({
+                        value: t.id,
+                        label: t.districtName ? `${t.name} (${t.districtName})` : t.name,
+                      }))}
+                    />
+                  </Collapsible>
                 </>
               )}
             </div>
@@ -149,6 +166,17 @@ export default async function StudentPage({ params, searchParams }: PageProps<"/
                 <p className="text-sm text-slate-600">
                   Retirado el {formatDay(current.withdrawnOn)}: {current.withdrawReason}
                 </p>
+              )}
+              {leaving && (
+                <div className="flex flex-wrap items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                  <span>Traslado pendiente: {leaving.toSchoolName} todavía no lo recibe.</span>
+                  <form action={cancelTransferAction}>
+                    <input type="hidden" name="id" value={leaving.id} />
+                    <button type="submit" className="text-xs font-semibold underline">
+                      Anular traslado
+                    </button>
+                  </form>
+                </div>
               )}
               {canEdit &&
                 (sectionOptions.length ? (
@@ -260,6 +288,12 @@ export default async function StudentPage({ params, searchParams }: PageProps<"/
           )}
         </Card>
       </div>
+
+      {cameFrom && (
+        <Card title="Traslado">
+          <TransferHistory transfer={cameFrom} />
+        </Card>
+      )}
 
       {(followUps.length > 0 || canFollowUp) && (
         <Card title="Seguimiento">

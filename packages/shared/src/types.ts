@@ -137,6 +137,13 @@ export interface ScopedSchoolDto extends SchoolDto {
   districtName: string | null;
 }
 
+/** Alguien de los centros del ámbito: su nombre y en qué centros del ámbito trabaja o trabajó. */
+export interface ScopedPersonDto {
+  id: string;
+  name: string;
+  schoolIds: string[];
+}
+
 /** Formato de error uniforme de todos los servicios. */
 export interface ApiErrorDto {
   error: {

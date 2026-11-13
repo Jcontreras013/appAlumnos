@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { weakPasswordReason } from "./passwords";
 import { REGIONAL_ROLES, SCHOOL_ROLES } from "./roles";
 
 /** Esquemas de validación compartidos entre el frontend (Next.js) y los servicios. */
@@ -12,7 +13,11 @@ export const emailSchema = z
 export const passwordSchema = z
   .string()
   .min(10, { error: "La contraseña debe tener al menos 10 caracteres" })
-  .max(200, { error: "La contraseña es demasiado larga" });
+  .max(200, { error: "La contraseña es demasiado larga" })
+  .superRefine((value, ctx) => {
+    const reason = value.length >= 10 ? weakPasswordReason(value) : null;
+    if (reason) ctx.addIssue({ code: "custom", message: reason });
+  });
 
 /**
  * Se entra con el correo o con el número de identidad (muchas familias no usan correo). El campo se

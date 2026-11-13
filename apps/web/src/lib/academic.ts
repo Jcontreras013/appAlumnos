@@ -33,18 +33,26 @@ import type {
   PlanTemplateInput,
   PortalAccessDto,
   PortalAccessInput,
+  PromotionInput,
+  PromotionSummaryDto,
+  RecoveriesInput,
   RegionalExportDto,
   RegionalOverviewDto,
   RegionalSchoolDetailDto,
   ReviewPlanInput,
   SavePlanInput,
+  ScheduleBlockDto,
+  ScheduleBlocksInput,
+  ScheduleDto,
   SchoolExportDto,
   SchoolFollowUpDto,
   SchoolYearDto,
   SchoolYearInput,
   ScoresInput,
   SectionDto,
+  SectionFinalsDto,
   SectionInput,
+  SectionScheduleInput,
   SectionUpdate,
   StudentDetailDto,
   StudentFields,
@@ -52,6 +60,8 @@ import type {
   SubjectDto,
   SubstitutionInput,
   TeacherClassDto,
+  TransferDto,
+  TransferInput,
 } from "@escolar/shared";
 import { serviceCall } from "./api";
 import { academicUrl } from "./config";
@@ -123,6 +133,9 @@ export const academic = {
   /** Tras corregir el nombre de alguien en identity: actualiza la copia en sus clases y licencias. */
   refreshPersonName: (token: string, userId: string) =>
     call<{ name: string }>(`/people/${userId}/refresh-name`, { method: "POST", token }),
+  /** Lo mismo cuando corrige la departamental o la distrital: en todos los centros de esa persona. */
+  refreshPersonNameInScope: (token: string, userId: string) =>
+    call<{ name: string }>(`/regional/people/${userId}/refresh-name`, { method: "POST", token }),
   removeGuardian: (token: string, id: string, guardianId: string) =>
     call<StudentDetailDto>(`/students/${id}/guardians/${guardianId}`, { method: "DELETE", token }),
 
@@ -203,6 +216,31 @@ export const academic = {
     call<AuditEventDto[]>(`/audit?limite=50${before ? `&antes=${encodeURIComponent(before)}` : ""}`, {
       token,
     }),
+  saveScheduleBlocks: (token: string, input: ScheduleBlocksInput) =>
+    call<ScheduleBlockDto[]>("/schedule/blocks", { method: "PUT", token, body: input }),
+  sectionSchedule: (token: string, sectionId: string) =>
+    call<ScheduleDto>(`/schedule/sections/${sectionId}`, { token }),
+  saveSectionSchedule: (token: string, sectionId: string, input: SectionScheduleInput) =>
+    call<ScheduleDto>(`/schedule/sections/${sectionId}`, { method: "PUT", token, body: input }),
+  mySchedule: (token: string) => call<ScheduleDto>("/schedule/mine", { token }),
+  childSchedule: (token: string, studentId: string) =>
+    call<ScheduleDto>(`/family/children/${studentId}/schedule`, { token }),
+  sendTransfer: (token: string, studentId: string, input: TransferInput) =>
+    call<TransferDto>(`/students/${studentId}/transfers`, { method: "POST", token, body: input }),
+  transfers: (token: string) =>
+    call<{ incoming: TransferDto[]; outgoing: TransferDto[] }>("/transfers", { token }),
+  receiveTransfer: (token: string, id: string, sectionId: string) =>
+    call<TransferDto>(`/transfers/${id}/receive`, { method: "POST", token, body: { sectionId } }),
+  cancelTransfer: (token: string, id: string) =>
+    call<TransferDto>(`/transfers/${id}/cancel`, { method: "POST", token }),
+  studentTransfers: (token: string, studentId: string) =>
+    call<TransferDto[]>(`/students/${studentId}/transfers`, { token }),
+  sectionFinals: (token: string, sectionId: string) =>
+    call<SectionFinalsDto>(`/sections/${sectionId}/finals`, { token }),
+  saveRecoveries: (token: string, assignmentId: string, input: RecoveriesInput) =>
+    call<SectionFinalsDto>(`/assignments/${assignmentId}/recoveries`, { method: "PUT", token, body: input }),
+  promote: (token: string, input: PromotionInput) =>
+    call<PromotionSummaryDto>("/promotion", { method: "POST", token, body: input }),
   exportSchool: (token: string) => call<SchoolExportDto>("/export/school", { token }),
   exportRegion: (token: string) => call<RegionalExportDto>("/regional/export", { token }),
   gradesReport: (token: string, sectionId: string, periodId?: string) =>

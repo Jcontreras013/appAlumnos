@@ -1,4 +1,4 @@
-import type { CreatedUserDto, DepartmentDto, UserDto } from "@escolar/shared";
+import type { CreatedUserDto, DepartmentDto, ScopedPersonDto, UserDto } from "@escolar/shared";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { type IdentityTestContext, PASSWORD, SUPERADMIN, setupIdentity } from "./helpers";
 
@@ -97,6 +97,22 @@ describe("corregir los datos de una cuenta", () => {
       email: "dos@escuelas.hn",
     });
     expect(ok.statusCode).toBe(200);
+
+    // academic pide su nombre y sus centros para actualizar las copias en ambos.
+    const person = await ctx.app.inject({
+      method: "GET",
+      url: `/scope/people/${ids.dos}`,
+      headers: ctx.auth(departmental),
+    });
+    expect(person.statusCode).toBe(200);
+    expect(person.json<ScopedPersonDto>()).toMatchObject({ name: "Dos Escuelas Bien" });
+    expect(person.json<ScopedPersonDto>().schoolIds).toHaveLength(2);
+    const asDirector = await ctx.app.inject({
+      method: "GET",
+      url: `/scope/people/${ids.dos}`,
+      headers: ctx.auth(dirA),
+    });
+    expect(asDirector.statusCode).toBe(403);
   });
 
   it("la dirección no corrige a otra dirección ni a sí misma; la departamental sí corrige directores", async () => {

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { Kpi } from "@/components/kpi";
+import { ScheduleGrid } from "@/components/schedule-grid";
 import { academic } from "@/lib/academic";
 import { ServiceError } from "@/lib/api";
 import { requireRole } from "@/lib/dal";
@@ -23,10 +24,13 @@ export default async function ChildPage({ params }: PageProps<"/panel/familia/[i
   const session = await requireRole("padre");
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
-  const child = await academic.familyChild(session.accessToken, id).catch((err) => {
-    if (err instanceof ServiceError && (err.status === 404 || err.status === 400)) notFound();
-    throw err;
-  });
+  const [child, schedule] = await Promise.all([
+    academic.familyChild(session.accessToken, id).catch((err) => {
+      if (err instanceof ServiceError && (err.status === 404 || err.status === 400)) notFound();
+      throw err;
+    }),
+    academic.childSchedule(session.accessToken, id).catch(() => null),
+  ]);
   const { student, period, subjects, attendance, homework, passingGrade } = child;
   const week = mondayOf(todayInHonduras());
   const projected = subjects
@@ -201,6 +205,14 @@ export default async function ChildPage({ params }: PageProps<"/panel/familia/[i
           </ul>
         )}
       </Card>
+
+      {schedule && schedule.slots.length > 0 && (
+        <Card title="Horario de clases">
+          <div className="p-4">
+            <ScheduleGrid schedule={schedule} show="teacher" />
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

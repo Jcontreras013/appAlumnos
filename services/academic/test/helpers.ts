@@ -6,7 +6,7 @@ import {
   createAccessTokenVerifier,
   JWT_ALGORITHM,
 } from "@escolar/service-kit";
-import type { Role, ScopeActivityDto, ScopedSchoolDto, UserDto } from "@escolar/shared";
+import type { Role, ScopeActivityDto, ScopedSchoolDto, TransferTargetDto, UserDto } from "@escolar/shared";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import { generateKeyPair, SignJWT } from "jose";
@@ -39,14 +39,26 @@ export async function setupAcademic(options: { today?: string } = {}) {
   const scopes = new Map<string, ScopedSchoolDto[]>();
   /** Qué cuentas ya se usan en esos centros (lo que respondería identity en /scope/activity). */
   const activity = new Map<string, ScopeActivityDto>();
+  /** A qué centros puede trasladar cada token (lo que respondería identity). */
+  const transferTargets = new Map<string, TransferTargetDto[]>();
   /** Cuentas de familia creadas en identity (por identidad o correo), como las guardaría identity. */
   const familyAccounts = new Map<string, { userId: string; password: string; active: boolean }>();
   const identity: IdentityClient = {
     async getUser(_token, userId) {
       return directory.get(userId) ?? null;
     },
+    async getScopePerson(token, userId) {
+      const person = directory.get(userId);
+      const inScope = (scopes.get(token) ?? []).some((s) => s.id === person?.schoolId);
+      return person?.schoolId && inScope
+        ? { id: person.id, name: person.name, schoolIds: [person.schoolId] }
+        : null;
+    },
     async getScopeSchools(token) {
       return scopes.get(token) ?? [];
+    },
+    async getTransferTargets(token) {
+      return transferTargets.get(token) ?? [];
     },
     async getScopeActivity(token) {
       return activity.get(token) ?? { schools: [], activatedFamilyUserIds: [] };
@@ -222,6 +234,8 @@ export async function setupAcademic(options: { today?: string } = {}) {
     call,
     familyAccounts,
     activity,
+    scopes,
+    transferTargets,
     seedStructure,
     directory,
     setToday: (value: string) => {

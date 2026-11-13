@@ -18,6 +18,7 @@ import {
 import { and, eq, isNull } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import type { DbOrTx } from "../db/client";
 import { substitutions, teacherLeaves, teachingAssignments } from "../db/schema";
 import type { AcademicDeps } from "../deps";
 import { audit } from "../lib/audit";
@@ -231,21 +232,44 @@ export async function staffRoutes(app: FastifyInstance, { db, identity, today }:
       const { id } = parseOrThrow(idParams, request.params);
       const person = await identity.getUser(bearerOf(request), id);
       if (!person) throw notFound("Persona no encontrada");
+      await db.transaction((tx) => renameCopies(tx, schoolId, id, person.name));
+      return { name: person.name };
+    },
+  );
+
+  /** Lo mismo cuando corrige el nombre la departamental o la distrital: en cada centro donde trabaja. */
+  app.post(
+    "/regional/people/:id/refresh-name",
+    {
+      preHandler: [
+        app.authenticate,
+        requireRole("director_distrital", "director_departamental", "superadmin"),
+      ],
+    },
+    async (request) => {
+      const { id } = parseOrThrow(idParams, request.params);
+      const person = await identity.getScopePerson(bearerOf(request), id);
+      if (!person) throw notFound("Persona no encontrada");
       await db.transaction(async (tx) => {
-        await tx
-          .update(teachingAssignments)
-          .set({ teacherName: person.name })
-          .where(and(eq(teachingAssignments.schoolId, schoolId), eq(teachingAssignments.teacherUserId, id)));
-        await tx
-          .update(teacherLeaves)
-          .set({ teacherName: person.name })
-          .where(and(eq(teacherLeaves.schoolId, schoolId), eq(teacherLeaves.teacherUserId, id)));
-        await tx
-          .update(substitutions)
-          .set({ substituteName: person.name })
-          .where(and(eq(substitutions.schoolId, schoolId), eq(substitutions.substituteUserId, id)));
+        for (const schoolId of person.schoolIds) await renameCopies(tx, schoolId, id, person.name);
       });
       return { name: person.name };
     },
   );
+}
+
+/** Copias del nombre de un docente en sus clases, licencias y sustituciones de un centro. */
+async function renameCopies(tx: DbOrTx, schoolId: string, userId: string, name: string) {
+  await tx
+    .update(teachingAssignments)
+    .set({ teacherName: name })
+    .where(and(eq(teachingAssignments.schoolId, schoolId), eq(teachingAssignments.teacherUserId, userId)));
+  await tx
+    .update(teacherLeaves)
+    .set({ teacherName: name })
+    .where(and(eq(teacherLeaves.schoolId, schoolId), eq(teacherLeaves.teacherUserId, userId)));
+  await tx
+    .update(substitutions)
+    .set({ substituteName: name })
+    .where(and(eq(substitutions.schoolId, schoolId), eq(substitutions.substituteUserId, userId)));
 }

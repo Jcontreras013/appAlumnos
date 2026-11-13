@@ -24,7 +24,7 @@ export function ChangePasswordForm({ temporary = false }: { temporary?: boolean 
         label="Contraseña nueva"
         type="password"
         autoComplete="new-password"
-        hint="Al menos 10 caracteres. Una frase corta es fácil de recordar y difícil de adivinar."
+        hint="Al menos 10 caracteres. Una frase corta (mango-río-4821-tarde) es fácil de recordar y difícil de adivinar; no se aceptan las más usadas ni solo números."
         required
         state={state}
       />

@@ -4,6 +4,7 @@ import {
   attendanceRate,
   currentPeriod,
   defaultPeriods,
+  finalResult,
   periodGrade,
   periodsInputSchema,
   roundGrade,
@@ -81,5 +82,20 @@ describe("asistencia", () => {
     expect(attendanceRate(["presente", "tarde", "ausente", "justificada"])).toBeCloseTo(2 / 3);
     expect(attendanceRate(["justificada"])).toBeNull();
     expect(attendanceRate([])).toBeNull();
+  });
+});
+
+describe("resultado final de una materia", () => {
+  it("promedia los parciales y aplica la nota mínima", () => {
+    expect(finalResult([70, 80, 90, 81], null, 70)).toEqual({ average: 80, status: "aprobada" });
+    expect(finalResult([60, 70, 69, 70], null, 70)).toEqual({ average: 67, status: "reprobada" });
+  });
+  it("la recuperación aprueba solo si alcanza la nota mínima", () => {
+    expect(finalResult([60, 60, 60, 60], 70, 70)).toEqual({ average: 60, status: "aprobada_recuperacion" });
+    expect(finalResult([60, 60, 60, 60], 65, 70)).toEqual({ average: 60, status: "reprobada" });
+  });
+  it("sin todos los parciales, todavía no hay resultado", () => {
+    expect(finalResult([80, null, 90, 70], null, 70)).toEqual({ average: null, status: "incompleta" });
+    expect(finalResult([], null, 70)).toEqual({ average: null, status: "incompleta" });
   });
 });

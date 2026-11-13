@@ -275,4 +275,26 @@ describe("responsables y nombres del personal", () => {
     ]);
     expect((await ctx.call(director, "POST", `/people/${randomUUID()}/refresh-name`)).status).toBe(404);
   });
+
+  it("si lo corrige la departamental, también se actualizan sus clases; fuera de su ámbito, no", async () => {
+    const person = ctx.directory.get(beto.id);
+    if (person) person.name = "Roberto Corregido";
+    const departamental = await ctx.regionalUser("director_departamental", [
+      { id: schoolId, name: "Centro" },
+    ]);
+    const res = await ctx.call<{ name: string }>(
+      departamental,
+      "POST",
+      `/regional/people/${beto.id}/refresh-name`,
+    );
+    expect(res.status).toBe(200);
+    const classes = (await ctx.call<AssignmentDto[]>(director, "GET", "/assignments")).body;
+    expect(classes.filter((a) => a.teacherUserId === beto.id).map((a) => a.teacherName)).toEqual([
+      "Roberto Corregido",
+    ]);
+
+    const elsewhere = await ctx.regionalUser("director_departamental", [{ id: randomUUID(), name: "Otro" }]);
+    expect((await ctx.call(elsewhere, "POST", `/regional/people/${beto.id}/refresh-name`)).status).toBe(404);
+    expect((await ctx.call(director, "POST", `/regional/people/${beto.id}/refresh-name`)).status).toBe(403);
+  });
 });

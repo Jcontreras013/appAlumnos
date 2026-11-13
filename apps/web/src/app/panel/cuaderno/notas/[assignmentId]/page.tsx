@@ -48,7 +48,7 @@ export default async function GradebookPage({
         </p>
       </div>
 
-      <nav aria-label="Parciales" className="flex flex-wrap gap-1">
+      <nav aria-label="Parciales" className="flex flex-wrap items-center gap-1">
         {periods.map((p) => (
           <a
             key={p.id}
@@ -63,6 +63,12 @@ export default async function GradebookPage({
             {p.name}
           </a>
         ))}
+        <a
+          href={`/panel/cuaderno/final/${assignment.id}`}
+          className="ml-auto rounded-lg px-3 py-1.5 text-sm font-semibold text-brand-700 ring-1 ring-brand-100 hover:bg-brand-50"
+        >
+          Notas finales y recuperación
+        </a>
       </nav>
 
       {!book.canEdit && (

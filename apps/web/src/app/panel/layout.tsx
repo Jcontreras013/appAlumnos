@@ -40,11 +40,13 @@ export default async function PanelLayout({ children }: { children: ReactNode })
     items.push({ href: "/panel/seguimiento", label: "Seguimiento" });
   }
   if (is("admin", "secretaria", "coordinador")) items.push({ href: "/panel/alumnos", label: "Alumnos" });
+  if (is("admin", "secretaria")) items.push({ href: "/panel/traslados", label: "Traslados" });
   if (is("admin", "coordinador", "secretaria")) {
     items.push({ href: "/panel/licencias", label: "Licencias y sustitutos" });
     items.push({ href: "/panel/estructura", label: "Estructura académica" });
   }
   if (is("admin", "coordinador", "secretaria", "docente")) {
+    items.push({ href: "/panel/horario", label: "Horario" });
     items.push({ href: "/panel/avisos", label: "Avisos" });
   }
   if (is("admin", "coordinador", "secretaria")) {
@@ -52,6 +54,7 @@ export default async function PanelLayout({ children }: { children: ReactNode })
   }
   if (is("admin")) {
     items.push({ href: "/panel/usuarios", label: "Personal y usuarios" });
+    items.push({ href: "/panel/cierre", label: "Cierre del año" });
     items.push({ href: "/panel/bitacora", label: "Bitácora" });
     items.push({ href: "/panel/colegio", label: "Mi centro" });
   }

@@ -11,6 +11,7 @@ import {
   formatNationalId,
   loginIdentifier,
   type PasswordResetDto,
+  type ScopedPersonDto,
   type UserDto,
 } from "@escolar/shared";
 import { and, asc, eq, ne } from "drizzle-orm";
@@ -206,6 +207,38 @@ export async function accountRoutes(app: FastifyInstance, { db, tokens }: Identi
         });
       });
       return reply.status(204).send();
+    },
+  );
+
+  /**
+   * Nombre y centros (del ámbito) de una persona. Lo usa academic para actualizar las copias de su
+   * nombre en las clases y licencias cuando la departamental o la distrital lo corrige.
+   */
+  app.get(
+    "/scope/people/:id",
+    {
+      preHandler: [
+        app.authenticate,
+        requireRole("director_distrital", "director_departamental", "superadmin"),
+      ],
+    },
+    async (request): Promise<ScopedPersonDto> => {
+      const { id } = parseOrThrow(idParams, request.params);
+      const scope = await schoolsUnder(db, request);
+      const [user] = await db.select({ id: users.id, name: users.name }).from(users).where(eq(users.id, id));
+      const rows = await db
+        .select({ schoolId: memberships.schoolId })
+        .from(memberships)
+        .where(eq(memberships.userId, id));
+      const schoolIds = [
+        ...new Set(
+          rows
+            .map((r) => r.schoolId)
+            .filter((s): s is string => s !== null && (scope === null || scope.has(s))),
+        ),
+      ];
+      if (!user || schoolIds.length === 0) throw notFound("Persona no encontrada");
+      return { id: user.id, name: user.name, schoolIds };
     },
   );
 

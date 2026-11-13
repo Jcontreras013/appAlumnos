@@ -94,9 +94,10 @@ export async function updateAccountAction(_prev: FormState, formData: FormData):
     submit: async (input) => {
       const user = await identity.updateAccount(session.accessToken, id, input);
       // Las clases y licencias del centro guardan una copia del nombre del docente.
-      if (session.user.role === "admin") {
-        await academic.refreshPersonName(session.accessToken, id).catch(() => {});
-      }
+      await (session.user.role === "admin"
+        ? academic.refreshPersonName(session.accessToken, id)
+        : academic.refreshPersonNameInScope(session.accessToken, id)
+      ).catch(() => {});
       revalidatePath("/panel", "layout");
       return `Datos de ${user.name} guardados.`;
     },

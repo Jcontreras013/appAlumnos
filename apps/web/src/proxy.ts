@@ -2,6 +2,7 @@ import type { TokenPairDto } from "@escolar/shared";
 import { decodeJwt } from "jose";
 import { type NextRequest, NextResponse } from "next/server";
 import { identityUrl } from "./lib/config";
+import { contentSecurityPolicy } from "./lib/csp";
 import { ACCESS_COOKIE, cookieOptions, REFRESH_COOKIE } from "./lib/session-cookies";
 
 /** Si al access token le quedan menos de estos segundos, se renueva antes de llegar a la página. */
@@ -43,6 +44,21 @@ function toLogin(request: NextRequest, expired: boolean) {
 }
 
 /**
+ * Sigue hacia la página con la política de contenido de esta respuesta: un `nonce` nuevo por petición
+ * que Next.js pone en sus propios scripts (lo lee del encabezado de la petición), así ningún script
+ * inyectado en la página puede correr. Solo en producción: en desarrollo, React necesita `eval`.
+ */
+function pass(request: NextRequest): NextResponse {
+  const headers = new Headers(request.headers);
+  const policy =
+    process.env.NODE_ENV === "production" ? contentSecurityPolicy(btoa(crypto.randomUUID())) : null;
+  if (policy) headers.set("content-security-policy", policy);
+  const response = NextResponse.next({ request: { headers } });
+  if (policy) response.headers.set("content-security-policy", policy);
+  return response;
+}
+
+/**
  * Renovación transparente de la sesión. El access token dura 15 minutos; cuando está por vencer,
  * se cambia el refresh token por uno nuevo (rotación) antes de renderizar, y los tokens nuevos se
  * pasan tanto al navegador (Set-Cookie) como a la petición en curso.
@@ -52,10 +68,10 @@ export async function proxy(request: NextRequest) {
   const refreshToken = request.cookies.get(REFRESH_COOKIE)?.value;
 
   if (request.nextUrl.pathname.startsWith("/login")) {
-    return isFresh(access) ? NextResponse.redirect(new URL("/panel", request.url)) : NextResponse.next();
+    return isFresh(access) ? NextResponse.redirect(new URL("/panel", request.url)) : pass(request);
   }
 
-  if (isFresh(access)) return NextResponse.next();
+  if (isFresh(access)) return pass(request);
   if (!refreshToken) return toLogin(request, Boolean(access));
 
   const pair = await refresh(refreshToken);
@@ -63,7 +79,7 @@ export async function proxy(request: NextRequest) {
 
   request.cookies.set(ACCESS_COOKIE, pair.accessToken);
   request.cookies.set(REFRESH_COOKIE, pair.refreshToken);
-  const response = NextResponse.next({ request: { headers: request.headers } });
+  const response = pass(request);
   response.cookies.set(ACCESS_COOKIE, pair.accessToken, cookieOptions(pair.expiresIn));
   response.cookies.set(REFRESH_COOKIE, pair.refreshToken, cookieOptions(pair.refreshExpiresIn));
   return response;

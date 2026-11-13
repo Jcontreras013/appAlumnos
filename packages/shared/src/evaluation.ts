@@ -328,3 +328,115 @@ export interface PlansSummaryDto {
   /** Sin entregar y con la fecha límite vencida. */
   overdue: number;
 }
+
+// ───────────────────────────── Fin de año: nota final, recuperación y promoción ─────────────────────────────
+
+/**
+ * Resultado de una materia en el año: el promedio de los parciales. Si no llega a la nota mínima,
+ * la recuperación puede aprobarla. Si falta algún parcial, todavía no hay resultado.
+ */
+export type FinalStatus = "incompleta" | "aprobada" | "aprobada_recuperacion" | "reprobada";
+export const FINAL_STATUS_LABELS: Record<FinalStatus, string> = {
+  incompleta: "Incompleta",
+  aprobada: "Aprobada",
+  aprobada_recuperacion: "Aprobada en recuperación",
+  reprobada: "Reprobada",
+};
+
+export function finalResult(
+  periodGrades: Array<number | null>,
+  recovery: number | null,
+  passingGrade: number,
+): { average: number | null; status: FinalStatus } {
+  if (periodGrades.length === 0 || periodGrades.some((g) => g === null))
+    return { average: null, status: "incompleta" };
+  const average = roundGrade((periodGrades as number[]).reduce((a, b) => a + b, 0) / periodGrades.length);
+  if (average >= passingGrade) return { average, status: "aprobada" };
+  if (recovery !== null && recovery >= passingGrade) return { average, status: "aprobada_recuperacion" };
+  return { average, status: "reprobada" };
+}
+
+export interface FinalSubjectDto {
+  assignmentId: string;
+  subjectName: string;
+  periods: Array<number | null>;
+  average: number | null;
+  recovery: number | null;
+  status: FinalStatus;
+}
+
+/** Lo que propone el sistema para el año siguiente; la dirección puede cambiarlo antes de confirmar. */
+export type PromotionDecision = "promovido" | "repite" | "pendiente";
+export const PROMOTION_LABELS: Record<PromotionDecision, string> = {
+  promovido: "Promovido",
+  repite: "Repite el grado",
+  pendiente: "Pendiente (faltan notas)",
+};
+
+export interface FinalStudentDto {
+  studentId: string;
+  name: string;
+  nationalId: string | null;
+  subjects: FinalSubjectDto[];
+  proposal: PromotionDecision;
+}
+
+export interface SectionFinalsDto {
+  sectionId: string;
+  sectionLabel: string;
+  gradeName: string;
+  passingGrade: number;
+  periods: string[];
+  students: FinalStudentDto[];
+}
+
+export const recoveriesInputSchema = z.object({
+  entries: z
+    .array(
+      z.object({
+        studentId: z.uuid(),
+        score: z.number().min(0, { error: "De 0 a 100" }).max(100, { error: "De 0 a 100" }).nullable(),
+      }),
+    )
+    .min(1)
+    .max(200),
+});
+export type RecoveriesInput = z.infer<typeof recoveriesInputSchema>;
+
+/** Paso al año siguiente: a qué sección del año nuevo va cada sección, y las decisiones finales. */
+export const promotionInputSchema = z.object({
+  toSchoolYearId: z.uuid({ error: "Elige el año lectivo siguiente" }),
+  dryRun: z.boolean().default(true),
+  sections: z
+    .array(
+      z.object({
+        fromSectionId: z.uuid(),
+        /** Sección del año nuevo para los promovidos (vacío = egresan: último grado). */
+        promotedToSectionId: z.uuid().nullable(),
+        /** Sección del año nuevo para quienes repiten. */
+        repeatToSectionId: z.uuid().nullable(),
+      }),
+    )
+    .min(1),
+  /** Cambios de la dirección a lo que propone el sistema. */
+  overrides: z
+    .array(z.object({ studentId: z.uuid(), decision: z.enum(["promovido", "repite"]) }))
+    .default([]),
+});
+export type PromotionInput = z.infer<typeof promotionInputSchema>;
+
+export interface PromotionRowDto {
+  studentId: string;
+  name: string;
+  fromSectionLabel: string;
+  decision: PromotionDecision | "egresa";
+  toSectionLabel: string | null;
+  /** Ya matriculado en el año nuevo, o sin cupo, o con notas pendientes. */
+  problem: string | null;
+}
+
+export interface PromotionSummaryDto {
+  dryRun: boolean;
+  rows: PromotionRowDto[];
+  enrolled: number;
+}

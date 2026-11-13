@@ -13,7 +13,7 @@ import { authRoutes } from "./routes/auth";
 import { familyRoutes } from "./routes/family";
 import { logoRoutes } from "./routes/logo";
 import { onboardingRoutes } from "./routes/onboarding";
-import { regionRoutes } from "./routes/regions";
+import { regionRoutes, transferTargetRoutes } from "./routes/regions";
 import { schoolRoutes } from "./routes/schools";
 import { userRoutes } from "./routes/users";
 
@@ -43,6 +43,7 @@ export async function buildApp({ db, keys, settings, logger }: BuildAppOptions) 
     await userRoutes(scope, deps);
     await logoRoutes(scope, deps);
     await regionRoutes(scope, deps);
+    await transferTargetRoutes(scope, deps);
     await familyRoutes(scope, deps);
     await onboardingRoutes(scope, deps);
     await accountRoutes(scope, deps);

@@ -21,6 +21,7 @@ import type {
   ScopedSchoolDto,
   StaffImportRowDto,
   TokenPairDto,
+  TransferTargetDto,
   UserDto,
 } from "@escolar/shared";
 import { ServiceError, serviceCall } from "./api";
@@ -72,6 +73,7 @@ export const identity = {
     call<UserDto>(`/accounts/${id}`, { method: "PUT", token, body: input }),
   changeRole: (token: string, id: string, input: RoleChange) =>
     call<UserDto>(`/users/${id}/role`, { method: "PUT", token, body: input }),
+  transferTargets: (token: string) => call<TransferTargetDto[]>("/schools/transfer-targets", { token }),
   auditLog: (token: string, before?: string) =>
     call<AuditEventDto[]>(`/audit?limite=50${before ? `&antes=${encodeURIComponent(before)}` : ""}`, {
       token,

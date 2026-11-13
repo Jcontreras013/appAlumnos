@@ -301,3 +301,70 @@ export interface ImportResultDto {
   guardiansReused: number;
   rows: ImportRowResultDto[];
 }
+
+// ───────────────────────────── Traslados entre centros ─────────────────────────────
+
+/** Un centro al que se puede trasladar un alumno (del mismo departamento). */
+export interface TransferTargetDto {
+  id: string;
+  name: string;
+  code: string | null;
+  districtName: string | null;
+}
+
+export const transferInputSchema = z.object({
+  toSchoolId: z.uuid({ error: "Elige el centro al que se traslada" }),
+  date: isoDateSchema,
+  notes: z.preprocess(
+    (v) => (typeof v === "string" && v.trim() === "" ? undefined : v),
+    z.string().trim().max(500).optional(),
+  ),
+});
+export type TransferInput = z.infer<typeof transferInputSchema>;
+
+export const receiveTransferSchema = z.object({ sectionId: z.uuid({ error: "Elige la sección" }) });
+
+/** Lo que viaja con el alumno: sus datos, sus responsables y cómo iba en el centro anterior. */
+export interface TransferSnapshot {
+  student: {
+    firstNames: string;
+    lastNames: string;
+    nationalId: string | null;
+    birthDate: string | null;
+    sex: "F" | "M" | null;
+    medicalNotes: string | null;
+  };
+  guardians: Array<{
+    fullName: string;
+    nationalId: string | null;
+    phone: string | null;
+    email: string | null;
+    relationship: Relationship;
+    isPrimary: boolean;
+  }>;
+  history: {
+    schoolYearName: string | null;
+    sectionLabel: string | null;
+    periods: string[];
+    subjects: Array<{ name: string; grades: Array<number | null> }>;
+    attendance: { days: number; absent: number; rate: number | null };
+  };
+}
+
+export interface TransferDto {
+  id: string;
+  /** Para el centro que pregunta: un alumno que se fue (salida) o que llegó (entrada). */
+  direction: "salida" | "entrada";
+  status: "pendiente" | "recibido" | "cancelado";
+  fromSchoolName: string;
+  toSchoolName: string;
+  studentName: string;
+  date: string;
+  notes: string | null;
+  createdByName: string;
+  createdAt: string;
+  receivedAt: string | null;
+  /** El alumno en el centro de origen (salida) o en el de destino (ya recibido). */
+  studentId: string | null;
+  snapshot: TransferSnapshot;
+}

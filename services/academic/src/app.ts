@@ -14,6 +14,7 @@ import { auditLogRoutes } from "./routes/audit-log";
 import { evaluationRoutes } from "./routes/evaluation";
 import { exportRoutes } from "./routes/exports";
 import { familyRoutes } from "./routes/family";
+import { finalRoutes } from "./routes/finals";
 import { followUpRoutes } from "./routes/followups";
 import { importRoutes } from "./routes/import";
 import { planRoutes } from "./routes/plans";
@@ -22,6 +23,7 @@ import { scheduleRoutes } from "./routes/schedule";
 import { staffRoutes } from "./routes/staff";
 import { structureRoutes } from "./routes/structure";
 import { studentRoutes } from "./routes/students";
+import { transferRoutes } from "./routes/transfers";
 
 export interface BuildAppOptions {
   db: Db;
@@ -64,6 +66,8 @@ export async function buildApp(options: BuildAppOptions) {
     await announcementRoutes(scope, deps);
     await auditLogRoutes(scope, deps);
     await scheduleRoutes(scope, deps);
+    await transferRoutes(scope, deps);
+    await finalRoutes(scope, deps);
   });
   return app;
 }

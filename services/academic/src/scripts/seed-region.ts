@@ -456,7 +456,12 @@ for (const [index, school] of SCHOOLS.entries()) {
     ],
   });
   const currentPeriodId = periods.find((p) => p.number === 4)?.id as string;
-  const closedPeriodId = periods.find((p) => p.number === 3)?.id as string;
+  // Parciales ya cerrados (I, II y III) con los días de sus actividades.
+  const closedPeriods = [
+    { id: periods.find((p) => p.number === 1)?.id as string, days: [-225, -205, -185] },
+    { id: periods.find((p) => p.number === 2)?.id as string, days: [-165, -145, -125] },
+    { id: periods.find((p) => p.number === 3)?.id as string, days: [-100, -80, -60] },
+  ];
   const subjects: Record<string, string> = {};
   for (const name of SUBJECTS)
     subjects[name] = (await acApi<{ id: string }>("/subjects", "POST", { name })).id;
@@ -628,34 +633,37 @@ for (const [index, school] of SCHOOLS.entries()) {
       }
     }
 
-    // III Parcial (ya cerrado): completo en las escuelas al día; en las atrasadas, una de cada
-    // tres clases quedó con un alumno sin la nota del examen. Con su propio generador para no
-    // cambiar el resto de la demo.
+    // Parciales I, II y III (ya cerrados): completos en las escuelas al día; en las atrasadas, una
+    // de cada tres clases quedó en el III con un alumno sin la nota del examen. Con su propio
+    // generador para no cambiar el resto de la demo.
     for (const [c, assignmentId] of (assignmentsBySection[sectionId] ?? []).entries()) {
-      const missing = usage === "atrasada" && (s + c) % 3 === 0 ? (s + c) % Math.max(roster.length, 1) : -1;
-      for (const [a, activity] of [
-        { name: "Tareas del parcial", maxPoints: 30, day: -100 },
-        { name: "Proyecto", maxPoints: 30, day: -80 },
-        { name: "Examen del parcial", maxPoints: 40, day: -60 },
-      ].entries()) {
-        const id = randomUUID();
-        await acApi(`/activities/${id}`, "PUT", {
-          id,
-          assignmentId,
-          periodId: closedPeriodId,
-          name: activity.name,
-          maxPoints: activity.maxPoints,
-          date: addDays(today, activity.day),
-        });
-        await acApi("/scores", "PUT", {
-          activityId: id,
-          entries: roster.map((r, i) => {
-            if (a === 2 && i === missing) return { studentId: r.studentId, points: null };
-            const ability = profile.get(r.studentId)?.ability ?? 0.8;
-            const ratio = Math.max(0, Math.min(1, ability + (randPast(13) - 6) / 100));
-            return { studentId: r.studentId, points: Math.round(ratio * activity.maxPoints * 2) / 2 };
-          }),
-        });
+      for (const [k, closed] of closedPeriods.entries()) {
+        const missing =
+          k === 2 && usage === "atrasada" && (s + c) % 3 === 0 ? (s + c) % Math.max(roster.length, 1) : -1;
+        for (const [a, activity] of [
+          { name: "Tareas del parcial", maxPoints: 30, day: closed.days[0] as number },
+          { name: "Proyecto", maxPoints: 30, day: closed.days[1] as number },
+          { name: "Examen del parcial", maxPoints: 40, day: closed.days[2] as number },
+        ].entries()) {
+          const id = randomUUID();
+          await acApi(`/activities/${id}`, "PUT", {
+            id,
+            assignmentId,
+            periodId: closed.id,
+            name: activity.name,
+            maxPoints: activity.maxPoints,
+            date: addDays(today, activity.day),
+          });
+          await acApi("/scores", "PUT", {
+            activityId: id,
+            entries: roster.map((r, i) => {
+              if (a === 2 && i === missing) return { studentId: r.studentId, points: null };
+              const ability = profile.get(r.studentId)?.ability ?? 0.8;
+              const ratio = Math.max(0, Math.min(1, ability + (randPast(13) - 6) / 100));
+              return { studentId: r.studentId, points: Math.round(ratio * activity.maxPoints * 2) / 2 };
+            }),
+          });
+        }
       }
     }
   }

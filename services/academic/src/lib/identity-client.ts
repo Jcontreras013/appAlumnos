@@ -3,7 +3,9 @@ import type {
   FamilyAccountDto,
   FamilyAccountInput,
   ScopeActivityDto,
+  ScopedPersonDto,
   ScopedSchoolDto,
+  TransferTargetDto,
   UserDto,
 } from "@escolar/shared";
 import type { FastifyRequest } from "fastify";
@@ -15,10 +17,14 @@ import type { FastifyRequest } from "fastify";
  */
 export interface IdentityClient {
   getUser(bearerToken: string, userId: string): Promise<UserDto | null>;
+  /** Nombre y centros del ámbito de una persona (para la departamental o la distrital). */
+  getScopePerson(bearerToken: string, userId: string): Promise<ScopedPersonDto | null>;
   /** Centros que la sesión puede ver (todo el departamento, el distrito o su propio centro). */
   getScopeSchools(bearerToken: string): Promise<ScopedSchoolDto[]>;
   /** Qué cuentas ya se usan en los centros del ámbito (indicadores del piloto). */
   getScopeActivity(bearerToken: string): Promise<ScopeActivityDto>;
+  /** Centros del mismo departamento a los que se puede trasladar a un alumno. */
+  getTransferTargets(bearerToken: string): Promise<TransferTargetDto[]>;
   /** Cuenta del portal de familias (la crea o enlaza identity con los permisos de quien pide). */
   createFamilyAccount(bearerToken: string, input: FamilyAccountInput): Promise<FamilyAccountDto>;
   resetFamilyPassword(bearerToken: string, userId: string): Promise<FamilyAccountDto>;
@@ -100,8 +106,12 @@ async function send<T>(
 export function httpIdentityClient(baseUrl: string): IdentityClient {
   return {
     getUser: (bearerToken, userId) => get<UserDto>(`${baseUrl}/users/${userId}`, bearerToken),
+    getScopePerson: (bearerToken, userId) =>
+      get<ScopedPersonDto>(`${baseUrl}/scope/people/${userId}`, bearerToken),
     getScopeSchools: async (bearerToken) =>
       (await get<ScopedSchoolDto[]>(`${baseUrl}/scope/schools`, bearerToken)) ?? [],
+    getTransferTargets: async (bearerToken) =>
+      (await get<TransferTargetDto[]>(`${baseUrl}/schools/transfer-targets`, bearerToken)) ?? [],
     getScopeActivity: async (bearerToken) =>
       (await get<ScopeActivityDto>(`${baseUrl}/scope/activity`, bearerToken)) ?? {
         schools: [],

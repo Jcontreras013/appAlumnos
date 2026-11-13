@@ -45,12 +45,31 @@ export function GradeForm() {
   );
 }
 
-export function SectionForm({ schoolYearId, grades }: { schoolYearId: string; grades: Option[] }) {
+export function SectionForm({
+  schoolYearId,
+  grades,
+  years,
+}: {
+  schoolYearId: string;
+  grades: Option[];
+  /** Si hay más de un año, se puede preparar las secciones del año siguiente. */
+  years: Option[];
+}) {
   const [state, action] = useActionState(createSectionAction, initialFormState);
   return (
     <form action={action} className="space-y-3" noValidate>
       <FormAlert state={state} />
-      <input type="hidden" name="schoolYearId" value={schoolYearId} />
+      {years.length > 1 ? (
+        <SelectField
+          name="schoolYearId"
+          label="Año lectivo"
+          options={years}
+          defaultValue={schoolYearId}
+          state={state}
+        />
+      ) : (
+        <input type="hidden" name="schoolYearId" value={schoolYearId} />
+      )}
       <SelectField name="gradeId" label="Grado" options={grades} placeholder="Elige…" state={state} />
       <div className="grid grid-cols-2 gap-3">
         <Field name="name" label="Sección" placeholder="A" required state={state} />

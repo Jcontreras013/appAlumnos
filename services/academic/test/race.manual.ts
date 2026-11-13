@@ -16,8 +16,10 @@ const app = await buildApp({
   db,
   identity: {
     getUser: async () => null,
+    getScopePerson: async () => null,
     getScopeSchools: async () => [],
     getScopeActivity: async () => ({ schools: [], activatedFamilyUserIds: [] }),
+    getTransferTargets: async () => [],
     createFamilyAccount: async () => {
       throw new Error("no se usa en esta prueba");
     },

@@ -8,6 +8,7 @@ export * from "./family";
 export * from "./format";
 export * from "./money";
 export * from "./onboarding";
+export * from "./passwords";
 export * from "./pilot";
 export * from "./roles";
 export * from "./schemas";

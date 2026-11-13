@@ -5,6 +5,7 @@ import {
   notFound,
   parseOrThrow,
   requireRole,
+  tenantOf,
 } from "@escolar/service-kit";
 import {
   type CreatedUserDto,
@@ -13,8 +14,9 @@ import {
   districtInputSchema,
   regionalUserInputSchema,
   type ScopedSchoolDto,
+  type TransferTargetDto,
 } from "@escolar/shared";
-import { asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, ne } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { Db } from "../db/client";
@@ -168,4 +170,37 @@ export async function schoolIdsOfDistricts(db: Db, districtIds: string[]): Promi
     .from(schools)
     .where(inArray(schools.districtId, districtIds));
   return rows.map((r) => r.id);
+}
+
+/**
+ * Centros a los que una dirección o secretaría puede trasladar a un alumno: los activos de su mismo
+ * departamento (sin el propio). Solo nombre, código y distrito.
+ */
+export async function transferTargetRoutes(app: FastifyInstance, { db }: IdentityDeps) {
+  app.get(
+    "/schools/transfer-targets",
+    { preHandler: [app.authenticate, requireRole("admin", "secretaria")] },
+    async (request): Promise<TransferTargetDto[]> => {
+      const schoolId = tenantOf(request);
+      const [own] = await db
+        .select({ departmentId: districts.departmentId })
+        .from(schools)
+        .innerJoin(districts, eq(districts.id, schools.districtId))
+        .where(eq(schools.id, schoolId));
+      if (!own) return [];
+      const rows = await db
+        .select({ id: schools.id, name: schools.name, code: schools.code, districtName: districts.name })
+        .from(schools)
+        .innerJoin(districts, eq(districts.id, schools.districtId))
+        .where(
+          and(
+            eq(districts.departmentId, own.departmentId),
+            eq(schools.active, true),
+            ne(schools.id, schoolId),
+          ),
+        )
+        .orderBy(asc(districts.name), asc(schools.name));
+      return rows;
+    },
+  );
 }

@@ -14,6 +14,12 @@ Departamental de Educación**:
   aprueba o la devuelve con observaciones, y la departamental ve qué centros van al día.
 - Las **familias** entran con su número de identidad (o su correo) y ven las notas, la asistencia y
   las tareas de la semana de sus hijos, y su boleta para imprimir.
+- Cada centro publica **avisos** (a familias o al personal), arma el **horario** de cada sección,
+  registra el **seguimiento** de los alumnos en riesgo, emite **constancias** y hace **traslados** a
+  otro centro del departamento, que recibe al alumno con su historial.
+- Al terminar el año, cada clase tiene su **nota final** y la **recuperación** de quien no alcanzó la
+  nota mínima; la dirección revisa y **pasa a todos al año siguiente** (promovidos, repiten o
+  egresan) en un solo paso.
 
 Para colegios privados quedan además facturación (con CAI) y wallet de cafetería.
 
@@ -30,6 +36,7 @@ Para colegios privados quedan además facturación (con CAI) y wallet de cafeter
 | 4    | Planificación semanal con la plantilla del centro, revisión de dirección/coordinación e historial           | ✅ Listo |
 | 5    | Portal de familias: notas, asistencia y tareas de sus hijos; acceso con identidad; boleta imprimible        | ✅ Listo |
 | 6    | Piloto: corregir datos sin perder notas, Excel, indicadores del piloto, verificación en dos pasos (2FA)     | ✅ Listo |
+| 7    | Escuela: avisos, horario, seguimiento, traslados, constancias, bitácora; nota final, recuperación, cierre   | ✅ Listo |
 | —    | Para colegios privados: facturación con CAI y wallet de cafetería                                           | Después  |
 
 ## Arquitectura
