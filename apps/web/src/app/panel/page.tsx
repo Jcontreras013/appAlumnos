@@ -46,7 +46,7 @@ export default async function PanelHome() {
         <section className="card flex flex-wrap items-center gap-5 p-5">
           <SchoolLogo school={school} className="size-16" />
           <div className="grid min-w-0 flex-1 gap-4 sm:grid-cols-[2fr_1fr_1.3fr]">
-            <Info label="Colegio" value={school.name} wrap />
+            <Info label="Centro" value={school.name} wrap />
             <Info label="RTN" value={formatRtn(school.rtn)} />
             <Info label="Identificador" value={school.slug} mono />
           </div>

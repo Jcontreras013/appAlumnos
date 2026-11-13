@@ -209,14 +209,20 @@ export const accountUpdateSchema = z
   });
 export type AccountUpdate = z.infer<typeof accountUpdateSchema>;
 
-/** Cargos del personal de un centro (las familias se manejan aparte, desde la ficha del alumno). */
-export const STAFF_ROLES = SCHOOL_ROLES.filter((r) => r !== "padre") as Exclude<
+/**
+ * Cargos del personal que se asignan en un centro público. Las familias se manejan aparte (desde la
+ * ficha del alumno) y "finanzas" queda reservado para colegios privados.
+ */
+export const STAFF_ROLES = ["admin", "coordinador", "secretaria", "docente"] as const;
+
+/** Cualquier acceso de personal (incluido "finanzas") se puede cambiar a uno de STAFF_ROLES. */
+const ANY_STAFF_ROLE = SCHOOL_ROLES.filter((r) => r !== "padre") as Exclude<
   (typeof SCHOOL_ROLES)[number],
   "padre"
 >[];
 
 export const roleChangeSchema = z.object({
-  from: z.enum(STAFF_ROLES, { error: "Cargo inválido" }),
+  from: z.enum(ANY_STAFF_ROLE, { error: "Cargo inválido" }),
   to: z.enum(STAFF_ROLES, { error: "Elige el cargo nuevo" }),
 });
 export type RoleChange = z.infer<typeof roleChangeSchema>;

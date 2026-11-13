@@ -49,7 +49,7 @@ export default async function PanelLayout({ children }: { children: ReactNode })
   }
   if (is("admin")) {
     items.push({ href: "/panel/usuarios", label: "Personal y usuarios" });
-    items.push({ href: "/panel/colegio", label: "Mi colegio" });
+    items.push({ href: "/panel/colegio", label: "Mi centro" });
   }
   const upcoming = MODULES.filter((m) => !m.href && m.roles.includes(user.role)).map((m) => ({
     label: m.label,

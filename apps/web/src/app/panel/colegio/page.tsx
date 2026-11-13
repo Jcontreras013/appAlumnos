@@ -5,7 +5,7 @@ import { requireRole } from "@/lib/dal";
 import { removeLogoAction } from "./actions";
 import { LogoForm } from "./logo-form";
 
-export const metadata: Metadata = { title: "Mi colegio" };
+export const metadata: Metadata = { title: "Mi centro" };
 
 export default async function SchoolSettingsPage() {
   const { school } = await requireRole("admin");
@@ -14,7 +14,7 @@ export default async function SchoolSettingsPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Mi colegio</h1>
+        <h1 className="text-2xl font-semibold text-slate-900">Mi centro</h1>
         <p className="mt-1 text-sm text-slate-500">
           El logo aparece en el panel de todo el personal y las familias, y en los documentos en PDF.
         </p>

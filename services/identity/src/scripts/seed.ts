@@ -49,7 +49,6 @@ try {
     const demoUsers: Array<[SchoolRole, string, string]> = [
       ["admin", "Ana Administradora", "admin@colegio-demo.hn"],
       ["coordinador", "Carmen Coordinadora", "coordinacion@colegio-demo.hn"],
-      ["finanzas", "Fernando Finanzas", "finanzas@colegio-demo.hn"],
       ["secretaria", "Sofía Secretaria", "secretaria@colegio-demo.hn"],
       ["docente", "Diego Docente", "docente@colegio-demo.hn"],
       ["docente", "Daniela Docente", "docente2@colegio-demo.hn"],

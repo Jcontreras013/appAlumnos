@@ -66,20 +66,4 @@ export const MODULES: ModuleInfo[] = [
     roles: ["admin", "secretaria", "coordinador"],
     href: "/panel/alumnos",
   },
-  {
-    key: "facturacion",
-    label: "Facturación",
-    description:
-      "Para colegios privados: colegiaturas, facturas con CAI, pagos en línea, mora y estados de cuenta.",
-    phase: 6,
-    roles: ["admin", "finanzas", "padre"],
-  },
-  {
-    key: "wallet",
-    label: "Wallet de cafetería",
-    description:
-      "Para colegios privados: saldo prepagado del alumno, recargas de los padres y consumos con carnet o QR.",
-    phase: 6,
-    roles: ["admin", "finanzas", "padre"],
-  },
 ];

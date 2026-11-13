@@ -1,6 +1,6 @@
 "use client";
 
-import { ROLE_LABELS, SCHOOL_ROLES } from "@escolar/shared";
+import { ROLE_LABELS, STAFF_ROLES } from "@escolar/shared";
 import { useActionState } from "react";
 import { Field, FormAlert, SubmitButton } from "@/components/form-controls";
 import { initialFormState } from "@/lib/form-state";
@@ -40,7 +40,7 @@ export function CreateUserForm() {
           defaultValue={state.values?.role ?? "docente"}
           aria-invalid={Boolean(roleError)}
         >
-          {SCHOOL_ROLES.map((role) => (
+          {STAFF_ROLES.map((role) => (
             <option key={role} value={role}>
               {ROLE_LABELS[role]}
             </option>

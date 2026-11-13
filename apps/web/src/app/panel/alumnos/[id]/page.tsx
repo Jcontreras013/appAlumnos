@@ -231,7 +231,7 @@ export default async function StudentPage({ params, searchParams }: PageProps<"/
           )}
           {student.siblings.length > 0 && (
             <div className="mt-4 border-t border-slate-100 pt-4 text-sm">
-              <span className="text-slate-500">Hermanos en el colegio: </span>
+              <span className="text-slate-500">Hermanos en el centro: </span>
               {student.siblings.map((s, i) => (
                 <span key={s.id}>
                   {i > 0 && ", "}

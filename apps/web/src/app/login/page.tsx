@@ -15,10 +15,10 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
       <section className="hidden flex-col justify-between bg-brand-900 p-12 text-white lg:flex">
         <Logo />
         <div className="max-w-md space-y-4">
-          <h1 className="text-3xl font-semibold leading-tight">Todo el colegio en un solo lugar.</h1>
+          <h1 className="text-3xl font-semibold leading-tight">Cada centro educativo, al día.</h1>
           <p className="text-brand-100">
-            Matrícula, notas, colegiaturas con factura CAI y el saldo de la cafetería, con la misma cuenta
-            para el personal y las familias.
+            Asistencia, notas, planificación y alerta temprana desde el aula, aun sin internet. La dirección,
+            la departamental y las familias ven lo que les toca, el mismo día.
           </p>
         </div>
         <p className="text-sm text-brand-100/70">Hecho en Honduras.</p>

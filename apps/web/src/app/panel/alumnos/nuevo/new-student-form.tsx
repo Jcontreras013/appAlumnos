@@ -40,7 +40,7 @@ export function NewStudentForm({ sections }: { sections: Option[] }) {
         <TextAreaField
           name="medicalNotes"
           label="Alergias o condiciones de salud"
-          hint="La verá enfermería y, más adelante, la cafetería."
+          hint="La ve el personal del centro en la ficha del alumno."
           rows={2}
           state={state}
         />
@@ -50,7 +50,7 @@ export function NewStudentForm({ sections }: { sections: Option[] }) {
         <legend className="sr-only">Responsable principal</legend>
         <h2 className="font-semibold text-slate-900">Responsable principal</h2>
         <p className="-mt-2 text-sm text-slate-500">
-          Si el alumno tiene hermanos en el colegio, escribe la misma identidad del responsable y quedarán en
+          Si el alumno tiene hermanos en el centro, escribe la misma identidad del responsable y quedarán en
           la misma familia.
         </p>
         <div className="grid gap-4 sm:grid-cols-2">

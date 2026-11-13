@@ -127,7 +127,7 @@ export default async function StructurePage() {
         }
       >
         {grades.length === 0 ? (
-          <Empty>Agrega los grados que ofrece el colegio (por ejemplo, Kínder, Primer grado…).</Empty>
+          <Empty>Agrega los grados que ofrece el centro (por ejemplo, Kínder, Primer grado…).</Empty>
         ) : (
           <ul className="divide-y divide-slate-100">
             {grades.map((g) => {

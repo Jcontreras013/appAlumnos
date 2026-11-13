@@ -10,7 +10,7 @@ import type { Role } from "./roles";
 
 // ───────────────────────────── Personal de un centro ─────────────────────────────
 
-export const STAFF_IMPORT_ROLES = ["docente", "coordinador", "secretaria", "finanzas"] as const;
+export const STAFF_IMPORT_ROLES = ["docente", "coordinador", "secretaria"] as const;
 export type StaffImportRole = (typeof STAFF_IMPORT_ROLES)[number];
 
 /** Cómo se escribe el cargo en los listados de las escuelas. Vacío = docente. */
@@ -25,10 +25,6 @@ const ROLE_WORDS: Record<string, StaffImportRole> = {
   coordinacion: "coordinador",
   secretaria: "secretaria",
   secretario: "secretaria",
-  finanzas: "finanzas",
-  contador: "finanzas",
-  contadora: "finanzas",
-  tesoreria: "finanzas",
 };
 
 export function staffRoleFrom(value: string | undefined): StaffImportRole | null {
