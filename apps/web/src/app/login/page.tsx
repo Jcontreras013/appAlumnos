@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { ClearOfflinePages } from "@/components/offline";
-import { APP_NAME, APP_TAGLINE } from "@/lib/brand";
+import { APP_MARK, APP_NAME, APP_TAGLINE } from "@/lib/brand";
 import { LoginForm } from "./login-form";
 
 export const metadata: Metadata = { title: "Iniciar sesión" };
@@ -41,7 +41,9 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
 function Logo({ dark = false }: { dark?: boolean }) {
   return (
     <div className={`flex items-center gap-2 font-semibold ${dark ? "text-slate-900" : "text-white"}`}>
-      <span className="grid size-8 place-items-center rounded-lg bg-brand-500 text-sm text-white">PE</span>
+      <span className="grid size-8 place-items-center rounded-lg bg-brand-500 text-sm text-white">
+        {APP_MARK}
+      </span>
       {APP_NAME}
     </div>
   );

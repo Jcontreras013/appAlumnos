@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { AccountImport } from "@/components/account-import";
+import { APP_NAME } from "@/lib/brand";
 import { requireRole } from "@/lib/dal";
 import { confirmStaffImportAction, previewStaffImportAction } from "../actions";
 
@@ -32,7 +33,7 @@ export default async function StaffImportPage() {
         kind="personal"
         preview={previewStaffImportAction}
         confirm={confirmStaffImportAction}
-        title={session.school?.name ?? "Plataforma Escolar"}
+        title={session.school?.name ?? APP_NAME}
       />
     </div>
   );

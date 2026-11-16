@@ -84,7 +84,7 @@ export function verifyTotp(
 }
 
 /** Enlace que leen las apps de autenticación (también se muestra como código QR). */
-export function otpauthUrl(secretBase32: string, account: string, issuer = "Plataforma Escolar"): string {
+export function otpauthUrl(secretBase32: string, account: string, issuer = "CONECTA"): string {
   const label = encodeURIComponent(`${issuer}:${account}`);
   // %20 y no "+": algunas apps de autenticación muestran el "+" tal cual.
   const query = [

@@ -6,7 +6,7 @@ import { MfaSetup } from "@/components/mfa-setup";
 import { Nav, type NavItem } from "@/components/nav";
 import { OfflineAgent } from "@/components/offline";
 import { SchoolLogo } from "@/components/school-logo";
-import { APP_NAME } from "@/lib/brand";
+import { APP_MARK, APP_NAME } from "@/lib/brand";
 import { getSession } from "@/lib/dal";
 import { MODULES } from "@/lib/modules";
 import { logoutAction, switchMembershipAction } from "./actions";
@@ -71,7 +71,7 @@ export default async function PanelLayout({ children }: { children: ReactNode })
       <aside className="border-b border-slate-200 bg-white px-4 py-4 md:min-h-dvh md:border-b-0 md:border-r md:py-6 print:hidden">
         <div className="mb-4 flex items-center gap-2 px-1 font-semibold md:mb-8">
           <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-600 text-sm text-white">
-            PE
+            {APP_MARK}
           </span>
           <span className="truncate">{APP_NAME}</span>
         </div>
@@ -88,7 +88,11 @@ export default async function PanelLayout({ children }: { children: ReactNode })
                 className="grid size-10 shrink-0 place-items-center rounded-lg bg-brand-50 text-xs font-bold text-brand-700"
                 aria-hidden="true"
               >
-                {current.scopeType === "departamento" ? "DD" : current.scopeType === "distrito" ? "DT" : "PE"}
+                {current.scopeType === "departamento"
+                  ? "DD"
+                  : current.scopeType === "distrito"
+                    ? "DT"
+                    : APP_MARK}
               </span>
             )}
             <div className="min-w-0">

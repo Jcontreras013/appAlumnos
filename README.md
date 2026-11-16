@@ -1,4 +1,7 @@
-# Plataforma Escolar
+# CONECTA
+
+**C**omunicación, **O**rientación, **N**otas, **E**valuación, **C**alendario, **T**areas y
+**A**sistencia: maestros y familias, conectados. Para escuelas públicas y privadas.
 
 Plataforma para centros educativos de Honduras, pensada para presentarse a una **Dirección
 Departamental de Educación**:
@@ -23,7 +26,7 @@ Departamental de Educación**:
 
 Para colegios privados quedan además facturación (con CAI) y wallet de cafetería.
 
-> Nombre provisional. Se cambia en `apps/web/src/lib/brand.ts`.
+> El nombre se cambia en `apps/web/src/lib/brand.ts` (por ejemplo, si un ministerio lo adopta con su propio nombre).
 
 ## Estado
 

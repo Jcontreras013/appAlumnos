@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { APP_NAME } from "@/lib/brand";
 import { MFA_COOKIE } from "@/lib/session-cookies";
 import { VerifyForm } from "./verify-form";
 
@@ -15,7 +16,7 @@ export default async function VerifyPage() {
         <h1 className="text-2xl font-semibold text-slate-900">Verificación en dos pasos</h1>
         <p className="mb-6 mt-1 text-sm text-slate-500">
           Abre la app de autenticación de tu teléfono (Google Authenticator, Microsoft Authenticator…) y
-          escribe el código de «Plataforma Escolar».
+          escribe el código de «{APP_NAME}».
         </p>
         <VerifyForm />
         <p className="mt-6 text-sm">
