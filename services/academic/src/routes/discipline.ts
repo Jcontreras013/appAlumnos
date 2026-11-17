@@ -1,5 +1,6 @@
 import { badRequest, forbidden, notFound, parseOrThrow, requireRole, tenantOf } from "@escolar/service-kit";
 import {
+  type DisciplineActaDto,
   type DisciplineDto,
   type DisciplineOverviewDto,
   type DisciplineStudentOption,
@@ -11,7 +12,14 @@ import { and, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { DbOrTx } from "../db/client";
-import { type DisciplineRecord, disciplineRecords, enrollments, students } from "../db/schema";
+import {
+  type DisciplineRecord,
+  disciplineRecords,
+  enrollments,
+  guardians,
+  studentGuardians,
+  students,
+} from "../db/schema";
 import type { AcademicDeps } from "../deps";
 import { audit } from "../lib/audit";
 import { rosterOf } from "../lib/evaluation";
@@ -281,6 +289,36 @@ export async function disciplineRoutes(app: FastifyInstance, { db, today }: Acad
       });
     });
     return reply.status(204).send();
+  });
+
+  /** Un registro con lo que lleva el acta impresa (identidad del alumno y su responsable principal). */
+  app.get("/discipline/:id", staff, async (request): Promise<DisciplineActaDto> => {
+    const schoolId = tenantOf(request);
+    const { id } = parseOrThrow(idParams, request.params);
+    const [row] = await db
+      .select()
+      .from(disciplineRecords)
+      .where(and(eq(disciplineRecords.schoolId, schoolId), eq(disciplineRecords.id, id)));
+    const scope = await scopeOf(request);
+    if (!row || (scope && !scope.has(row.studentId))) throw notFound("Registro no encontrado");
+    const [[student], family] = await Promise.all([
+      db
+        .select({ nationalId: students.nationalId })
+        .from(students)
+        .where(and(eq(students.schoolId, schoolId), eq(students.id, row.studentId))),
+      db
+        .select({ fullName: guardians.fullName, isPrimary: studentGuardians.isPrimary })
+        .from(studentGuardians)
+        .innerJoin(guardians, eq(guardians.id, studentGuardians.guardianId))
+        .where(and(eq(studentGuardians.schoolId, schoolId), eq(studentGuardians.studentId, row.studentId))),
+    ]);
+    const primary = family.find((g) => g.isPrimary) ?? family[0];
+    const [record] = await describe(db, request, [row]);
+    return {
+      record: record as DisciplineDto,
+      nationalId: student?.nationalId ?? null,
+      guardianName: primary?.fullName ?? null,
+    };
   });
 
   /** La familia ve solo lo que se le avisó, de sus propios hijos. */

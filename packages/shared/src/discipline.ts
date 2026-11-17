@@ -126,6 +126,23 @@ export interface DisciplineStudentOption {
   sectionLabel: string;
 }
 
+/** Lo que lleva el acta impresa: el registro, la identidad del alumno y su responsable principal. */
+export interface DisciplineActaDto {
+  record: DisciplineDto;
+  nationalId: string | null;
+  guardianName: string | null;
+}
+
+/** Título del acta impresa según la medida. */
+export const ACTA_TITLES: Record<DisciplineKind, string> = {
+  llamado_verbal: "Constancia de llamado de atención verbal",
+  llamado_escrito: "Llamado de atención por escrito",
+  citacion: "Citación a la familia",
+  compromiso: "Acta de compromiso",
+  suspension: "Notificación de suspensión",
+  expulsion: "Notificación de expulsión",
+};
+
 /** La página de disciplina: a quién puede anotar quien entra, lo reciente y las suspensiones vigentes. */
 export interface DisciplineOverviewDto {
   kinds: DisciplineKind[];

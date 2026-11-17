@@ -1,4 +1,4 @@
-import { formatDay, formatNationalId, todayInHonduras } from "@escolar/shared";
+import { formatDay, formatNationalId, MONTH_NAMES, todayInHonduras } from "@escolar/shared";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -9,21 +9,6 @@ import { ServiceError } from "@/lib/api";
 import { requireRole } from "@/lib/dal";
 
 export const metadata: Metadata = { title: "Constancia de matrícula" };
-
-const MONTHS = [
-  "enero",
-  "febrero",
-  "marzo",
-  "abril",
-  "mayo",
-  "junio",
-  "julio",
-  "agosto",
-  "septiembre",
-  "octubre",
-  "noviembre",
-  "diciembre",
-];
 
 /**
  * Constancia de matrícula para imprimir, firmar y sellar: la piden las familias para becas, bonos,
@@ -83,7 +68,7 @@ export default async function EnrollmentCertificatePage({
           </p>
           <p className="text-justify leading-8">
             Y para los fines que a la persona interesada convengan, se extiende la presente a los {day} días
-            del mes de {MONTHS[month - 1]} de {year}.
+            del mes de {MONTH_NAMES[month - 1]} de {year}.
           </p>
           <div className="grid grid-cols-2 gap-12 pt-16 text-center text-sm">
             <div className="border-t border-slate-400 pt-2">Director(a)</div>

@@ -17,6 +17,27 @@ export function formatDate(iso: string): string {
   return DATE_FORMAT.format(new Date(iso));
 }
 
+export const MONTH_NAMES = [
+  "enero",
+  "febrero",
+  "marzo",
+  "abril",
+  "mayo",
+  "junio",
+  "julio",
+  "agosto",
+  "septiembre",
+  "octubre",
+  "noviembre",
+  "diciembre",
+] as const;
+
+/** Fecha de calendario AAAA-MM-DD => "9 de noviembre de 2026", para documentos impresos. */
+export function formatLongDay(isoDate: string): string {
+  const [year, month, day] = isoDate.split("-").map(Number) as [number, number, number];
+  return `${day} de ${MONTH_NAMES[month - 1]} de ${year}`;
+}
+
 /** Fecha de calendario AAAA-MM-DD => "08 de nov de 2026" (sin desfase por zona horaria). */
 export function formatDay(isoDate: string | null | undefined): string {
   if (!isoDate) return "—";

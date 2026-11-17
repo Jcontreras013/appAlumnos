@@ -18,7 +18,8 @@ type Item = (DisciplineDto | FamilyDisciplineDto) & Partial<Pick<DisciplineDto, 
 
 /**
  * Lista de llamados de atención y medidas. Con `showStudent`, cada uno dice de quién es (y enlaza a su
- * ficha si `linkStudents`); con `canDelete`, quien lo anotó o la dirección lo puede borrar.
+ * ficha si `linkStudents`); con `canDelete`, quien lo anotó o la dirección lo puede borrar. El personal
+ * imprime el acta de cada uno para que la familia la firme (la familia no ve ese enlace).
  */
 export function DisciplineList({
   items,
@@ -68,6 +69,14 @@ export function DisciplineList({
                   <span className="rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-800">
                     Familia avisada
                   </span>
+                )}
+                {full && (
+                  <Link
+                    href={`/panel/disciplina/${full.id}/acta`}
+                    className="text-xs font-semibold text-brand-700 hover:underline"
+                  >
+                    Imprimir acta
+                  </Link>
                 )}
                 {allowDelete && full?.canDelete && (
                   <form action={deleteDisciplineAction}>

@@ -96,6 +96,7 @@ export const HELP_GUIDES: HelpGuide[] = [
           "En «Disciplina» elige al alumno (solo ves a los de tus secciones), la medida y qué tan grave fue la falta.",
           "Puedes registrar llamados de atención verbales o por escrito y citaciones a la familia. La suspensión y la expulsión las registra la dirección.",
           "Escribe qué pasó y, si hubo, el acuerdo. Si marcas «Avisar a la familia», la familia lo ve en su portal.",
+          "Con «Imprimir acta» sale la hoja para que el alumno y su familia la firmen.",
           "Si te equivocaste, puedes borrar lo que tú registraste.",
         ],
       },
@@ -168,6 +169,8 @@ export const HELP_GUIDES: HelpGuide[] = [
           "Los docentes registran llamados de atención y citaciones de sus alumnos; coordinación, también actas de compromiso.",
           "La suspensión (con sus fechas) y la expulsión solo las registra la dirección. Al registrar una expulsión, se retira la matrícula del alumno.",
           "Lo que se marca «Avisar a la familia» aparece en el portal de la familia. Todo queda en la bitácora.",
+          "«Imprimir acta» saca la hoja de cada registro (llamado, citación, compromiso, suspensión o expulsión) con espacio para las firmas del alumno, la familia y la dirección.",
+          "Mientras dure una suspensión, el alumno aparece marcado «Suspendido» en la lista de asistencia del docente.",
         ],
       },
       {

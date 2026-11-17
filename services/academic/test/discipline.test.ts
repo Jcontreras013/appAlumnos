@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type {
   AssignmentDto,
+  DisciplineActaDto,
   DisciplineDto,
   DisciplineOverviewDto,
   FamilyDisciplineDto,
@@ -120,6 +121,14 @@ describe("disciplina", () => {
       notifyFamily: true,
     });
     expect(ok.status).toBe(201);
+    const sheet = (
+      await ctx.call<{ students: Array<{ studentId: string; suspendedUntil: string | null }> }>(
+        ana,
+        "GET",
+        `/attendance/${luis.enrollments[0]?.sectionId}?fecha=${TODAY}`,
+      )
+    ).body;
+    expect(sheet.students.find((s) => s.studentId === luis.id)?.suspendedUntil).toBe("2026-11-11");
     const overview = (await ctx.call<DisciplineOverviewDto>(director, "GET", "/discipline")).body;
     expect(overview.activeSuspensions.map((d) => d.studentName)).toEqual(["López, Luis"]);
     expect(overview.kinds).toContain("expulsion");
@@ -158,6 +167,16 @@ describe("disciplina", () => {
     expect(seen.map((d) => d.kind)).toEqual(["suspension", "llamado_escrito"]);
     expect(seen[0]).not.toHaveProperty("authorName");
     expect((await ctx.call(mom, "GET", `/family/children/${sofia.id}/discipline`)).status).toBe(404);
+  });
+
+  it("el acta trae la identidad y el responsable; la maestra solo la de sus alumnos", async () => {
+    const list = (await ctx.call<DisciplineDto[]>(director, "GET", `/students/${luis.id}/discipline`)).body;
+    const susp = list.find((d) => d.kind === "suspension") as DisciplineDto;
+    const acta = await ctx.call<DisciplineActaDto>(ana, "GET", `/discipline/${susp.id}`);
+    expect(acta.status).toBe(200);
+    expect(acta.body).toMatchObject({ nationalId: null, guardianName: "María López Castro" });
+    expect(acta.body.record).toMatchObject({ kind: "suspension", studentName: "López, Luis" });
+    expect((await ctx.call(beto, "GET", `/discipline/${susp.id}`)).status).toBe(404);
   });
 
   it("solo quien lo anotó o la dirección lo borra", async () => {

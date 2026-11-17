@@ -11,6 +11,7 @@ import type {
   CoverageDto,
   CreatePlanInput,
   CreateStudentInput,
+  DisciplineActaDto,
   DisciplineDto,
   DisciplineInput,
   DisciplineOverviewDto,
@@ -215,6 +216,7 @@ export const academic = {
     call<DisciplineDto[]>(`/students/${studentId}/discipline`, { token }),
   addDiscipline: (token: string, studentId: string, input: DisciplineInput) =>
     call<DisciplineDto>(`/students/${studentId}/discipline`, { method: "POST", token, body: input }),
+  disciplineActa: (token: string, id: string) => call<DisciplineActaDto>(`/discipline/${id}`, { token }),
   deleteDiscipline: (token: string, id: string) =>
     call<void>(`/discipline/${id}`, { method: "DELETE", token }),
   familyDiscipline: (token: string, childId: string) =>
