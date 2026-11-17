@@ -294,6 +294,25 @@ pnpm test
   asistencia y notas. Medido en una computadora: tablero departamental ~1.4 s, indicadores del piloto
   ~0.6 s, Excel del departamento ~1.5 s (los centros se calculan de 4 en 4).
 
+## Licencia de las copias vendidas (Gumroad)
+
+Las copias de CONECTA que se venden por Gumroad piden una clave de licencia; la demo y el servidor
+propio no (mientras `GUMROAD_PRODUCT_ID` esté vacío en `apps/web/src/lib/brand.ts`).
+
+1. En Gumroad, crea el producto y activa **«Generate a unique license key per sale»**. En la sección
+   de licencias del producto aparece su `product_id`.
+2. En la copia que vas a entregar, pon ese ID en `GUMROAD_PRODUCT_ID` (`apps/web/src/lib/brand.ts`).
+3. Quien compra pone su clave en la variable de entorno `CONECTA_LICENSE_KEY` del panel web.
+
+El panel le pregunta a Gumroad si la clave es válida (sin contarlo como otra instalación) y lo
+vuelve a revisar cada 12 horas. Si la clave no existe, fue desactivada desde Gumroad, la compra se
+reembolsó o tuvo contracargo, o la suscripción terminó, el panel muestra un aviso en lugar del
+contenido; los datos no se tocan. Si Gumroad no responde, la instalación sigue funcionando. El
+servidor web necesita salida a `api.gumroad.com`.
+
+> Quien recibe el código fuente puede quitar esta revisión: lo que protege la venta es el contrato
+> de licencia. La revisión sirve para que una copia reembolsada o desactivada deje de funcionar.
+
 ## Despliegue en AWS
 
 Para **producción con 100 centros** (dominio con HTTPS, dos zonas, autoescalado, WAF, alarmas por

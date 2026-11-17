@@ -8,14 +8,20 @@ import { OfflineAgent } from "@/components/offline";
 import { SchoolLogo } from "@/components/school-logo";
 import { APP_MARK, APP_NAME } from "@/lib/brand";
 import { getSession } from "@/lib/dal";
+import { currentLicense } from "@/lib/license";
 import { MODULES } from "@/lib/modules";
 import { logoutAction, switchMembershipAction } from "./actions";
 
 export default async function PanelLayout({ children }: { children: ReactNode }) {
-  const { user, school, current, memberships, mfa } = await getSession();
+  const [{ user, school, current, memberships, mfa }, license] = await Promise.all([
+    getSession(),
+    currentLicense(),
+  ]);
+  // Una copia vendida sin licencia válida no muestra el panel.
+  const unlicensed = license.state === "invalida";
   // Antes de usar el panel: cambiar la contraseña temporal y, en los cargos que lo exigen, activar
   // la verificación en dos pasos.
-  const gated = user.mustChangePassword || mfa.setupRequired;
+  const gated = unlicensed || user.mustChangePassword || mfa.setupRequired;
 
   const is = (...roles: Role[]) => roles.includes(user.role);
   const items: NavItem[] = [];
@@ -141,7 +147,25 @@ export default async function PanelLayout({ children }: { children: ReactNode })
           </div>
         </header>
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-8 print:max-w-none print:p-0">
-          {user.mustChangePassword ? (
+          {unlicensed ? (
+            <div className="max-w-2xl space-y-4" role="alert">
+              <h1 className="text-2xl font-semibold text-slate-900">
+                Esta instalación no tiene una licencia válida
+              </h1>
+              <p className="text-sm text-slate-600">
+                {APP_NAME} no puede usarse hasta que la licencia esté al día. Los datos del centro están
+                guardados y no se pierde nada.
+              </p>
+              <div className="card space-y-2 p-5 text-sm">
+                <p className="font-medium text-slate-900">Motivo</p>
+                <p className="text-slate-600">{license.reason}</p>
+                <p className="pt-2 text-slate-500">
+                  Si compraste la licencia, revisa que la clave esté bien escrita en la configuración del
+                  servidor o escribe a quien te vendió {APP_NAME}.
+                </p>
+              </div>
+            </div>
+          ) : user.mustChangePassword ? (
             // Entró con la contraseña temporal que le dio el centro: primero la cambia.
             <div className="space-y-4">
               <div>
