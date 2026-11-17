@@ -11,8 +11,12 @@ import type {
   CoverageDto,
   CreatePlanInput,
   CreateStudentInput,
+  DisciplineDto,
+  DisciplineInput,
+  DisciplineOverviewDto,
   FamilyChildDto,
   FamilyChildSummaryDto,
+  FamilyDisciplineDto,
   FollowUpDto,
   FollowUpInput,
   GradebookDto,
@@ -206,6 +210,15 @@ export const academic = {
   addFollowUp: (token: string, studentId: string, input: FollowUpInput) =>
     call<FollowUpDto>(`/students/${studentId}/follow-ups`, { method: "POST", token, body: input }),
   deleteFollowUp: (token: string, id: string) => call<void>(`/follow-ups/${id}`, { method: "DELETE", token }),
+  disciplineOverview: (token: string) => call<DisciplineOverviewDto>("/discipline", { token }),
+  listDiscipline: (token: string, studentId: string) =>
+    call<DisciplineDto[]>(`/students/${studentId}/discipline`, { token }),
+  addDiscipline: (token: string, studentId: string, input: DisciplineInput) =>
+    call<DisciplineDto>(`/students/${studentId}/discipline`, { method: "POST", token, body: input }),
+  deleteDiscipline: (token: string, id: string) =>
+    call<void>(`/discipline/${id}`, { method: "DELETE", token }),
+  familyDiscipline: (token: string, childId: string) =>
+    call<FamilyDisciplineDto[]>(`/family/children/${childId}/discipline`, { token }),
   announcements: (token: string) => call<AnnouncementDto[]>("/announcements", { token }),
   familyAnnouncements: (token: string) => call<AnnouncementDto[]>("/family/announcements", { token }),
   publishAnnouncement: (token: string, input: AnnouncementInput) =>

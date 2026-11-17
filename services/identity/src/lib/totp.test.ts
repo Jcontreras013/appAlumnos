@@ -45,7 +45,7 @@ describe("TOTP", () => {
 
   it("arma el enlace para la app y códigos de recuperación legibles", () => {
     expect(otpauthUrl("ABC", "ana@ihb.hn")).toBe(
-      "otpauth://totp/Plataforma%20Escolar%3Aana%40ihb.hn?secret=ABC&issuer=Plataforma%20Escolar&digits=6&period=30",
+      "otpauth://totp/CONECTA%3Aana%40ihb.hn?secret=ABC&issuer=CONECTA&digits=6&period=30",
     );
     const codes = newRecoveryCodes();
     expect(codes).toHaveLength(10);

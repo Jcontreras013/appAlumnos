@@ -91,6 +91,15 @@ export const HELP_GUIDES: HelpGuide[] = [
         ],
       },
       {
+        title: "Llamados de atención",
+        steps: [
+          "En «Disciplina» elige al alumno (solo ves a los de tus secciones), la medida y qué tan grave fue la falta.",
+          "Puedes registrar llamados de atención verbales o por escrito y citaciones a la familia. La suspensión y la expulsión las registra la dirección.",
+          "Escribe qué pasó y, si hubo, el acuerdo. Si marcas «Avisar a la familia», la familia lo ve en su portal.",
+          "Si te equivocaste, puedes borrar lo que tú registraste.",
+        ],
+      },
+      {
         title: "Cuando cubres a un compañero",
         steps: [
           "Si la dirección te asigna como sustituto, la clase aparece en «Mi cuaderno» mientras dura la licencia.",
@@ -150,6 +159,15 @@ export const HELP_GUIDES: HelpGuide[] = [
           "En «Seguimiento», cada alumno en riesgo dice si ya tiene seguimiento.",
           "«Registrar seguimiento»: anota qué se hizo (llamada, reunión, visita, referido a orientación…) y qué se acordó.",
           "Todo queda en la ficha del alumno, con la fecha y quién lo registró.",
+        ],
+      },
+      {
+        title: "Disciplina: llamados de atención, suspensiones y expulsiones",
+        steps: [
+          "En «Disciplina» ves lo registrado en los últimos meses y quién está suspendido hoy. También desde la ficha de cada alumno.",
+          "Los docentes registran llamados de atención y citaciones de sus alumnos; coordinación, también actas de compromiso.",
+          "La suspensión (con sus fechas) y la expulsión solo las registra la dirección. Al registrar una expulsión, se retira la matrícula del alumno.",
+          "Lo que se marca «Avisar a la familia» aparece en el portal de la familia. Todo queda en la bitácora.",
         ],
       },
       {
@@ -295,6 +313,7 @@ export const HELP_GUIDES: HelpGuide[] = [
           "Si aparece «Conviene hablar con sus maestros», acércate al centro: es una alerta temprana, todavía hay tiempo de ayudarlo.",
           "«Ver boleta» abre la boleta informativa para imprimir.",
           "Más abajo está el horario de clases de su sección.",
+          "Si el centro registró un llamado de atención o una medida y te la avisó, aparece en «Llamados de atención y medidas».",
           "Arriba de «Mis hijos» aparecen los avisos del centro.",
         ],
       },

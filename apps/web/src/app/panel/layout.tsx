@@ -45,6 +45,9 @@ export default async function PanelLayout({ children }: { children: ReactNode })
   if (is("admin", "coordinador", "secretaria")) {
     items.push({ href: "/panel/seguimiento", label: "Seguimiento" });
   }
+  if (is("admin", "coordinador", "secretaria", "docente")) {
+    items.push({ href: "/panel/disciplina", label: "Disciplina" });
+  }
   if (is("admin", "secretaria", "coordinador")) items.push({ href: "/panel/alumnos", label: "Alumnos" });
   if (is("admin", "secretaria")) items.push({ href: "/panel/traslados", label: "Traslados" });
   if (is("admin", "coordinador", "secretaria")) {

@@ -1,4 +1,5 @@
 import {
+  disciplineKindsFor,
   FOLLOW_UP_LABELS,
   formatDay,
   formatNationalId,
@@ -14,6 +15,8 @@ import type { ReactNode } from "react";
 import { deleteFollowUpAction } from "@/app/panel/seguimiento/actions";
 import { cancelTransferAction } from "@/app/panel/traslados/actions";
 import { SendTransferForm } from "@/app/panel/traslados/forms";
+import { DisciplineEditor } from "@/components/discipline-editor";
+import { DisciplineList } from "@/components/discipline-list";
 import { FollowUpEditor } from "@/components/follow-up-editor";
 import { TransferHistory } from "@/components/transfer-history";
 import { academic } from "@/lib/academic";
@@ -42,7 +45,8 @@ export default async function StudentPage({ params, searchParams }: PageProps<"/
   const { nuevo } = await searchParams;
 
   const canFollowUp = session.user.role !== "secretaria";
-  const [student, years, sections, followUps, transfers, transferTargets] = await Promise.all([
+  const disciplineKinds = disciplineKindsFor(session.user.role);
+  const [student, years, sections, followUps, transfers, transferTargets, discipline] = await Promise.all([
     academic.getStudent(session.accessToken, id).catch((err) => {
       if (err instanceof ServiceError && (err.status === 404 || err.status === 400)) notFound();
       throw err;
@@ -52,6 +56,7 @@ export default async function StudentPage({ params, searchParams }: PageProps<"/
     academic.listFollowUps(session.accessToken, id).catch(() => []),
     canEdit ? academic.studentTransfers(session.accessToken, id).catch(() => []) : Promise.resolve([]),
     canEdit ? identity.transferTargets(session.accessToken).catch(() => []) : Promise.resolve([]),
+    academic.listDiscipline(session.accessToken, id).catch(() => []),
   ]);
   const cameFrom = transfers.find((t) => t.direction === "entrada" && t.status === "recibido");
   const leaving = transfers.find((t) => t.direction === "salida" && t.status === "pendiente");
@@ -335,6 +340,25 @@ export default async function StudentPage({ params, searchParams }: PageProps<"/
               <FollowUpEditor
                 studentId={student.id}
                 studentName={`${student.firstNames} ${student.lastNames}`}
+              />
+            </div>
+          )}
+        </Card>
+      )}
+
+      {(discipline.length > 0 || disciplineKinds.length > 0) && (
+        <Card title="Disciplina">
+          {discipline.length === 0 ? (
+            <p className="text-sm text-slate-500">Sin llamados de atención ni medidas.</p>
+          ) : (
+            <DisciplineList items={discipline} allowDelete={disciplineKinds.length > 0} />
+          )}
+          {disciplineKinds.length > 0 && (
+            <div className="mt-3">
+              <DisciplineEditor
+                studentId={student.id}
+                studentName={`${student.firstNames} ${student.lastNames}`}
+                kinds={disciplineKinds}
               />
             </div>
           )}

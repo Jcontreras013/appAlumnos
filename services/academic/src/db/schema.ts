@@ -2,6 +2,8 @@ import {
   ANNOUNCEMENT_AUDIENCES,
   ATTENDANCE_STATUSES,
   DEFAULT_PASSING_GRADE,
+  DISCIPLINE_KINDS,
+  DISCIPLINE_SEVERITIES,
   FOLLOW_UP_KINDS,
   LEAVE_TYPES,
   PLAN_STATUSES,
@@ -46,6 +48,8 @@ export const leaveTypeEnum = pgEnum("leave_type", LEAVE_TYPES);
 export const attendanceStatusEnum = pgEnum("attendance_status", ATTENDANCE_STATUSES);
 export const planStatusEnum = pgEnum("plan_status", PLAN_STATUSES);
 export const followUpKindEnum = pgEnum("follow_up_kind", FOLLOW_UP_KINDS);
+export const disciplineKindEnum = pgEnum("discipline_kind", DISCIPLINE_KINDS);
+export const disciplineSeverityEnum = pgEnum("discipline_severity", DISCIPLINE_SEVERITIES);
 export const announcementAudienceEnum = pgEnum("announcement_audience", ANNOUNCEMENT_AUDIENCES);
 export const transferStatusEnum = pgEnum("transfer_status", ["pendiente", "recibido", "cancelado"]);
 export const planActionEnum = pgEnum("plan_action", [
@@ -499,6 +503,44 @@ export const studentFollowUps = pgTable(
   ],
 );
 
+/**
+ * Disciplina: llamados de atención y medidas (citación, acta de compromiso, suspensión, expulsión).
+ * Solo lo que se avisó a la familia aparece en su portal.
+ */
+export const disciplineRecords = pgTable(
+  "discipline_records",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    schoolId: schoolId(),
+    studentId: uuid("student_id").notNull(),
+    kind: disciplineKindEnum("kind").notNull(),
+    severity: disciplineSeverityEnum("severity").notNull(),
+    date: date("date", { mode: "string" }).notNull(),
+    description: text("description").notNull(),
+    measure: text("measure"),
+    suspensionFrom: date("suspension_from", { mode: "string" }),
+    suspensionTo: date("suspension_to", { mode: "string" }),
+    notifyFamily: boolean("notify_family").notNull().default(false),
+    authorUserId: uuid("author_user_id").notNull(),
+    authorName: text("author_name").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique("discipline_records_tenant_key").on(t.schoolId, t.id),
+    index("discipline_records_student_idx").on(t.schoolId, t.studentId, t.date),
+    index("discipline_records_school_date_idx").on(t.schoolId, t.date),
+    foreignKey({
+      name: "discipline_records_student_fk",
+      columns: [t.schoolId, t.studentId],
+      foreignColumns: [students.schoolId, students.id],
+    }).onDelete("cascade"),
+    check(
+      "discipline_records_suspension_dates",
+      sql`${t.kind} <> 'suspension' OR (${t.suspensionFrom} IS NOT NULL AND ${t.suspensionTo} >= ${t.suspensionFrom})`,
+    ),
+  ],
+);
+
 /** Avisos del centro para el personal, las familias o una sección. Vencen solos. */
 export const announcements = pgTable(
   "announcements",
@@ -737,5 +779,6 @@ export type Substitution = typeof substitutions.$inferSelect;
 export type GradingPeriod = typeof gradingPeriods.$inferSelect;
 export type Activity = typeof activities.$inferSelect;
 export type StudentFollowUp = typeof studentFollowUps.$inferSelect;
+export type DisciplineRecord = typeof disciplineRecords.$inferSelect;
 export type Announcement = typeof announcements.$inferSelect;
 export type StudentTransfer = typeof studentTransfers.$inferSelect;

@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
+import { DisciplineList } from "@/components/discipline-list";
 import { Kpi } from "@/components/kpi";
 import { ScheduleGrid } from "@/components/schedule-grid";
 import { academic } from "@/lib/academic";
@@ -24,12 +25,13 @@ export default async function ChildPage({ params }: PageProps<"/panel/familia/[i
   const session = await requireRole("padre");
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
-  const [child, schedule] = await Promise.all([
+  const [child, schedule, discipline] = await Promise.all([
     academic.familyChild(session.accessToken, id).catch((err) => {
       if (err instanceof ServiceError && (err.status === 404 || err.status === 400)) notFound();
       throw err;
     }),
     academic.childSchedule(session.accessToken, id).catch(() => null),
+    academic.familyDiscipline(session.accessToken, id).catch(() => []),
   ]);
   const { student, period, subjects, attendance, homework, passingGrade } = child;
   const week = mondayOf(todayInHonduras());
@@ -205,6 +207,14 @@ export default async function ChildPage({ params }: PageProps<"/panel/familia/[i
           </ul>
         )}
       </Card>
+
+      {discipline.length > 0 && (
+        <Card title="Llamados de atención y medidas">
+          <div className="p-4">
+            <DisciplineList items={discipline} />
+          </div>
+        </Card>
+      )}
 
       {schedule && schedule.slots.length > 0 && (
         <Card title="Horario de clases">
