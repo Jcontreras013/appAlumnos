@@ -2,6 +2,7 @@ import { buildApp } from "./app";
 import { loadConfig } from "./config";
 import { createDb, runMigrations } from "./db/client";
 import { httpIdentityClient } from "./lib/identity-client";
+import { claudePlanDrafter } from "./lib/plan-assistant";
 
 const config = loadConfig();
 
@@ -14,6 +15,7 @@ const app = await buildApp({
   db,
   identity: httpIdentityClient(config.identityUrl),
   identityUrl: config.identityUrl,
+  planDrafter: config.planAssistant ? claudePlanDrafter() : null,
 });
 
 // Apagado ordenado: ECS manda SIGTERM antes de matar la tarea en cada despliegue.

@@ -42,6 +42,11 @@ export interface EscolarStackProps extends StackProps {
   certificateArn?: string;
   /** Correo que recibe las alarmas (se confirma desde el correo que manda AWS). */
   alertEmail?: string;
+  /**
+   * ARN del secreto con la llave de la API de Claude (el valor del secreto es la llave). Opcional:
+   * sin él, el asistente de planificación aparece como no disponible.
+   */
+  anthropicSecretArn?: string;
 }
 
 /**
@@ -137,6 +142,8 @@ export class EscolarStack extends Stack {
         secrets?: Record<string, ecs.Secret>;
         /** CPU y memoria en prod (en dev siempre 256/512). */
         prodSize?: { cpu: number; memoryLimitMiB: number };
+        /** Cuánto espera Service Connect cada respuesta (15 s por defecto). */
+        requestTimeout?: Duration;
       },
     ) => {
       const id = name.charAt(0).toUpperCase() + name.slice(1);
@@ -192,7 +199,14 @@ export class EscolarStack extends Stack {
         maxHealthyPercent: 200,
         circuitBreaker: { enable: true, rollback: true },
         serviceConnectConfiguration: {
-          services: [{ portMappingName: name, dnsName: name, port: options.port }],
+          services: [
+            {
+              portMappingName: name,
+              dnsName: name,
+              port: options.port,
+              ...(options.requestTimeout ? { perRequestTimeout: options.requestTimeout } : {}),
+            },
+          ],
         },
       });
       database.connections.allowDefaultPortFrom(service, `${name} -> Postgres`);
@@ -216,6 +230,17 @@ export class EscolarStack extends Stack {
       environment: { IDENTITY_URL: "http://identity:3001" },
       // Tableros y seguimiento recorren muchos datos: más CPU en prod.
       prodSize: { cpu: 512, memoryLimitMiB: 1024 },
+      // El asistente de planificación con IA puede tardar cerca de un minuto en responder.
+      requestTimeout: Duration.minutes(3),
+      ...(props.anthropicSecretArn
+        ? {
+            secrets: {
+              ANTHROPIC_API_KEY: ecs.Secret.fromSecretsManager(
+                secretsmanager.Secret.fromSecretCompleteArn(this, "AnthropicKey", props.anthropicSecretArn),
+              ),
+            },
+          }
+        : {}),
     });
     identityService.connections.allowFrom(academic.service, ec2.Port.tcp(3001), "academic -> identity");
 
@@ -232,6 +257,8 @@ export class EscolarStack extends Stack {
       assignPublicIp: true,
       taskSubnets: { subnetType: ec2.SubnetType.PUBLIC },
       publicLoadBalancer: true,
+      // El borrador del asistente de planificación tarda; el ALB corta a los 60 s por defecto.
+      idleTimeout: Duration.minutes(3),
       minHealthyPercent: 100,
       circuitBreaker: { rollback: true },
       ...(certificate

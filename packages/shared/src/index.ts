@@ -12,6 +12,7 @@ export * from "./money";
 export * from "./onboarding";
 export * from "./passwords";
 export * from "./pilot";
+export * from "./plan-assistant";
 export * from "./roles";
 export * from "./schemas";
 export * from "./search";

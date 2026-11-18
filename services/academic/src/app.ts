@@ -9,6 +9,7 @@ import type { FastifyServerOptions } from "fastify";
 import { type Db, ping } from "./db/client";
 import type { AcademicDeps } from "./deps";
 import type { IdentityClient } from "./lib/identity-client";
+import type { PlanDrafter } from "./lib/plan-assistant";
 import { announcementRoutes } from "./routes/announcements";
 import { auditLogRoutes } from "./routes/audit-log";
 import { conductRoutes } from "./routes/conduct";
@@ -34,6 +35,8 @@ export interface BuildAppOptions {
   identityUrl?: string;
   today?: () => string;
   logger?: FastifyServerOptions["logger"];
+  /** Asistente de planificación (en producción, Claude). Sin él, el asistente aparece como no disponible. */
+  planDrafter?: PlanDrafter | null;
 }
 
 export async function buildApp(options: BuildAppOptions) {
@@ -52,6 +55,7 @@ export async function buildApp(options: BuildAppOptions) {
     db: options.db,
     identity: options.identity,
     today: options.today ?? (() => todayInHonduras()),
+    planDrafter: options.planDrafter ?? null,
   };
   await app.register(async (scope) => {
     await structureRoutes(scope, deps);

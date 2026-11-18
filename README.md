@@ -294,6 +294,25 @@ pnpm test
   asistencia y notas. Medido en una computadora: tablero departamental ~1.4 s, indicadores del piloto
   ~0.6 s, Excel del departamento ~1.5 s (los centros se calculan de 4 en 4).
 
+## Asistente de planificación con IA
+
+En el editor de la planificación semanal, el docente escribe el tema (y, si quiere, indicaciones:
+libro de texto, materiales, alumnos que necesitan apoyo) y el asistente llena la plantilla del centro
+con un borrador según el Currículo Nacional Básico. El borrador **no se guarda**: llena el formulario
+y el docente lo revisa, lo ajusta y lo guarda o lo envía como siempre.
+
+- Usa Claude (`claude-opus-5-5`) desde el servicio `academic`. Al modelo solo van la asignatura, el
+  grado, el tema, los días con clase según el horario, el tema de la semana anterior y las
+  indicaciones del docente; **nunca datos de alumnos**.
+- Solo quien escribe la planificación lo usa, mientras está en borrador o devuelta; hasta 20
+  borradores por docente al día, y cada uso queda en la bitácora del centro.
+- Se activa con la variable `ANTHROPIC_API_KEY` en `academic`; sin ella aparece como no disponible.
+  `PLAN_ASSISTANT=off` lo apaga aunque haya llave.
+- En la demo con Docker, define la llave antes de levantarla (PowerShell):
+  `$env:ANTHROPIC_API_KEY = "tu-llave"` y luego `docker compose -f docker-compose.demo.yml up --build`.
+- En AWS, guarda la llave como secreto y despliega con `-c anthropicSecretArn=arn:aws:secretsmanager:...`.
+  El balanceador y Service Connect esperan hasta 3 minutos, porque un borrador tarda de 20 a 60 s.
+
 ## Licencia de las copias vendidas (Gumroad)
 
 Las copias de CONECTA que se venden por Gumroad piden una clave de licencia; la demo y el servidor

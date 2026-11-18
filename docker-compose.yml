@@ -41,6 +41,7 @@ services:
     environment:
       DATABASE_URL: postgres://escolar:escolar@db:5432/escolar_academic
       IDENTITY_URL: http://identity:3001
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     ports:
       - "3002:3002"
     depends_on:

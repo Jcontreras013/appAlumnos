@@ -112,6 +112,41 @@ describe("seguridad de la infraestructura", () => {
     });
   });
 
+  it("el asistente de planificación tiene tiempo para responder (Service Connect y balanceador)", () => {
+    const academic = Object.entries(template.findResources("AWS::ECS::Service")).find(([id]) =>
+      id.startsWith("AcademicService"),
+    )?.[1] as { Properties: { ServiceConnectConfiguration: { Services: Array<Record<string, unknown>> } } };
+    expect(academic.Properties.ServiceConnectConfiguration.Services[0]).toMatchObject({
+      Timeout: { PerRequestTimeoutSeconds: 180 },
+    });
+    template.hasResourceProperties("AWS::ElasticLoadBalancingV2::LoadBalancer", {
+      LoadBalancerAttributes: Match.arrayWith([{ Key: "idle_timeout.timeout_seconds", Value: "180" }]),
+    });
+  });
+
+  it("la llave de Claude llega como secreto a academic, solo si se indica", () => {
+    const withoutKey = JSON.stringify(template.findResources("AWS::ECS::TaskDefinition"));
+    expect(withoutKey).not.toContain("ANTHROPIC_API_KEY");
+    const stack = new EscolarStack(new App(), "ConAsistente", {
+      stage: "dev",
+      jwtSecretArn: JWT_ARN,
+      anthropicSecretArn: "arn:aws:secretsmanager:us-east-1:111111111111:secret:escolar/dev/anthropic-AbCdEf",
+      env: { account: "111111111111", region: "us-east-1" },
+    });
+    const tasks = Template.fromStack(stack).findResources("AWS::ECS::TaskDefinition");
+    const academic = Object.entries(tasks).find(([id]) => id.startsWith("AcademicTask"))?.[1] as {
+      Properties: {
+        ContainerDefinitions: Array<{
+          Secrets?: Array<{ Name: string }>;
+          Environment?: Array<{ Name: string }>;
+        }>;
+      };
+    };
+    const container = academic.Properties.ContainerDefinitions[0];
+    expect(container?.Secrets?.map((s) => s.Name)).toContain("ANTHROPIC_API_KEY");
+    expect(container?.Environment?.map((e) => e.Name)).not.toContain("ANTHROPIC_API_KEY");
+  });
+
   it("falla con un mensaje claro si falta el secreto JWT", () => {
     expect(() => new EscolarStack(new App(), "SinSecreto", { stage: "dev" })).toThrow(/jwtSecretArn/);
   });

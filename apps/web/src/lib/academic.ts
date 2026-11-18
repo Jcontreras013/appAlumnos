@@ -32,8 +32,11 @@ import type {
   MeasureInput,
   PeriodsInput,
   PilotIndicatorsDto,
+  PlanAssistantStatusDto,
   PlanBoardDto,
   PlanDetailDto,
+  PlanDraftDto,
+  PlanDraftInput,
   PlanTemplateDto,
   PlanTemplateInput,
   PortalAccessDto,
@@ -311,6 +314,10 @@ export const academic = {
   createPlan: (token: string, input: CreatePlanInput) =>
     call<PlanDetailDto>("/plans", { method: "POST", token, body: input }),
   getPlan: (token: string, id: string) => call<PlanDetailDto>(`/plans/${id}`, { token }),
+  planAssistant: (token: string) => call<PlanAssistantStatusDto>("/plans/assistant", { token }),
+  /** El borrador con IA tarda (normalmente 20-60 s): se espera hasta 2 minutos y medio. */
+  draftPlan: (token: string, id: string, input: PlanDraftInput) =>
+    call<PlanDraftDto>(`/plans/${id}/draft`, { method: "POST", token, body: input, timeoutMs: 150_000 }),
   savePlan: (token: string, id: string, input: SavePlanInput) =>
     call<PlanDetailDto>(`/plans/${id}`, { method: "PUT", token, body: input }),
   submitPlan: (token: string, id: string, input: Partial<SavePlanInput>) =>

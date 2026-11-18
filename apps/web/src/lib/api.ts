@@ -14,18 +14,23 @@ export class ServiceError extends Error {
   }
 }
 
-export type CallInit = Omit<RequestInit, "body"> & { token?: string; body?: unknown };
+export type CallInit = Omit<RequestInit, "body"> & {
+  token?: string;
+  body?: unknown;
+  /** Cuánto esperar la respuesta (15 s por defecto; el asistente de planificación necesita más). */
+  timeoutMs?: number;
+};
 
 /** Llama a un microservicio desde el servidor de Next (BFF). El navegador nunca habla con ellos directo. */
 export async function serviceCall<T>(baseUrl: string, path: string, init: CallInit = {}): Promise<T> {
-  const { token, body, ...rest } = init;
+  const { token, body, timeoutMs = 15_000, ...rest } = init;
   let response: Response;
   try {
     response = await fetch(`${baseUrl}${path}`, {
       ...rest,
       body: body === undefined ? undefined : JSON.stringify(body),
       cache: "no-store",
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(timeoutMs),
       headers: {
         ...(body === undefined ? {} : { "content-type": "application/json" }),
         ...(token ? { authorization: `Bearer ${token}` } : {}),

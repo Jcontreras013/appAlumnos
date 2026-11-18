@@ -73,6 +73,7 @@ export const AUDIT_LABELS: Record<string, string> = {
   "substitution.cancelled": "Canceló una sustitución",
   "activity.deleted": "Borró una actividad con notas",
   "plan_template.updated": "Cambió la plantilla de planificación",
+  "plan.ai_draft": "Generó un borrador de planificación con el asistente",
   "announcement.published": "Publicó un aviso",
   "announcement.removed": "Quitó un aviso",
   "export.school": "Descargó los datos del centro en Excel",
