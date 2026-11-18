@@ -13,6 +13,7 @@ export * from "./passwords";
 export * from "./pilot";
 export * from "./roles";
 export * from "./schemas";
+export * from "./search";
 export * from "./staff";
 export * from "./types";
 export * from "./weeks";
