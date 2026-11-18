@@ -1,4 +1,7 @@
 import {
+  CONDUCT_CATEGORY_LABELS,
+  CONDUCT_MEASURE_LABELS,
+  CONDUCT_SEVERITY_LABELS,
   FOLLOW_UP_LABELS,
   formatDay,
   formatNationalId,
@@ -13,6 +16,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { AccountEditor } from "@/components/account-editor";
+import { MEASURE_STYLES, measureDates, Pill } from "@/components/conduct-incident";
 import { KpiPanel } from "@/components/kpi-panel";
 import { ResetPassword } from "@/components/reset-password";
 import { SchoolLogo } from "@/components/school-logo";
@@ -38,7 +42,8 @@ export default async function RegionSchoolPage({ params, searchParams }: PagePro
     if (err instanceof ServiceError && (err.status === 404 || err.status === 400)) notFound();
     throw err;
   });
-  const { summary, coverage, sections, studentsAtRisk, gradeProgress, plans, attendanceBySection } = detail;
+  const { summary, coverage, sections, studentsAtRisk, gradeProgress, plans, attendanceBySection, conduct } =
+    detail;
   // Personal del centro (para ayudar a quien olvidó su contraseña o quedó bloqueado).
   const staff = await identity.schoolStaff(session.accessToken, id).catch(() => []);
 
@@ -350,6 +355,44 @@ export default async function RegionSchoolPage({ params, searchParams }: PagePro
               </tr>
             ))}
           </PanelTable>
+        </KpiPanel>
+      </section>
+
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <KpiPanel
+          label="Conducta"
+          value={conduct.incidents}
+          tone={conduct.expulsions > 0 ? "alert" : "neutral"}
+          hint={`incidentes del año · ${conduct.serious} graves · ${conduct.suspensions} ${conduct.suspensions === 1 ? "suspensión" : "suspensiones"} · ${conduct.expulsions} ${conduct.expulsions === 1 ? "expulsión" : "expulsiones"}`}
+          cta="Ver suspensiones y expulsiones →"
+          title="Suspensiones y expulsiones del año"
+          subtitle="Las decide la dirección del centro según su reglamento. Toca un alumno para ver su ficha."
+        >
+          {conduct.measures.length === 0 ? (
+            <p className="px-5 py-8 text-center text-sm text-slate-500">
+              El centro no ha registrado suspensiones ni expulsiones este año.
+            </p>
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              {conduct.measures.map((m) => (
+                <li key={m.measureId}>
+                  <Link href={studentHref(m.studentId)} className="block px-5 py-3 text-sm hover:bg-slate-50">
+                    <span className="flex flex-wrap items-baseline justify-between gap-x-3">
+                      <span className="font-semibold text-brand-700">{m.studentName}</span>
+                      <span className="text-xs text-slate-500">{m.sectionLabel}</span>
+                    </span>
+                    <span className="mt-1 flex flex-wrap items-center gap-1.5 text-slate-600">
+                      <Pill className={MEASURE_STYLES[m.kind]}>{CONDUCT_MEASURE_LABELS[m.kind]}</Pill>
+                      <span className="text-xs">
+                        {measureDates(m)} · {CONDUCT_CATEGORY_LABELS[m.category]} (
+                        {CONDUCT_SEVERITY_LABELS[m.severity].toLowerCase()})
+                      </span>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
         </KpiPanel>
       </section>
 

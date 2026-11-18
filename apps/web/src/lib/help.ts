@@ -91,6 +91,16 @@ export const HELP_GUIDES: HelpGuide[] = [
         ],
       },
       {
+        title: "Reportar un incidente de conducta",
+        steps: [
+          "En «Conducta», toca «Reportar un incidente».",
+          "Busca al alumno por su nombre (solo aparecen los de tus secciones), elige la fecha, la gravedad y el tipo de falta, y describe qué pasó.",
+          "La dirección o la coordinación deciden la medida. En «Conducta» ves tus reportes y lo que se decidió.",
+          "Si te equivocaste, puedes «Borrar reporte» mientras no tenga una medida.",
+        ],
+        tip: "La familia ve el tipo de falta y la medida, no tu descripción: puede nombrar a otros alumnos.",
+      },
+      {
         title: "Cuando cubres a un compañero",
         steps: [
           "Si la dirección te asigna como sustituto, la clase aparece en «Mi cuaderno» mientras dura la licencia.",
@@ -193,6 +203,17 @@ export const HELP_GUIDES: HelpGuide[] = [
         ],
       },
       {
+        title: "Conducta: incidentes y medidas",
+        steps: [
+          "En «Conducta» ves los incidentes del año. «Esperan decisión» filtra los que todavía no tienen medida.",
+          "En cada incidente, «Decidir una medida»: llamado de atención, citación a la familia, compromiso de conducta, suspensión o expulsión. Escribe la nota para la familia: la ve en su portal.",
+          "La suspensión pide su primer y último día (máximo 30 días). La suspensión y la expulsión las decide solo la dirección.",
+          "La expulsión retira la matrícula del alumno con esa fecha. Hay que confirmarla antes de registrarla.",
+          "Las medidas no se borran: si fue un error, «Anular» la deja en el historial como anulada. Anular una expulsión no vuelve a matricular: eso se hace desde la ficha del alumno.",
+        ],
+        tip: "Aplica las medidas según el reglamento interno del centro. La departamental ve cuántas suspensiones y expulsiones hay.",
+      },
+      {
         title: "Datos del centro",
         steps: [
           "«Exportar datos» descarga en Excel la matrícula, las notas de cada parcial y la asistencia del año.",
@@ -221,6 +242,14 @@ export const HELP_GUIDES: HelpGuide[] = [
         steps: [
           "En «Seguimiento» revisa qué clases van atrasadas con las notas y qué alumnos están en riesgo.",
           "Habla con el docente a tiempo: la alerta aparece antes del cierre del parcial, cuando todavía se puede ayudar al alumno.",
+        ],
+      },
+      {
+        title: "Conducta",
+        steps: [
+          "En «Conducta» revisa los incidentes que reportan los docentes; «Esperan decisión» muestra los pendientes.",
+          "Registra el llamado de atención, la citación a la familia o el compromiso de conducta, con una nota para la familia.",
+          "La suspensión y la expulsión las decide la dirección.",
         ],
       },
     ],
@@ -294,6 +323,7 @@ export const HELP_GUIDES: HelpGuide[] = [
           "Verás sus notas por materia y parcial, su asistencia, las faltas recientes y las tareas de la semana.",
           "Si aparece «Conviene hablar con sus maestros», acércate al centro: es una alerta temprana, todavía hay tiempo de ayudarlo.",
           "«Ver boleta» abre la boleta informativa para imprimir.",
+          "Si el centro decidió una medida de conducta (por ejemplo, una citación o una suspensión), aparece en «Conducta» con la nota de la dirección.",
           "Más abajo está el horario de clases de su sección.",
           "Arriba de «Mis hijos» aparecen los avisos del centro.",
         ],

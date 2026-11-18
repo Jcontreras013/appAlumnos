@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
+import { ConductRecordList } from "@/components/conduct-incident";
 import { Kpi } from "@/components/kpi";
 import { ScheduleGrid } from "@/components/schedule-grid";
 import { academic } from "@/lib/academic";
@@ -184,6 +185,15 @@ export default async function ChildPage({ params }: PageProps<"/panel/familia/[i
           </ul>
         )}
       </Card>
+
+      {child.conduct.length > 0 && (
+        <Card title="Conducta">
+          <p className="px-4 pt-3 text-xs text-slate-500">
+            Medidas que decidió el centro este año. Si tiene dudas, acérquese a la dirección.
+          </p>
+          <ConductRecordList records={child.conduct} />
+        </Card>
+      )}
 
       <Card title="Asistencia del último mes">
         {attendance.recent.length === 0 ? (

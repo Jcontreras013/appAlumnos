@@ -8,6 +8,9 @@ import type {
   AttendanceInput,
   AttendanceSheetDto,
   AuditEventDto,
+  ConductIncidentDto,
+  ConductOverviewDto,
+  ConductStudentOptionDto,
   CoverageDto,
   CreatePlanInput,
   CreateStudentInput,
@@ -22,9 +25,11 @@ import type {
   GuardianInput,
   GuardianUpdate,
   ImportResultDto,
+  IncidentInput,
   LeaveDto,
   LeaveInput,
   LessonPlanDto,
+  MeasureInput,
   PeriodsInput,
   PilotIndicatorsDto,
   PlanBoardDto,
@@ -212,6 +217,24 @@ export const academic = {
   addFollowUp: (token: string, studentId: string, input: FollowUpInput) =>
     call<FollowUpDto>(`/students/${studentId}/follow-ups`, { method: "POST", token, body: input }),
   deleteFollowUp: (token: string, id: string) => call<void>(`/follow-ups/${id}`, { method: "DELETE", token }),
+
+  // Conducta
+  conduct: (token: string) => call<ConductOverviewDto>("/conduct", { token }),
+  conductStudents: (token: string) => call<ConductStudentOptionDto[]>("/conduct/students", { token }),
+  studentConduct: (token: string, studentId: string) =>
+    call<ConductIncidentDto[]>(`/students/${studentId}/conduct`, { token }),
+  reportIncident: (token: string, input: IncidentInput) =>
+    call<ConductIncidentDto>("/conduct/incidents", { method: "POST", token, body: input }),
+  deleteIncident: (token: string, id: string) =>
+    call<void>(`/conduct/incidents/${id}`, { method: "DELETE", token }),
+  addMeasure: (token: string, incidentId: string, input: MeasureInput) =>
+    call<ConductIncidentDto>(`/conduct/incidents/${incidentId}/measures`, {
+      method: "POST",
+      token,
+      body: input,
+    }),
+  cancelMeasure: (token: string, measureId: string) =>
+    call<ConductIncidentDto>(`/conduct/measures/${measureId}/cancel`, { method: "POST", token }),
   announcements: (token: string) => call<AnnouncementDto[]>("/announcements", { token }),
   familyAnnouncements: (token: string) => call<AnnouncementDto[]>("/family/announcements", { token }),
   publishAnnouncement: (token: string, input: AnnouncementInput) =>
