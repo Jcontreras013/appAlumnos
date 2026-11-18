@@ -6,11 +6,14 @@ export function Kpi({
   value,
   hint,
   tone = "neutral",
+  cta,
 }: {
   label: string;
   value: number | string;
   hint?: ReactNode;
   tone?: "neutral" | "alert" | "ok";
+  /** Texto de acción cuando el indicador se puede tocar (por ejemplo, «Ver quiénes →»). */
+  cta?: string;
 }) {
   const styles = {
     neutral: "border-slate-200 bg-white",
@@ -19,10 +22,11 @@ export function Kpi({
   }[tone];
   const valueColor = { neutral: "text-slate-900", alert: "text-red-700", ok: "text-brand-700" }[tone];
   return (
-    <div className={`rounded-xl border p-4 shadow-sm ${styles}`}>
+    <div className={`h-full rounded-xl border p-4 shadow-sm ${styles}`}>
       <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
       <p className={`mt-1 text-3xl font-semibold tabular-nums ${valueColor}`}>{value}</p>
       {hint && <p className="mt-1 text-xs text-slate-500">{hint}</p>}
+      {cta && <p className="mt-2 text-xs font-semibold text-brand-700">{cta}</p>}
     </div>
   );
 }

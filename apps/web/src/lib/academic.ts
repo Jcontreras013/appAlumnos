@@ -39,6 +39,7 @@ import type {
   RegionalExportDto,
   RegionalOverviewDto,
   RegionalSchoolDetailDto,
+  RegionalStudentDto,
   ReviewPlanInput,
   SavePlanInput,
   ScheduleBlockDto,
@@ -173,6 +174,11 @@ export const academic = {
     call<RegionalOverviewDto>(fecha ? `/regional/overview?fecha=${fecha}` : "/regional/overview", { token }),
   regionalSchool: (token: string, id: string, fecha?: string) =>
     call<RegionalSchoolDetailDto>(`/regional/schools/${id}${fecha ? `?fecha=${fecha}` : ""}`, { token }),
+  regionalStudent: (token: string, schoolId: string, studentId: string, fecha?: string) =>
+    call<RegionalStudentDto>(
+      `/regional/schools/${schoolId}/students/${studentId}${fecha ? `?fecha=${fecha}` : ""}`,
+      { token },
+    ),
 
   // Cuaderno del maestro y seguimiento
   periods: (token: string) =>
