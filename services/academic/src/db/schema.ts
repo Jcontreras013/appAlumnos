@@ -1,6 +1,9 @@
 import {
   ANNOUNCEMENT_AUDIENCES,
   ATTENDANCE_STATUSES,
+  CONDUCT_CATEGORIES,
+  CONDUCT_MEASURES,
+  CONDUCT_SEVERITIES,
   DEFAULT_PASSING_GRADE,
   FOLLOW_UP_KINDS,
   LEAVE_TYPES,
@@ -46,6 +49,9 @@ export const leaveTypeEnum = pgEnum("leave_type", LEAVE_TYPES);
 export const attendanceStatusEnum = pgEnum("attendance_status", ATTENDANCE_STATUSES);
 export const planStatusEnum = pgEnum("plan_status", PLAN_STATUSES);
 export const followUpKindEnum = pgEnum("follow_up_kind", FOLLOW_UP_KINDS);
+export const conductSeverityEnum = pgEnum("conduct_severity", CONDUCT_SEVERITIES);
+export const conductCategoryEnum = pgEnum("conduct_category", CONDUCT_CATEGORIES);
+export const conductMeasureEnum = pgEnum("conduct_measure", CONDUCT_MEASURES);
 export const announcementAudienceEnum = pgEnum("announcement_audience", ANNOUNCEMENT_AUDIENCES);
 export const transferStatusEnum = pgEnum("transfer_status", ["pendiente", "recibido", "cancelado"]);
 export const planActionEnum = pgEnum("plan_action", [
@@ -471,6 +477,68 @@ export const attendanceRecords = pgTable(
       columns: [t.schoolId, t.studentId],
       foreignColumns: [students.schoolId, students.id],
     }),
+  ],
+);
+
+/** Un incidente de conducta que reporta el personal (maestro, coordinación o dirección). */
+export const conductIncidents = pgTable(
+  "conduct_incidents",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    schoolId: schoolId(),
+    studentId: uuid("student_id").notNull(),
+    date: date("date", { mode: "string" }).notNull(),
+    severity: conductSeverityEnum("severity").notNull(),
+    category: conductCategoryEnum("category").notNull(),
+    description: text("description").notNull(),
+    reportedByUserId: uuid("reported_by_user_id").notNull(),
+    reportedByName: text("reported_by_name").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique("conduct_incidents_tenant_key").on(t.schoolId, t.id),
+    index("conduct_incidents_school_date_idx").on(t.schoolId, t.date),
+    index("conduct_incidents_student_idx").on(t.schoolId, t.studentId, t.date),
+    foreignKey({
+      name: "conduct_incidents_student_fk",
+      columns: [t.schoolId, t.studentId],
+      foreignColumns: [students.schoolId, students.id],
+    }),
+  ],
+);
+
+/**
+ * Lo que decidió el centro por un incidente: llamado de atención, citación, compromiso, suspensión o
+ * expulsión. No se borra: si fue un error se anula y queda en el historial.
+ */
+export const conductMeasures = pgTable(
+  "conduct_measures",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    schoolId: schoolId(),
+    incidentId: uuid("incident_id").notNull(),
+    kind: conductMeasureEnum("kind").notNull(),
+    startsOn: date("starts_on", { mode: "string" }).notNull(),
+    endsOn: date("ends_on", { mode: "string" }),
+    notes: text("notes").notNull(),
+    decidedByUserId: uuid("decided_by_user_id").notNull(),
+    decidedByName: text("decided_by_name").notNull(),
+    createdAt: createdAt(),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    cancelledByUserId: uuid("cancelled_by_user_id"),
+  },
+  (t) => [
+    index("conduct_measures_incident_idx").on(t.schoolId, t.incidentId),
+    foreignKey({
+      name: "conduct_measures_incident_fk",
+      columns: [t.schoolId, t.incidentId],
+      foreignColumns: [conductIncidents.schoolId, conductIncidents.id],
+    }),
+    // Solo la suspensión tiene último día, y nunca antes del primero.
+    check(
+      "conduct_measures_dates",
+      sql`(${t.kind} = 'suspension' and ${t.endsOn} is not null and ${t.endsOn} >= ${t.startsOn}) or (${t.kind} <> 'suspension' and ${t.endsOn} is null)`,
+    ),
   ],
 );
 

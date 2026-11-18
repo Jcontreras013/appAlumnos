@@ -71,6 +71,13 @@
       "when": 1794607078598,
       "tag": "0009_recuperacion",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1795031328211,
+      "tag": "0010_conducta",
+      "breakpoints": true
     }
   ]
 }

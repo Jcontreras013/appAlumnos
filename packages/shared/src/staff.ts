@@ -167,6 +167,23 @@ export interface RegionalSchoolDetailDto {
   plans: import("./academic").PlanBoardRowDto[];
   /** Asistencia de los últimos 7 días por sección (null si la sección no pasó lista). */
   attendanceBySection: RegionalSectionAttendanceDto[];
+  /** Conducta del año lectivo: cuántos incidentes y las suspensiones y expulsiones, con el alumno. */
+  conduct: RegionalConductDto;
+}
+
+export interface RegionalConductDto {
+  incidents: number;
+  serious: number;
+  suspensions: number;
+  expulsions: number;
+  /** Suspensiones y expulsiones (sin la descripción del incidente), la más reciente primero. */
+  measures: Array<
+    import("./conduct").ConductRecordDto & {
+      studentId: string;
+      studentName: string;
+      sectionLabel: string | null;
+    }
+  >;
 }
 
 export interface RegionalSectionAttendanceDto {

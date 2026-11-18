@@ -24,6 +24,7 @@ import type { DbOrTx } from "../db/client";
 import { attendanceRecords, auditEvents, enrollments, studentFollowUps } from "../db/schema";
 import type { AcademicDeps } from "../deps";
 import { mapLimit } from "../lib/concurrency";
+import { regionalConduct } from "../lib/conduct";
 import { ensureDefaultPeriods, followUp } from "../lib/evaluation";
 import { familyChild } from "../lib/family";
 import { bearerOf } from "../lib/identity-client";
@@ -229,6 +230,7 @@ export async function regionalRoutes(app: FastifyInstance, { db, identity, today
       gradeProgress: follow.gradeProgress.items,
       plans: assignments.length ? (await weekBoard(db, id, assignments, mondayOf(date), date)).rows : [],
       attendanceBySection: await attendanceBySection(db, id, sections, date),
+      conduct: await regionalConduct(db, id),
     };
   });
 

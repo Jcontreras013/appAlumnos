@@ -81,6 +81,8 @@ export interface FamilyChildDto {
   homework: FamilyHomeworkDto[];
   generalAverage: number | null;
   atRisk: boolean;
+  /** Medidas de conducta del año (sin la descripción del incidente), la más reciente primero. */
+  conduct: import("./conduct").ConductRecordDto[];
 }
 
 export interface FamilyChildSummaryDto {
