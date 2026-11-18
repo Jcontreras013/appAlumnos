@@ -341,13 +341,8 @@ Lo de abajo es el ambiente `dev` (de pruebas).
 
 La primera vez:
 
-1. Configura credenciales de AWS y prepara la cuenta para CDK:
-
-   ```bash
-   pnpm --filter @escolar/infra exec cdk bootstrap
-   ```
-
-2. Crea el secreto con las llaves JWT. Nunca se guardan en git:
+1. Con las credenciales de AWS configuradas, crea el secreto con las llaves JWT. Nunca se guardan
+   en git:
 
    ```bash
    pnpm -s keys:generate --json > jwt.json
@@ -361,7 +356,18 @@ La primera vez:
    rm jwt.json
    ```
 
-3. Despliega con el ARN completo que devolvió el paso anterior:
+   En PowerShell, `>` guarda el archivo en UTF-16 y AWS lo rechaza: usa
+   `pnpm -s keys:generate --json | Out-File -Encoding ascii jwt.json` y `Remove-Item jwt.json`.
+
+2. Prepara la cuenta para CDK con el ARN completo que devolvió el paso anterior. CDK arma la app para
+   saber dónde instalarse, y la app no arma sin ese secreto:
+
+   ```bash
+   pnpm --filter @escolar/infra exec cdk bootstrap -c jwtSecretArn=arn:aws:secretsmanager:...
+   ```
+
+3. Despliega con el mismo ARN. Docker tiene que estar corriendo: el despliegue construye las imágenes
+   en tu computadora y las sube a la cuenta.
 
    ```bash
    pnpm --filter @escolar/infra exec cdk deploy --all -c jwtSecretArn=arn:aws:secretsmanager:...

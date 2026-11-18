@@ -36,17 +36,11 @@ Si la carga sube y se escala a 4 tareas en horas pico, el costo sube solo durant
 
 ## Pasos
 
-1. Preparar la cuenta para CDK (una vez):
+1. Crear las llaves con que se firman las sesiones (nunca se guardan en git):
 
    ```bash
    pnpm install
    ```
-
-   ```bash
-   pnpm --filter @escolar/infra exec cdk bootstrap
-   ```
-
-2. Crear las llaves con que se firman las sesiones (nunca se guardan en git):
 
    ```bash
    pnpm -s keys:generate --json > jwt.json
@@ -58,6 +52,13 @@ Si la carga sube y se escala a 4 tareas en horas pico, el costo sube solo durant
 
    ```bash
    rm jwt.json
+   ```
+
+2. Preparar la cuenta para CDK (una vez), con el ARN del secreto del paso 1. CDK arma la app para
+   saber dónde instalarse, y la app no arma sin ese secreto:
+
+   ```bash
+   pnpm --filter @escolar/infra exec cdk bootstrap -c jwtSecretArn=arn:aws:secretsmanager:...
    ```
 
 3. Pedir el certificado HTTPS del dominio en ACM y validarlo por DNS (AWS muestra un registro CNAME
