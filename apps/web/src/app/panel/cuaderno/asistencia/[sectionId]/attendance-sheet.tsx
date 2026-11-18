@@ -7,6 +7,7 @@ import {
   type AttendanceStatus,
   addDays,
   formatDay,
+  matchesSearch,
 } from "@escolar/shared";
 import { useEffect, useState } from "react";
 import { SyncStatus } from "@/components/offline";
@@ -22,6 +23,10 @@ const ACTIVE: Record<AttendanceStatus, string> = {
   tarde: "bg-amber-500 text-white border-amber-500",
   justificada: "bg-sky-600 text-white border-sky-600",
 };
+
+/** Qué alumnos se ven en la lista: todos, los que faltan por marcar o los ausentes. */
+const VIEWS = { todos: "Todos", sin_marcar: "Sin marcar", ausentes: "Ausentes" } as const;
+type View = keyof typeof VIEWS;
 
 /** Una copia guardada sin internet de más de 10 minutos puede ser de otro día. */
 const STALE_MS = 10 * 60 * 1000;
@@ -46,6 +51,9 @@ export function AttendanceSheet({
   const [date, setDate] = useState(sheet.date);
   const [statuses, setStatuses] = useState<Statuses>(fromServer);
   const [rolled, setRolled] = useState(false);
+  // Buscar y filtrar solo cambia qué filas se ven: marcar sigue guardando igual, también sin internet.
+  const [query, setQuery] = useState("");
+  const [view, setView] = useState<View>("todos");
 
   useEffect(() => {
     startSync(owner);
@@ -97,6 +105,18 @@ export function AttendanceSheet({
   const totals = { presente: 0, ausente: 0, tarde: 0, justificada: 0, sin_registro: 0 };
   for (const s of sheet.students) totals[statuses[s.studentId] ?? "sin_registro"]++;
   const unmarked = sheet.students.filter((s) => !statuses[s.studentId]);
+  // El número de lista es el de la lista completa, aunque se filtre.
+  const visible = sheet.students
+    .map((s, i) => ({ ...s, number: i + 1 }))
+    .filter((s) => {
+      const current = statuses[s.studentId] ?? null;
+      if (view === "sin_marcar" && current) return false;
+      if (view === "ausentes" && current !== "ausente") return false;
+      // Un número solo busca ese número de lista (el 1 no trae al 10 ni al 21).
+      const q = query.trim();
+      return /^\d+$/.test(q) ? s.number === Number(q) : matchesSearch(s.name, q);
+    });
+  const filtering = query.trim() !== "" || view !== "todos";
   const today = rolled ? date : serverToday;
   const base = `/panel/cuaderno/asistencia/${sectionId}`;
 
@@ -170,13 +190,81 @@ export function AttendanceSheet({
         </button>
       )}
 
+      {sheet.students.length > 0 && (
+        // Fija arriba al desplazarse: el maestro busca al siguiente alumno sin volver al principio.
+        <div className="sticky top-0 z-10 -mx-1 space-y-2 bg-slate-50/95 px-1 py-2 backdrop-blur">
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            // Al volver a tocar el buscador se selecciona lo escrito: el siguiente nombre lo reemplaza.
+            onFocus={(e) => e.target.select()}
+            placeholder="Buscar alumno por nombre o número de lista"
+            aria-label="Buscar alumno"
+            autoComplete="off"
+            className="input"
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            {(Object.keys(VIEWS) as View[]).map((v) => {
+              const count =
+                v === "todos"
+                  ? sheet.students.length
+                  : v === "sin_marcar"
+                    ? totals.sin_registro
+                    : totals.ausente;
+              return (
+                <button
+                  key={v}
+                  type="button"
+                  aria-pressed={view === v}
+                  onClick={() => setView(v)}
+                  className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                    view === v
+                      ? "border-brand-600 bg-brand-600 text-white"
+                      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  {VIEWS[v]} ({count})
+                </button>
+              );
+            })}
+            {filtering && (
+              <span className="text-xs text-slate-500">
+                {visible.length} de {sheet.students.length}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
       <section className="card divide-y divide-slate-100">
         {sheet.students.length === 0 && (
           <p className="p-8 text-center text-sm text-slate-500">
             Esta sección no tiene alumnos matriculados.
           </p>
         )}
-        {sheet.students.map((s, i) => {
+        {sheet.students.length > 0 && visible.length === 0 && (
+          <div className="p-6 text-center text-sm text-slate-500">
+            <p>
+              {view === "sin_marcar" && !query.trim()
+                ? "Ya marcaste a todos los alumnos."
+                : view === "ausentes" && !query.trim()
+                  ? "No hay ausentes marcados."
+                  : "Ningún alumno coincide con la búsqueda."}
+            </p>
+            <button
+              type="button"
+              className="mt-2 font-semibold text-brand-700 hover:underline"
+              onClick={() => {
+                setQuery("");
+                setView("todos");
+              }}
+            >
+              Ver la lista completa
+            </button>
+          </div>
+        )}
+        {visible.map((s) => {
           const current = statuses[s.studentId] ?? null;
           return (
             <div
@@ -184,7 +272,7 @@ export function AttendanceSheet({
               className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 sm:px-4"
             >
               <span className="min-w-0 flex-1 text-sm">
-                <span className="mr-2 tabular-nums text-slate-400">{i + 1}.</span>
+                <span className="mr-2 tabular-nums text-slate-400">{s.number}.</span>
                 <span className="font-medium text-slate-900">{s.name}</span>
               </span>
               <fieldset className="flex gap-1" disabled={!sheet.canEdit}>

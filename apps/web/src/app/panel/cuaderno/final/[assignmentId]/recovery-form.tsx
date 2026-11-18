@@ -1,7 +1,7 @@
 "use client";
 
-import { FINAL_STATUS_LABELS, type FinalStatus } from "@escolar/shared";
-import { useActionState } from "react";
+import { FINAL_STATUS_LABELS, type FinalStatus, matchesSearch } from "@escolar/shared";
+import { useActionState, useState } from "react";
 import { FormAlert, SubmitButton } from "@/components/form-controls";
 import { initialFormState } from "@/lib/form-state";
 import { saveRecoveriesAction } from "./actions";
@@ -38,10 +38,57 @@ export function RecoveryForm({
 }) {
   const [state, action] = useActionState(saveRecoveriesAction, initialFormState);
   const recoverable = rows.filter((r) => r.average !== null && r.average < passingGrade);
+  const [query, setQuery] = useState("");
+  const [onlyRecovery, setOnlyRecovery] = useState(false);
+  // Las filas que no coinciden se ocultan pero siguen en el formulario: su recuperación no se pierde.
+  const shows = (r: FinalRow) =>
+    (!onlyRecovery || (r.average !== null && r.average < passingGrade)) && matchesSearch(r.name, query);
+  const shown = rows.filter(shows).length;
   return (
     <form action={action} className="space-y-4" noValidate>
       <input type="hidden" name="assignmentId" value={assignmentId} />
       <FormAlert state={state} />
+      {rows.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onFocus={(e) => e.target.select()}
+            // Enter en el buscador no debe enviar el formulario de recuperación.
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.preventDefault();
+            }}
+            placeholder="Buscar alumno"
+            aria-label="Buscar alumno"
+            autoComplete="off"
+            className="input min-w-56 flex-1 sm:max-w-sm"
+          />
+          {[
+            { value: false, label: `Todos (${rows.length})` },
+            { value: true, label: `Deben recuperación (${recoverable.length})` },
+          ].map((o) => (
+            <button
+              key={String(o.value)}
+              type="button"
+              aria-pressed={onlyRecovery === o.value}
+              onClick={() => setOnlyRecovery(o.value)}
+              className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                onlyRecovery === o.value
+                  ? "border-brand-600 bg-brand-600 text-white"
+                  : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+              }`}
+            >
+              {o.label}
+            </button>
+          ))}
+          {(query.trim() || onlyRecovery) && (
+            <span className="text-xs text-slate-500">
+              {shown} de {rows.length}
+            </span>
+          )}
+        </div>
+      )}
       <div className="card overflow-x-auto">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
@@ -61,7 +108,7 @@ export function RecoveryForm({
             {rows.map((r) => {
               const canRecover = r.average !== null && r.average < passingGrade;
               return (
-                <tr key={r.studentId}>
+                <tr key={r.studentId} className={shows(r) ? undefined : "hidden"}>
                   <td className="px-4 py-2 font-medium text-slate-900">{r.name}</td>
                   {r.periods.map((g, i) => (
                     <td key={periods[i]} className="px-2 py-2 text-center tabular-nums">
@@ -100,6 +147,13 @@ export function RecoveryForm({
             })}
           </tbody>
         </table>
+        {rows.length > 0 && shown === 0 && (
+          <p className="p-6 text-center text-sm text-slate-500">
+            {onlyRecovery && !query.trim()
+              ? "Nadie debe recuperación en esta clase."
+              : "Ningún alumno coincide con la búsqueda."}
+          </p>
+        )}
       </div>
       {canEdit && recoverable.length > 0 && (
         <SubmitButton pendingText="Guardando…">Guardar recuperación</SubmitButton>

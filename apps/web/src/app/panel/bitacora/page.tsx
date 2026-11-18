@@ -1,6 +1,7 @@
 import { type AuditEventDto, auditLabel, formatDate } from "@escolar/shared";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { FilterBar, FilterEmpty, FilterRow, FilterScope } from "@/components/quick-filter";
 import { academic } from "@/lib/academic";
 import { requireRole } from "@/lib/dal";
 import { identity } from "@/lib/identity";
@@ -53,6 +54,15 @@ export default async function AuditPage({ searchParams }: PageProps<"/panel/bita
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .slice(0, PAGE);
   const older = events.length === PAGE ? events.at(-1)?.createdAt : undefined;
+  const rows = events.map((e) => {
+    const target =
+      e.entityType === "user" && e.entityId && e.entityId !== e.actorUserId
+        ? names.get(e.entityId)
+        : undefined;
+    const extra = [target, detail(e)].filter(Boolean).join(" · ");
+    const actor = e.actorUserId ? (names.get(e.actorUserId) ?? "Otra cuenta") : "Sistema";
+    return { e, actor, extra, text: `${actor} ${auditLabel(e.action)} ${extra}` };
+  });
 
   return (
     <div className="space-y-6">
@@ -66,45 +76,42 @@ export default async function AuditPage({ searchParams }: PageProps<"/panel/bita
         {events.length === 0 ? (
           <p className="p-6 text-center text-sm text-slate-500">Todavía no hay movimientos.</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th className="px-4 py-3 font-semibold">Cuándo</th>
-                  <th className="px-4 py-3 font-semibold">Quién</th>
-                  <th className="px-4 py-3 font-semibold">Qué</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {events.map((e) => {
-                  const target =
-                    e.entityType === "user" && e.entityId && e.entityId !== e.actorUserId
-                      ? names.get(e.entityId)
-                      : undefined;
-                  const extra = [target, detail(e)].filter(Boolean).join(" · ");
-                  return (
-                    <tr key={`${e.source}-${e.id}`}>
-                      <td className="whitespace-nowrap px-4 py-2 tabular-nums text-slate-600">
-                        {formatDate(e.createdAt)}{" "}
-                        {new Date(e.createdAt).toLocaleTimeString("es-HN", {
-                          timeZone: "America/Tegucigalpa",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </td>
-                      <td className="px-4 py-2">
-                        {e.actorUserId ? (names.get(e.actorUserId) ?? "Otra cuenta") : "Sistema"}
-                      </td>
-                      <td className="px-4 py-2">
-                        <span className="text-slate-900">{auditLabel(e.action)}</span>
-                        {extra && <span className="block text-xs text-slate-500">{extra}</span>}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <FilterScope items={rows.map((r) => ({ text: r.text }))}>
+            <FilterBar placeholder="Buscar en esta página: persona o acción" />
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold">Cuándo</th>
+                    <th className="px-4 py-3 font-semibold">Quién</th>
+                    <th className="px-4 py-3 font-semibold">Qué</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {rows.map(({ e, actor, extra, text }) => {
+                    return (
+                      <FilterRow key={`${e.source}-${e.id}`} text={text}>
+                        <td className="whitespace-nowrap px-4 py-2 tabular-nums text-slate-600">
+                          {formatDate(e.createdAt)}{" "}
+                          {new Date(e.createdAt).toLocaleTimeString("es-HN", {
+                            timeZone: "America/Tegucigalpa",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </td>
+                        <td className="px-4 py-2">{actor}</td>
+                        <td className="px-4 py-2">
+                          <span className="text-slate-900">{auditLabel(e.action)}</span>
+                          {extra && <span className="block text-xs text-slate-500">{extra}</span>}
+                        </td>
+                      </FilterRow>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <FilterEmpty message="Nada en esta página coincide con la búsqueda." />
+          </FilterScope>
         )}
       </section>
       <div className="flex gap-4 text-sm">
