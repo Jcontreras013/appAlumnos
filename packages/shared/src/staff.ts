@@ -159,4 +159,39 @@ export interface RegionalSchoolDetailDto {
   summary: RegionalSchoolSummaryDto;
   coverage: CoverageDto;
   sections: import("./academic").SectionDto[];
+  /** El detalle detrás de cada indicador, para abrirlo desde el tablero del centro. */
+  studentsAtRisk: import("./evaluation").StudentRiskDto[];
+  /** Avance de notas del parcial vigente, clase por clase. */
+  gradeProgress: import("./evaluation").GradeProgressDto[];
+  /** Planificación de la semana de la fecha consultada, clase por clase. */
+  plans: import("./academic").PlanBoardRowDto[];
+  /** Asistencia de los últimos 7 días por sección (null si la sección no pasó lista). */
+  attendanceBySection: RegionalSectionAttendanceDto[];
+}
+
+export interface RegionalSectionAttendanceDto {
+  sectionId: string;
+  sectionLabel: string;
+  rate: number | null;
+  /** Días de los últimos 7 en que la sección pasó lista. */
+  recordedDays: number;
+}
+
+/**
+ * Ficha de un alumno vista desde la departamental o distrital: solo lectura. Lo mismo que ve su
+ * familia (notas, asistencia, tareas), por qué está en riesgo y qué ha hecho la escuela con él. Sin
+ * datos de contacto de la familia: el seguimiento lo hace el centro.
+ */
+export interface RegionalStudentDto {
+  school: { id: string; name: string; districtName: string | null; logoVersion: number | null };
+  child: import("./family").FamilyChildDto;
+  /** null si hoy no está en riesgo. */
+  risk: import("./evaluation").StudentRiskDto | null;
+  followUps: Array<{
+    id: string;
+    kind: import("./evaluation").FollowUpKind;
+    date: string;
+    notes: string;
+    authorName: string;
+  }>;
 }

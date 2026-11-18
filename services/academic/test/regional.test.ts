@@ -1,7 +1,14 @@
 import { randomUUID } from "node:crypto";
-import type { AssignmentDto, RegionalOverviewDto, RegionalSchoolDetailDto } from "@escolar/shared";
+import type {
+  AssignmentDto,
+  AuditEventDto,
+  RegionalOverviewDto,
+  RegionalSchoolDetailDto,
+  RegionalStudentDto,
+  StudentDetailDto,
+} from "@escolar/shared";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { type AcademicTestContext, guardian, setupAcademic } from "./helpers";
+import { type AcademicTestContext, guardian, setupAcademic, type TestUser } from "./helpers";
 
 let ctx: AcademicTestContext;
 const schoolA = { id: randomUUID(), name: "Escuela Coxen Hole", districtName: "Roatán" };
@@ -98,5 +105,111 @@ describe("tablero departamental", () => {
   it("las direcciones de centro no usan el tablero regional", async () => {
     const director = await ctx.user("admin", schoolA.id);
     expect((await ctx.call(director, "GET", "/regional/overview")).status).toBe(403);
+  });
+});
+
+describe("detalle de los indicadores de un centro y ficha de un alumno", () => {
+  const oakRidge = { id: randomUUID(), name: "Escuela Oak Ridge", districtName: "Roatán" };
+  const punta = { id: randomUUID(), name: "Escuela Punta Gorda", districtName: "Roatán" };
+  let director: TestUser;
+  let sectionId: string;
+  let studentId: string;
+  let otherStudentId: string;
+
+  beforeAll(async () => {
+    director = await ctx.user("admin", oakRidge.id, "Directora Oak Ridge");
+    const teacher = await ctx.user("docente", oakRidge.id);
+    const s = await ctx.seedStructure(director);
+    sectionId = s.sectionA.id;
+    await ctx.call<AssignmentDto>(director, "POST", "/assignments", {
+      sectionId,
+      subjectId: s.subject.id,
+      teacherUserId: teacher.id,
+    });
+    studentId = (
+      await ctx.call<StudentDetailDto>(director, "POST", "/students", {
+        firstNames: "Luis",
+        lastNames: "Ebanks",
+        guardians: [guardian()],
+        sectionId,
+      })
+    ).body.id;
+    // Cinco ausencias en la última semana: queda en riesgo por faltas.
+    for (const date of ["2026-11-03", "2026-11-04", "2026-11-05", "2026-11-06", "2026-11-09"]) {
+      await ctx.call(director, "PUT", "/attendance", {
+        sectionId,
+        date,
+        entries: [{ studentId, status: "ausente" }],
+      });
+    }
+    await ctx.call(director, "POST", `/students/${studentId}/follow-ups`, {
+      kind: "llamada",
+      date: "2026-11-06",
+      notes: "Se llamó a la madre; se acordó que vuelve el lunes",
+    });
+
+    const otherDirector = await ctx.user("admin", punta.id);
+    const other = await ctx.seedStructure(otherDirector);
+    otherStudentId = (
+      await ctx.call<StudentDetailDto>(otherDirector, "POST", "/students", {
+        firstNames: "Ana",
+        lastNames: "Bodden",
+        guardians: [guardian()],
+        sectionId: other.sectionA.id,
+      })
+    ).body.id;
+  });
+
+  it("el detalle de un centro trae quiénes están detrás de cada indicador", async () => {
+    const departmental = await ctx.regionalUser("director_departamental", [oakRidge, punta]);
+    const res = await ctx.call<RegionalSchoolDetailDto>(
+      departmental,
+      "GET",
+      `/regional/schools/${oakRidge.id}`,
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.summary.studentsAtRisk).toBe(1);
+    expect(res.body.studentsAtRisk).toMatchObject([{ studentId, absences: 5, followUps: 1 }]);
+    expect(res.body.gradeProgress).toHaveLength(1);
+    expect(res.body.plans.map((p) => p.status)).toEqual(["sin_iniciar"]);
+    expect(res.body.attendanceBySection.find((a) => a.sectionId === sectionId)).toMatchObject({
+      rate: 0,
+      recordedDays: 5,
+    });
+  });
+
+  it("la departamental abre la ficha del alumno en riesgo y la consulta queda en la bitácora", async () => {
+    const departmental = await ctx.regionalUser("director_departamental", [oakRidge, punta]);
+    const res = await ctx.call<RegionalStudentDto>(
+      departmental,
+      "GET",
+      `/regional/schools/${oakRidge.id}/students/${studentId}`,
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.school.name).toBe("Escuela Oak Ridge");
+    expect(res.body.child.student.name).toContain("Luis");
+    expect(res.body.risk).toMatchObject({ studentId, absences: 5 });
+    expect(res.body.followUps).toMatchObject([
+      { kind: "llamada", notes: "Se llamó a la madre; se acordó que vuelve el lunes" },
+    ]);
+    const log = await ctx.call<AuditEventDto[]>(director, "GET", "/audit?limite=10");
+    expect(log.body.some((e) => e.action === "student.viewed_by_region" && e.entityId === studentId)).toBe(
+      true,
+    );
+  });
+
+  it("no abre alumnos fuera del ámbito ni alumnos de otro centro por la dirección de este", async () => {
+    const distrital = await ctx.regionalUser("director_distrital", [schoolB]);
+    expect(
+      (await ctx.call(distrital, "GET", `/regional/schools/${oakRidge.id}/students/${studentId}`)).status,
+    ).toBe(404);
+    const departmental = await ctx.regionalUser("director_departamental", [oakRidge, punta]);
+    expect(
+      (await ctx.call(departmental, "GET", `/regional/schools/${oakRidge.id}/students/${otherStudentId}`))
+        .status,
+    ).toBe(404);
+    expect(
+      (await ctx.call(director, "GET", `/regional/schools/${oakRidge.id}/students/${studentId}`)).status,
+    ).toBe(403);
   });
 });

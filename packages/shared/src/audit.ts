@@ -79,6 +79,7 @@ export const AUDIT_LABELS: Record<string, string> = {
   "announcement.published": "Publicó un aviso",
   "announcement.removed": "Quitó un aviso",
   "export.school": "Descargó los datos del centro en Excel",
+  "student.viewed_by_region": "Consultó la ficha de un alumno desde la departamental o distrital",
   "schedule.blocks_updated": "Cambió las horas de clase",
   "student.transfer_sent": "Trasladó a un alumno a otro centro",
   "student.transfer_received": "Recibió a un alumno trasladado",
