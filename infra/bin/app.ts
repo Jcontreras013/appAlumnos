@@ -14,6 +14,8 @@ new EscolarStack(app, `Escolar-${stage}`, {
   certificateArn: app.node.tryGetContext("certificateArn"),
   alertEmail: app.node.tryGetContext("alertEmail"),
   anthropicSecretArn: app.node.tryGetContext("anthropicSecretArn"),
+  geminiSecretArn: app.node.tryGetContext("geminiSecretArn"),
+  geminiModel: app.node.tryGetContext("geminiModel"),
   pushSecretArn: app.node.tryGetContext("pushSecretArn"),
 });
 

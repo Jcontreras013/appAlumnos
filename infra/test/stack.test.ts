@@ -147,6 +147,35 @@ describe("seguridad de la infraestructura", () => {
     expect(container?.Environment?.map((e) => e.Name)).not.toContain("ANTHROPIC_API_KEY");
   });
 
+  it("con la llave de Gemini, academic usa Gemini y la llave llega como secreto", () => {
+    const stack = new EscolarStack(new App(), "ConGemini", {
+      stage: "dev",
+      jwtSecretArn: JWT_ARN,
+      geminiSecretArn: "arn:aws:secretsmanager:us-east-1:111111111111:secret:escolar/dev/gemini-AbCdEf",
+      geminiModel: "gemini-3.5-flash",
+      env: { account: "111111111111", region: "us-east-1" },
+    });
+    const tasks = Template.fromStack(stack).findResources("AWS::ECS::TaskDefinition");
+    const academic = Object.entries(tasks).find(([id]) => id.startsWith("AcademicTask"))?.[1] as {
+      Properties: {
+        ContainerDefinitions: Array<{
+          Secrets?: Array<{ Name: string }>;
+          Environment?: Array<{ Name: string; Value: string }>;
+        }>;
+      };
+    };
+    const container = academic.Properties.ContainerDefinitions[0];
+    expect(container?.Secrets?.map((s) => s.Name)).toContain("GEMINI_API_KEY");
+    expect(container?.Environment).toEqual(
+      expect.arrayContaining([
+        { Name: "PLAN_ASSISTANT_PROVIDER", Value: "gemini" },
+        { Name: "GEMINI_MODEL", Value: "gemini-3.5-flash" },
+        { Name: "IDENTITY_URL", Value: "http://identity:3001" },
+      ]),
+    );
+    expect(container?.Environment?.map((e) => e.Name)).not.toContain("GEMINI_API_KEY");
+  });
+
   it("las llaves de los avisos al celular llegan como secretos a identity, solo si se indican", () => {
     const withoutPush = JSON.stringify(template.findResources("AWS::ECS::TaskDefinition"));
     expect(withoutPush).not.toContain("VAPID_PRIVATE_KEY");

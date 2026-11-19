@@ -48,6 +48,13 @@ export interface EscolarStackProps extends StackProps {
    */
   anthropicSecretArn?: string;
   /**
+   * ARN del secreto con la llave de la API de Gemini (Google; el valor del secreto es la llave).
+   * Opcional. Si se indica, el asistente de planificación usa Gemini aunque también haya llave de
+   * Claude. `geminiModel` fija la versión (por defecto, el Flash más reciente).
+   */
+  geminiSecretArn?: string;
+  geminiModel?: string;
+  /**
    * ARN del secreto con las llaves de los avisos de mensajes al celular (VAPID_PUBLIC_KEY,
    * VAPID_PRIVATE_KEY, VAPID_SUBJECT; se generan con `pnpm push:keys`). Opcional: sin él los
    * mensajes funcionan, pero el teléfono no avisa.
@@ -242,23 +249,33 @@ export class EscolarStack extends Stack {
     });
     const identityService = identity.service;
 
+    /** Asistente de planificación: la llave de Gemini o de Claude llega como secreto, nunca en claro. */
+    const assistantSettings = () => {
+      const secrets: Record<string, ecs.Secret> = {};
+      const environment: Record<string, string> = { IDENTITY_URL: "http://identity:3001" };
+      if (props.anthropicSecretArn) {
+        secrets.ANTHROPIC_API_KEY = ecs.Secret.fromSecretsManager(
+          secretsmanager.Secret.fromSecretCompleteArn(this, "AnthropicKey", props.anthropicSecretArn),
+        );
+      }
+      if (props.geminiSecretArn) {
+        secrets.GEMINI_API_KEY = ecs.Secret.fromSecretsManager(
+          secretsmanager.Secret.fromSecretCompleteArn(this, "GeminiKey", props.geminiSecretArn),
+        );
+        environment.PLAN_ASSISTANT_PROVIDER = "gemini";
+        if (props.geminiModel) environment.GEMINI_MODEL = props.geminiModel;
+      }
+      return { environment, ...(Object.keys(secrets).length ? { secrets } : {}) };
+    };
+
     // academic no tiene la llave privada: verifica tokens con el JWKS público de identity.
     const academic = backendService("academic", {
       port: 3002,
-      environment: { IDENTITY_URL: "http://identity:3001" },
       // Tableros y seguimiento recorren muchos datos: más CPU en prod.
       prodSize: { cpu: 512, memoryLimitMiB: 1024 },
       // El asistente de planificación con IA puede tardar cerca de un minuto en responder.
       requestTimeout: Duration.minutes(3),
-      ...(props.anthropicSecretArn
-        ? {
-            secrets: {
-              ANTHROPIC_API_KEY: ecs.Secret.fromSecretsManager(
-                secretsmanager.Secret.fromSecretCompleteArn(this, "AnthropicKey", props.anthropicSecretArn),
-              ),
-            },
-          }
-        : {}),
+      ...assistantSettings(),
     });
     identityService.connections.allowFrom(academic.service, ec2.Port.tcp(3001), "academic -> identity");
 

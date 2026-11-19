@@ -302,17 +302,31 @@ libro de texto, materiales, alumnos que necesitan apoyo) y el asistente llena la
 con un borrador según el Currículo Nacional Básico. El borrador **no se guarda**: llena el formulario
 y el docente lo revisa, lo ajusta y lo guarda o lo envía como siempre.
 
-- Usa Claude (`claude-opus-5-5`) desde el servicio `academic`. Al modelo solo van la asignatura, el
-  grado, el tema, los días con clase según el horario, el tema de la semana anterior y las
-  indicaciones del docente; **nunca datos de alumnos**.
+- Funciona con **Gemini** (Google) o con **Claude** (Anthropic), con la misma indicación y la misma
+  plantilla. Al modelo solo van la asignatura, el grado, el tema, los días con clase según el
+  horario, el tema de la semana anterior y las indicaciones del docente; **nunca datos de alumnos**.
 - Solo quien escribe la planificación lo usa, mientras está en borrador o devuelta; hasta 20
   borradores por docente al día, y cada uso queda en la bitácora del centro.
-- Se activa con la variable `ANTHROPIC_API_KEY` en `academic`; sin ella aparece como no disponible.
+- Se activa con la llave del proveedor en `academic`; sin llave aparece como no disponible.
   `PLAN_ASSISTANT=off` lo apaga aunque haya llave.
+
+**Gemini (capa gratuita, recomendada para el piloto).** La llave se saca gratis en
+aistudio.google.com → «Get API key». Va en `GEMINI_API_KEY`; `GEMINI_MODEL` fija la versión (por
+defecto `gemini-flash-latest`, el Flash más reciente: en producción conviene fijar una versión).
+La capa gratuita tiene límite de consultas por minuto (si se pasa, el docente ve «llegó a su límite
+de uso por ahora») y en ella Google puede usar lo que se envía para mejorar sus productos. Al crecer
+a muchos centros conviene la capa de pago.
+
+**Claude.** Llave de console.anthropic.com en `ANTHROPIC_API_KEY` (modelo `claude-opus-5-5`). Con
+las dos llaves se usa Claude, salvo `PLAN_ASSISTANT_PROVIDER=gemini`.
+
 - En la demo con Docker, define la llave antes de levantarla (PowerShell):
-  `$env:ANTHROPIC_API_KEY = "tu-llave"` y luego `docker compose -f docker-compose.demo.yml up --build`.
-- En AWS, guarda la llave como secreto y despliega con `-c anthropicSecretArn=arn:aws:secretsmanager:...`.
-  El balanceador y Service Connect esperan hasta 3 minutos, porque un borrador tarda de 20 a 60 s.
+  `$env:GEMINI_API_KEY = "tu-llave"` y luego `docker compose -f docker-compose.demo.yml up`.
+- En AWS, guarda la llave como secreto (el valor del secreto es la llave) y despliega con
+  `-c geminiSecretArn=arn:aws:secretsmanager:...` (o `-c anthropicSecretArn=...`). El balanceador y
+  Service Connect esperan hasta 3 minutos, porque un borrador tarda de 20 a 60 s.
+- Si un borrador falla, el docente ve un mensaje sencillo; el motivo exacto (lo que respondió el
+  proveedor) queda en los registros de `academic`.
 
 ## Mensajes entre el personal
 

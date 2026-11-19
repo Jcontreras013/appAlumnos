@@ -16,6 +16,9 @@ import { z } from "zod";
  * Asistente de planificación: arma un borrador de la planificación semanal con los campos de la
  * plantilla del centro. Al modelo solo van la asignatura, el grado, el tema y lo que escribe el
  * docente; nunca datos de alumnos. El borrador no se guarda: el docente lo revisa y lo guarda.
+ *
+ * Hay dos proveedores con la misma indicación y la misma plantilla: Claude (aquí) y Gemini
+ * (plan-assistant-gemini.ts). La instalación elige uno (ver config.ts).
  */
 
 export interface PlanDraftRequest {
@@ -37,19 +40,30 @@ export interface PlanDrafter {
   draft(request: PlanDraftRequest): Promise<PlanContent>;
 }
 
-/** Por qué no salió un borrador, con el mensaje para el docente. */
+/** Por qué no salió un borrador, con el mensaje para el docente (y la causa, para los registros). */
 export class PlanDraftError extends Error {
   constructor(
     readonly reason: "refused" | "unavailable" | "incomplete",
     message: string,
+    options?: { cause?: unknown },
   ) {
-    super(message);
+    super(message, options);
   }
 }
 
+/** Lo que ve el docente cuando no sale el borrador (igual con cualquier proveedor). */
+export const DRAFT_MESSAGES = {
+  refused:
+    "El asistente no pudo preparar este borrador. Prueba con otra forma de escribir el tema o escríbela tú.",
+  incomplete: "El borrador salió incompleto. Intenta de nuevo.",
+  busy: "El asistente no responde en este momento. Intenta en unos minutos.",
+  limit: "El asistente llegó a su límite de uso por ahora. Intenta en unos minutos.",
+  misconfigured: "El asistente no está bien configurado en este servidor. Avisa al equipo de la plataforma.",
+} as const;
+
 const MODEL = "claude-opus-5-5";
 
-const SYSTEM = `Eres un asistente de planificación didáctica para docentes de centros educativos de Honduras. Redactas el borrador de la planificación semanal de una clase, alineado con el Currículo Nacional Básico (CNB) de la Secretaría de Educación. El docente lo revisa, lo ajusta y lo entrega a la dirección.
+export const SYSTEM_PROMPT = `Eres un asistente de planificación didáctica para docentes de centros educativos de Honduras. Redactas el borrador de la planificación semanal de una clase, alineado con el Currículo Nacional Básico (CNB) de la Secretaría de Educación. El docente lo revisa, lo ajusta y lo entrega a la dirección.
 
 Cómo escribir el borrador:
 - Español de Honduras, claro y concreto, adecuado a la edad del grado. Escribe como un docente que planifica, no como un libro de texto.
@@ -107,11 +121,12 @@ export function draftPrompt(request: PlanDraftRequest): string {
 }
 
 /** Deja vacíos los días en que la sección no tiene esta clase. */
-function onlyClassDays(fields: PlanField[], content: PlanContent, classDays: Weekday[]): PlanContent {
+export function onlyClassDays(fields: PlanField[], content: PlanContent, classDays: Weekday[]): PlanContent {
   for (const field of fields) {
     if (field.type !== "dias") continue;
-    const days = content[field.key] as DaysValue;
-    for (const day of WEEKDAYS) if (!classDays.includes(day)) days[day] = "";
+    const days = (content[field.key] ?? {}) as DaysValue;
+    for (const day of WEEKDAYS) if (!classDays.includes(day) || typeof days[day] !== "string") days[day] = "";
+    content[field.key] = days;
   }
   return content;
 }
@@ -123,7 +138,7 @@ export function claudePlanDrafter(client = new Anthropic({ timeout: 120_000, max
         client.beta.messages.parse({
           model: MODEL,
           max_tokens: 16000,
-          system: SYSTEM,
+          system: SYSTEM_PROMPT,
           // Si el modelo declina, el servidor reintenta con el modelo que corresponda.
           betas: ["server-side-fallback-2026-07-01"],
           fallbacks: "default",
@@ -135,31 +150,22 @@ export function claudePlanDrafter(client = new Anthropic({ timeout: 120_000, max
         response = await parse();
       } catch (err) {
         if (err instanceof Anthropic.AuthenticationError || err instanceof Anthropic.PermissionDeniedError) {
-          throw new PlanDraftError(
-            "unavailable",
-            "El asistente no está bien configurado en este servidor. Avisa al equipo de la plataforma.",
-          );
+          throw new PlanDraftError("unavailable", DRAFT_MESSAGES.misconfigured, { cause: err });
         }
         if (
           err instanceof Anthropic.RateLimitError ||
           err instanceof Anthropic.InternalServerError ||
           err instanceof Anthropic.APIConnectionError
         ) {
-          throw new PlanDraftError(
-            "unavailable",
-            "El asistente no responde en este momento. Intenta en unos minutos.",
-          );
+          throw new PlanDraftError("unavailable", DRAFT_MESSAGES.busy, { cause: err });
         }
         throw err;
       }
       if (response.stop_reason === "refusal") {
-        throw new PlanDraftError(
-          "refused",
-          "El asistente no pudo preparar este borrador. Prueba con otra forma de escribir el tema o escríbela tú.",
-        );
+        throw new PlanDraftError("refused", DRAFT_MESSAGES.refused);
       }
       if (response.stop_reason === "max_tokens" || !response.parsed_output) {
-        throw new PlanDraftError("incomplete", "El borrador salió incompleto. Intenta de nuevo.");
+        throw new PlanDraftError("incomplete", DRAFT_MESSAGES.incomplete);
       }
       const { content } = parsePlanContent(request.fields, response.parsed_output);
       return onlyClassDays(request.fields, content, request.classDays);
