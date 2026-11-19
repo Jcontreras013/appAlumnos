@@ -116,6 +116,14 @@ export function IncidentCard({
                   {measureDates(m)} · decidió {m.decidedByName}
                   {m.cancelledAt && " · anulada"}
                 </span>
+                {!m.cancelledAt && (
+                  <Link
+                    href={`/panel/conducta/medidas/${m.id}/acta`}
+                    className="text-xs font-semibold text-brand-700 hover:underline"
+                  >
+                    Imprimir acta
+                  </Link>
+                )}
                 {can.suspendOrExpel && !m.cancelledAt && (
                   <CancelMeasureButton
                     measureId={m.id}
@@ -124,7 +132,12 @@ export function IncidentCard({
                   />
                 )}
               </div>
-              <p className="mt-0.5 text-xs text-slate-600">Para la familia: {m.notes}</p>
+              <p className="mt-0.5 text-xs text-slate-600">
+                {m.notifyFamily
+                  ? "Para la familia: "
+                  : "Solo en el registro del centro (la familia no lo ve): "}
+                {m.notes}
+              </p>
             </li>
           ))}
         </ul>

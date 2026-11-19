@@ -2,6 +2,7 @@ import { badRequest, forbidden, notFound, parseOrThrow, requireRole, tenantOf } 
 import {
   addDays,
   CONDUCT_MEASURE_LABELS,
+  type ConductActaDto,
   type ConductIncidentDto,
   type ConductOverviewDto,
   type ConductStudentOptionDto,
@@ -12,7 +13,14 @@ import {
 import { and, eq, isNull } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { conductIncidents, conductMeasures, enrollments, students } from "../db/schema";
+import {
+  conductIncidents,
+  conductMeasures,
+  enrollments,
+  guardians,
+  studentGuardians,
+  students,
+} from "../db/schema";
 import type { AcademicDeps } from "../deps";
 import { audit } from "../lib/audit";
 import { conductTotals, listIncidents, yearRange } from "../lib/conduct";
@@ -210,6 +218,7 @@ export async function conductRoutes(app: FastifyInstance, { db, today }: Academi
           startsOn: input.startsOn,
           endsOn: input.endsOn,
           notes: input.notes,
+          notifyFamily: input.notifyFamily,
           decidedByUserId: request.auth.userId,
           decidedByName: request.auth.name,
         });
@@ -217,7 +226,12 @@ export async function conductRoutes(app: FastifyInstance, { db, today }: Academi
           action: "conduct.measure_added",
           entityType: "student",
           entityId: incident.studentId,
-          data: { kind: input.kind, startsOn: input.startsOn, endsOn: input.endsOn },
+          data: {
+            kind: input.kind,
+            startsOn: input.startsOn,
+            endsOn: input.endsOn,
+            notifyFamily: input.notifyFamily,
+          },
         });
         if (input.kind === "expulsion") {
           // La expulsión retira la matrícula del año vigente; si no hay, no se registra nada.
@@ -249,6 +263,47 @@ export async function conductRoutes(app: FastifyInstance, { db, today }: Academi
       return reply.status(201).send(await incidentDto(request, id));
     },
   );
+
+  /**
+   * Datos del acta impresa de una medida, para que el alumno y su familia la firmen. La imprime la
+   * oficina; el maestro, solo las de incidentes que él reportó.
+   */
+  app.get("/conduct/measures/:id/acta", read, async (request): Promise<ConductActaDto> => {
+    const schoolId = tenantOf(request);
+    const { id } = parseOrThrow(idParams, request.params);
+    const [row] = await db
+      .select()
+      .from(conductMeasures)
+      .where(and(eq(conductMeasures.schoolId, schoolId), eq(conductMeasures.id, id)));
+    if (!row) throw notFound("Medida no encontrada");
+    const incident = await incidentOrThrow(schoolId, row.incidentId);
+    if (!isOffice(request) && incident.reportedByUserId !== request.auth.userId) {
+      throw notFound("Medida no encontrada");
+    }
+    const [dto, [student], family] = await Promise.all([
+      incidentDto(request, incident.id),
+      db
+        .select({ nationalId: students.nationalId })
+        .from(students)
+        .where(and(eq(students.schoolId, schoolId), eq(students.id, incident.studentId))),
+      db
+        .select({ fullName: guardians.fullName, isPrimary: studentGuardians.isPrimary })
+        .from(studentGuardians)
+        .innerJoin(guardians, eq(guardians.id, studentGuardians.guardianId))
+        .where(
+          and(eq(studentGuardians.schoolId, schoolId), eq(studentGuardians.studentId, incident.studentId)),
+        ),
+    ]);
+    const measure = dto.measures.find((m) => m.id === id);
+    if (!measure) throw notFound("Medida no encontrada");
+    const primary = family.find((g) => g.isPrimary) ?? family[0];
+    return {
+      incident: dto,
+      measure,
+      nationalId: student?.nationalId ?? null,
+      guardianName: primary?.fullName ?? null,
+    };
+  });
 
   /**
    * Anular una medida registrada por error (solo la dirección). Queda en el historial como anulada.

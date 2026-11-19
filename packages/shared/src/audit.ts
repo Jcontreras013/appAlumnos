@@ -63,6 +63,7 @@ export const AUDIT_LABELS: Record<string, string> = {
   "guardian.portal_revoked": "Quitó el acceso al portal a una familia",
   "student.follow_up_added": "Registró un seguimiento",
   "student.follow_up_deleted": "Borró un seguimiento",
+  "student.expelled": "Expulsó a un alumno (matrícula retirada)",
   "enrollment.created": "Matriculó a un alumno",
   "enrollment.reactivated": "Volvió a matricular a un alumno",
   "enrollment.transferred": "Cambió de sección a un alumno",

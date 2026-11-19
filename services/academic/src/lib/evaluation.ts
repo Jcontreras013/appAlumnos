@@ -24,6 +24,8 @@ import type { DbOrTx } from "../db/client";
 import {
   activities,
   attendanceRecords,
+  conductIncidents,
+  conductMeasures,
   enrollments,
   evaluationSettings,
   gradingPeriods,
@@ -256,16 +258,52 @@ export async function attendanceSheet(
   canEdit: boolean,
 ): Promise<AttendanceSheetDto> {
   const roster = await rosterOf(db, schoolId, [section.id]);
-  const marks = await db
-    .select()
-    .from(attendanceRecords)
-    .where(and(eq(attendanceRecords.sectionId, section.id), eq(attendanceRecords.date, date)));
+  const ids = roster.map((r) => r.studentId);
+  const [marks, suspensions] = await Promise.all([
+    db
+      .select()
+      .from(attendanceRecords)
+      .where(and(eq(attendanceRecords.sectionId, section.id), eq(attendanceRecords.date, date))),
+    // Quién está suspendido ese día (suspensiones de Conducta no anuladas): la maestra lo ve en la lista.
+    ids.length
+      ? db
+          .select({ studentId: conductIncidents.studentId, until: conductMeasures.endsOn })
+          .from(conductMeasures)
+          .innerJoin(
+            conductIncidents,
+            and(
+              eq(conductIncidents.schoolId, conductMeasures.schoolId),
+              eq(conductIncidents.id, conductMeasures.incidentId),
+            ),
+          )
+          .where(
+            and(
+              eq(conductMeasures.schoolId, schoolId),
+              eq(conductMeasures.kind, "suspension"),
+              isNull(conductMeasures.cancelledAt),
+              inArray(conductIncidents.studentId, ids),
+              lte(conductMeasures.startsOn, date),
+              gte(conductMeasures.endsOn, date),
+            ),
+          )
+      : Promise.resolve([]),
+  ]);
+  const suspendedUntil = new Map<string, string>();
+  for (const s of suspensions) {
+    if (s.until && s.until > (suspendedUntil.get(s.studentId) ?? ""))
+      suspendedUntil.set(s.studentId, s.until);
+  }
   const totals = { presente: 0, ausente: 0, tarde: 0, justificada: 0, sin_registro: 0 };
   const rows = roster.map((r) => {
     const status = (marks.find((m) => m.studentId === r.studentId)?.status ??
       null) as AttendanceStatus | null;
     totals[status ?? "sin_registro"]++;
-    return { studentId: r.studentId, name: `${r.lastNames}, ${r.firstNames}`, status };
+    return {
+      studentId: r.studentId,
+      name: `${r.lastNames}, ${r.firstNames}`,
+      status,
+      suspendedUntil: suspendedUntil.get(r.studentId) ?? null,
+    };
   });
   return { section, date, students: rows, totals, canEdit };
 }

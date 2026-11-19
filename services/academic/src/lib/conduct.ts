@@ -23,6 +23,7 @@ const measureDto = (m: MeasureRow): ConductMeasureDto => ({
   decidedByName: m.decidedByName,
   createdAt: m.createdAt.toISOString(),
   cancelledAt: m.cancelledAt?.toISOString() ?? null,
+  notifyFamily: m.notifyFamily,
 });
 
 /** Nombre y sección actual (año vigente) de cada alumno. */
@@ -146,14 +147,17 @@ async function yearRange(db: DbOrTx, schoolId: string) {
   return year ? { from: year.startsOn, to: year.endsOn } : {};
 }
 
-/** Medidas de conducta de un alumno en el año vigente, para su familia. */
+/** Medidas de conducta de un alumno en el año vigente que se le avisaron a su familia. */
 export async function conductRecordsFor(
   db: DbOrTx,
   schoolId: string,
   studentId: string,
 ): Promise<ConductRecordDto[]> {
   const incidents = await listIncidents(db, schoolId, { studentId, ...(await yearRange(db, schoolId)) });
-  return records(incidents).map(({ incident: _, ...r }) => r);
+  const told = new Set(incidents.flatMap((i) => i.measures.filter((m) => m.notifyFamily).map((m) => m.id)));
+  return records(incidents)
+    .filter((r) => told.has(r.measureId))
+    .map(({ incident: _, ...r }) => r);
 }
 
 /** Resumen de conducta del año vigente de un centro, para la departamental. */

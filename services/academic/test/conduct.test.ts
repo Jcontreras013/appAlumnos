@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import type {
   AssignmentDto,
+  AttendanceSheetDto,
   AuditEventDto,
+  ConductActaDto,
   ConductIncidentDto,
   ConductOverviewDto,
   ConductStudentOptionDto,
@@ -24,6 +26,7 @@ let teacher: TestUser;
 let otherTeacher: TestUser;
 let luis: StudentDetailDto;
 let ana: StudentDetailDto;
+let sectionA: string;
 const school = { id: randomUUID(), name: "Escuela Demo West End", districtName: "Roatán" };
 const schoolId = school.id;
 
@@ -35,6 +38,7 @@ beforeAll(async () => {
   teacher = await ctx.user("docente", schoolId, "Prof. Britney Mejía");
   otherTeacher = await ctx.user("docente", schoolId, "Prof. Héctor Cruz");
   const s = await ctx.seedStructure(director);
+  sectionA = s.sectionA.id;
   await ctx.call<AssignmentDto>(director, "POST", "/assignments", {
     sectionId: s.sectionA.id,
     subjectId: s.subject.id,
@@ -147,6 +151,50 @@ describe("medidas", () => {
     expect(overview.body.totals.activeSuspensions).toBe(1);
   });
 
+  it("mientras dura la suspensión, el alumno aparece marcado en la lista de asistencia", async () => {
+    const sheet = async (date: string) =>
+      (await ctx.call<AttendanceSheetDto>(teacher, "GET", `/attendance/${sectionA}?fecha=${date}`)).body;
+    const today = await sheet(TODAY);
+    expect(today.students.find((x) => x.studentId === luis.id)?.suspendedUntil).toBe("2026-11-11");
+    const before = await sheet("2026-11-06");
+    expect(before.students.find((x) => x.studentId === luis.id)?.suspendedUntil).toBeNull();
+  });
+
+  it("en el llamado de atención se elige si se avisa a la familia; lo demás siempre se avisa", async () => {
+    const quiet = await measure(coordinator, incident.id, {
+      kind: "llamado_atencion",
+      notes: "Se habló con él en privado.",
+    });
+    expect(quiet.status).toBe(201);
+    const told = await measure(coordinator, incident.id, {
+      kind: "llamado_atencion",
+      notes: "Se le recordó la norma de convivencia.",
+      notifyFamily: "on",
+    });
+    const warnings = told.body.measures.filter((m) => m.kind === "llamado_atencion");
+    expect(warnings.map((m) => m.notifyFamily).sort()).toEqual([false, true]);
+    expect(told.body.measures.find((m) => m.kind === "citacion_familia")?.notifyFamily).toBe(true);
+  });
+
+  it("el acta de una medida trae al alumno y a su encargado; el maestro solo la de sus reportes", async () => {
+    const suspension = (
+      await ctx.call<ConductIncidentDto[]>(director, "GET", `/students/${luis.id}/conduct`)
+    ).body
+      .flatMap((i) => i.measures)
+      .find((m) => m.kind === "suspension");
+    if (!suspension) throw new Error("falta la suspensión");
+    const url = `/conduct/measures/${suspension.id}/acta`;
+    const acta = await ctx.call<ConductActaDto>(secretary, "GET", url);
+    expect(acta.status).toBe(200);
+    expect(acta.body).toMatchObject({
+      measure: { id: suspension.id, kind: "suspension", endsOn: "2026-11-11" },
+      incident: { id: incident.id, studentName: "López, Luis" },
+    });
+    expect(acta.body.guardianName).toEqual(expect.any(String));
+    expect((await ctx.call(teacher, "GET", url)).status).toBe(200);
+    expect((await ctx.call(otherTeacher, "GET", url)).status).toBe(404);
+  });
+
   it("un incidente con medidas ya no se borra", async () => {
     expect((await ctx.call(director, "DELETE", `/conduct/incidents/${incident.id}`)).status).toBe(400);
   });
@@ -162,9 +210,15 @@ describe("medidas", () => {
     ).body;
     const mom = await ctx.user("padre", schoolId, "María López Castro", access.userId);
     const child = (await ctx.call<FamilyChildDto>(mom, "GET", `/family/children/${luis.id}`)).body;
-    expect(child.conduct.map((c) => c.kind).sort()).toEqual(["citacion_familia", "suspension"]);
+    // El llamado que no se le avisó no aparece.
+    expect(child.conduct.map((c) => c.kind).sort()).toEqual([
+      "citacion_familia",
+      "llamado_atencion",
+      "suspension",
+    ]);
     expect(child.conduct[0]).toMatchObject({ severity: "muy_grave", category: "agresion" });
     expect(JSON.stringify(child.conduct)).not.toContain("Empujó");
+    expect(JSON.stringify(child.conduct)).not.toContain("en privado");
   });
 
   it("la expulsión retira la matrícula en la misma operación", async () => {

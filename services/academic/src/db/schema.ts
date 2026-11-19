@@ -526,6 +526,8 @@ export const conductMeasures = pgTable(
     createdAt: createdAt(),
     cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
     cancelledByUserId: uuid("cancelled_by_user_id"),
+    /** La familia la ve en su portal (en el llamado de atención se elige; lo demás, siempre). */
+    notifyFamily: boolean("notify_family").notNull().default(true),
   },
   (t) => [
     index("conduct_measures_incident_idx").on(t.schoolId, t.incidentId),

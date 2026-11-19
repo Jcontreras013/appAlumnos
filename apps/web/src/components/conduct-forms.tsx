@@ -162,11 +162,30 @@ export function MeasureForm({
       </div>
       <TextAreaField
         name="notes"
-        label="Nota para la familia"
+        label={kind === "llamado_atencion" ? "Nota" : "Nota para la familia"}
         state={withDefaults}
-        hint="La familia la ve en su portal: qué se decidió y qué se espera."
+        hint={
+          kind === "llamado_atencion"
+            ? "Qué se le dijo al alumno. Si avisas a la familia, la ve en su portal."
+            : "La familia la ve en su portal: qué se decidió y qué se espera."
+        }
         idPrefix={prefix}
       />
+      {kind === "llamado_atencion" && (
+        // La citación, el compromiso, la suspensión y la expulsión siempre se le avisan a la familia.
+        <label className="flex items-start gap-2 text-sm text-slate-700">
+          <input
+            type="checkbox"
+            name="notifyFamily"
+            className="mt-0.5"
+            defaultChecked={state.values?.notifyFamily === "on"}
+          />
+          <span>
+            <strong>Avisar a la familia.</strong> Si no lo marcas, el llamado queda solo en el registro del
+            centro.
+          </span>
+        </label>
+      )}
       {kind === "expulsion" && (
         <label className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-900">
           <input type="checkbox" name="confirm" className="mt-0.5" />

@@ -104,7 +104,8 @@ export function AttendanceSheet({
 
   const totals = { presente: 0, ausente: 0, tarde: 0, justificada: 0, sin_registro: 0 };
   for (const s of sheet.students) totals[statuses[s.studentId] ?? "sin_registro"]++;
-  const unmarked = sheet.students.filter((s) => !statuses[s.studentId]);
+  // «Todos presentes» no marca a los suspendidos: la maestra decide cómo anotarlos.
+  const unmarked = sheet.students.filter((s) => !statuses[s.studentId] && !s.suspendedUntil);
   // El número de lista es el de la lista completa, aunque se filtre.
   const visible = sheet.students
     .map((s, i) => ({ ...s, number: i + 1 }))
@@ -178,7 +179,7 @@ export function AttendanceSheet({
         <Count label="Sin marcar" value={totals.sin_registro} alert={totals.sin_registro > 0} />
       </section>
 
-      {sheet.canEdit && unmarked.length > 0 && sheet.students.length > 0 && (
+      {sheet.canEdit && unmarked.length > 0 && (
         <button
           type="button"
           className="btn-primary w-full sm:w-auto"
@@ -274,6 +275,11 @@ export function AttendanceSheet({
               <span className="min-w-0 flex-1 text-sm">
                 <span className="mr-2 tabular-nums text-slate-400">{s.number}.</span>
                 <span className="font-medium text-slate-900">{s.name}</span>
+                {s.suspendedUntil && (
+                  <span className="ml-2 inline-block rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                    Suspendido hasta el {formatDay(s.suspendedUntil)}
+                  </span>
+                )}
               </span>
               <fieldset className="flex gap-1" disabled={!sheet.canEdit}>
                 <legend className="sr-only">Asistencia de {s.name}</legend>

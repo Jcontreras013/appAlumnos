@@ -8,6 +8,7 @@ import type {
   AttendanceInput,
   AttendanceSheetDto,
   AuditEventDto,
+  ConductActaDto,
   ConductIncidentDto,
   ConductOverviewDto,
   ConductStudentOptionDto,
@@ -238,6 +239,8 @@ export const academic = {
     }),
   cancelMeasure: (token: string, measureId: string) =>
     call<ConductIncidentDto>(`/conduct/measures/${measureId}/cancel`, { method: "POST", token }),
+  conductActa: (token: string, measureId: string) =>
+    call<ConductActaDto>(`/conduct/measures/${measureId}/acta`, { token }),
   announcements: (token: string) => call<AnnouncementDto[]>("/announcements", { token }),
   familyAnnouncements: (token: string) => call<AnnouncementDto[]>("/family/announcements", { token }),
   publishAnnouncement: (token: string, input: AnnouncementInput) =>

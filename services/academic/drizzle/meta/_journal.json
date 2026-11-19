@@ -78,6 +78,13 @@
       "when": 1795031328211,
       "tag": "0010_conducta",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1795106357663,
+      "tag": "0011_conducta_aviso_familia",
+      "breakpoints": true
     }
   ]
 }

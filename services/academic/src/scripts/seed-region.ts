@@ -763,6 +763,7 @@ for (const [index, school] of SCHOOLS.entries()) {
         kind: "llamado_atencion",
         startsOn: addDays(today, -8),
         notes: "Se le recordó la norma del celular en clase. Les pedimos apoyarnos desde casa.",
+        notifyFamily: true,
       });
       const grave = await asCuarto<ConductIncidentDto>("/conduct/incidents", "POST", {
         studentId: push.studentId,

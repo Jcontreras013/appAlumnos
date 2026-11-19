@@ -83,12 +83,17 @@ export const measureInputSchema = z
     startsOn: isoDate,
     /** Último día de la suspensión. Solo para suspensiones. */
     endsOn: z.preprocess(blankToUndefined, isoDate.optional()),
-    /** Lo que se le explica a la familia (la ve en su portal). */
+    /** Lo que se le explica a la familia (la ve en su portal si se le avisa). */
     notes: z
       .string({ error: "Escribe la nota para la familia" })
       .trim()
       .min(3, { error: "Escribe la nota para la familia" })
       .max(1000, { error: "Máximo 1000 caracteres" }),
+    /**
+     * Si la familia lo ve en su portal. Solo se elige en el llamado de atención: la citación, el
+     * compromiso, la suspensión y la expulsión siempre se le avisan. La casilla llega como "on".
+     */
+    notifyFamily: z.preprocess((v) => v === true || v === "on" || v === "true", z.boolean()),
   })
   .superRefine((m, ctx) => {
     if (m.kind !== "suspension") return;
@@ -104,7 +109,11 @@ export const measureInputSchema = z
       });
     }
   })
-  .transform((m) => ({ ...m, endsOn: m.kind === "suspension" ? (m.endsOn ?? null) : null }));
+  .transform((m) => ({
+    ...m,
+    endsOn: m.kind === "suspension" ? (m.endsOn ?? null) : null,
+    notifyFamily: m.kind === "llamado_atencion" ? m.notifyFamily : true,
+  }));
 export type MeasureInput = z.infer<typeof measureInputSchema>;
 
 export interface ConductMeasureDto {
@@ -119,7 +128,18 @@ export interface ConductMeasureDto {
   createdAt: string;
   /** Anulada por error (queda en el historial). */
   cancelledAt: string | null;
+  /** La familia la ve en su portal. */
+  notifyFamily: boolean;
 }
+
+/** Título del acta impresa de cada medida. */
+export const CONDUCT_ACTA_TITLES: Record<ConductMeasureKind, string> = {
+  llamado_atencion: "Llamado de atención",
+  citacion_familia: "Citación a la familia",
+  compromiso: "Acta de compromiso",
+  suspension: "Notificación de suspensión",
+  expulsion: "Notificación de expulsión",
+};
 
 export interface ConductIncidentDto {
   id: string;
@@ -180,3 +200,12 @@ export const suspensionActive = (
   m: Pick<ConductMeasureDto, "kind" | "startsOn" | "endsOn" | "cancelledAt">,
   date: string,
 ) => m.kind === "suspension" && !m.cancelledAt && m.startsOn <= date && (m.endsOn ?? m.startsOn) >= date;
+
+/** Lo que necesita el acta impresa de una medida: el incidente, la medida y a quién va dirigida. */
+export interface ConductActaDto {
+  incident: ConductIncidentDto;
+  measure: ConductMeasureDto;
+  nationalId: string | null;
+  /** Encargado principal del alumno (o el primero registrado). */
+  guardianName: string | null;
+}

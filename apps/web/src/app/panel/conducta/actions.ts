@@ -38,13 +38,16 @@ export async function addMeasureAction(
       error: "Para registrar la expulsión, confirma que se retira la matrícula del alumno.",
       fields: { confirm: "Confirma la expulsión" },
       values: Object.fromEntries(
-        ["kind", "startsOn", "endsOn", "notes"].map((k) => [k, String(formData.get(k) ?? "")]),
+        ["kind", "startsOn", "endsOn", "notes", "notifyFamily"].map((k) => [
+          k,
+          String(formData.get(k) ?? ""),
+        ]),
       ),
     };
   }
   return runFormAction(formData, {
     schema: measureInputSchema,
-    fields: ["kind", "startsOn", "endsOn", "notes"],
+    fields: ["kind", "startsOn", "endsOn", "notes", "notifyFamily"],
     submit: async (input) => {
       await academic.addMeasure(accessToken, target.incidentId, input);
       refresh(target.studentId);

@@ -237,7 +237,13 @@ export interface GradebookDto {
 export interface AttendanceSheetDto {
   section: SectionDto;
   date: string;
-  students: Array<{ studentId: string; name: string; status: AttendanceStatus | null }>;
+  students: Array<{
+    studentId: string;
+    name: string;
+    status: AttendanceStatus | null;
+    /** Último día de una suspensión vigente en esta fecha, o null. */
+    suspendedUntil: string | null;
+  }>;
   totals: Record<AttendanceStatus | "sin_registro", number>;
   canEdit: boolean;
 }
