@@ -17,8 +17,8 @@ import { z } from "zod";
  * plantilla del centro. Al modelo solo van la asignatura, el grado, el tema y lo que escribe el
  * docente; nunca datos de alumnos. El borrador no se guarda: el docente lo revisa y lo guarda.
  *
- * Hay dos proveedores con la misma indicación y la misma plantilla: Claude (aquí) y Gemini
- * (plan-assistant-gemini.ts). La instalación elige uno (ver config.ts).
+ * Hay tres proveedores con la misma indicación y la misma plantilla: Claude (aquí), Gemini
+ * (plan-assistant-gemini.ts) y Groq (plan-assistant-groq.ts). La instalación elige uno (ver config.ts).
  */
 
 export interface PlanDraftRequest {
@@ -118,6 +118,60 @@ export function draftPrompt(request: PlanDraftRequest): string {
   ]
     .filter((line) => line !== null)
     .join("\n");
+}
+
+/**
+ * El formato de la respuesta como JSON Schema (para Gemini y Groq): un texto por campo, y en los
+ * campos por día un texto por cada día. `closed` prohíbe claves de más, como pide el modo estricto.
+ */
+export function planJsonSchema(fields: PlanField[], options: { closed?: boolean } = {}) {
+  const closed = options.closed ? { additionalProperties: false } : {};
+  const properties: Record<string, unknown> = {};
+  for (const field of fields) {
+    const description = [field.label, field.help].filter(Boolean).join(". ");
+    properties[field.key] =
+      field.type === "dias"
+        ? {
+            type: "object",
+            description,
+            properties: Object.fromEntries(WEEKDAYS.map((d) => [d, { type: "string" }])),
+            required: [...WEEKDAYS],
+            ...closed,
+          }
+        : { type: "string", description };
+  }
+  return { type: "object", properties, required: fields.map((f) => f.key), ...closed };
+}
+
+/** Quita un cerco ```json … ``` si el modelo lo agregara (con respuesta JSON no debería). */
+const unfence = (text: string) =>
+  text
+    .trim()
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/```$/, "")
+    .trim();
+
+/**
+ * Lee el borrador que un proveedor devolvió como texto JSON. Un campo puede quedar vacío (p. ej. sin
+ * tarea esa semana), pero no la plantilla entera; si no se puede leer, sale como incompleto.
+ */
+export function readDraftJson(text: string, request: PlanDraftRequest, provider: string): PlanContent {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(unfence(text));
+  } catch (err) {
+    throw new PlanDraftError("incomplete", DRAFT_MESSAGES.incomplete, { cause: err });
+  }
+  const { content, errors } = parsePlanContent(request.fields, parsed);
+  const filled = Object.values(content).some((v) =>
+    typeof v === "string" ? v !== "" : Object.values(v ?? {}).some((day) => day !== ""),
+  );
+  if (Object.keys(errors).length > 0 || !filled) {
+    throw new PlanDraftError("incomplete", DRAFT_MESSAGES.incomplete, {
+      cause: new Error(`${provider} devolvió la plantilla incompleta: ${JSON.stringify(errors)}`),
+    });
+  }
+  return onlyClassDays(request.fields, content, request.classDays);
 }
 
 /** Deja vacíos los días en que la sección no tiene esta clase. */

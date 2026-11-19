@@ -55,6 +55,13 @@ export interface EscolarStackProps extends StackProps {
   geminiSecretArn?: string;
   geminiModel?: string;
   /**
+   * ARN del secreto con la llave de la API de Groq (el valor del secreto es la llave). Opcional. Si
+   * se indica (y no hay de Gemini), el asistente usa Groq aunque también haya llave de Claude.
+   * `groqModel` elige el modelo (por defecto, GPT-OSS 120B).
+   */
+  groqSecretArn?: string;
+  groqModel?: string;
+  /**
    * ARN del secreto con las llaves de los avisos de mensajes al celular (VAPID_PUBLIC_KEY,
    * VAPID_PRIVATE_KEY, VAPID_SUBJECT; se generan con `pnpm push:keys`). Opcional: sin él los
    * mensajes funcionan, pero el teléfono no avisa.
@@ -249,7 +256,7 @@ export class EscolarStack extends Stack {
     });
     const identityService = identity.service;
 
-    /** Asistente de planificación: la llave de Gemini o de Claude llega como secreto, nunca en claro. */
+    /** Asistente de planificación: la llave del proveedor llega como secreto, nunca en claro. */
     const assistantSettings = () => {
       const secrets: Record<string, ecs.Secret> = {};
       const environment: Record<string, string> = { IDENTITY_URL: "http://identity:3001" };
@@ -262,9 +269,17 @@ export class EscolarStack extends Stack {
         secrets.GEMINI_API_KEY = ecs.Secret.fromSecretsManager(
           secretsmanager.Secret.fromSecretCompleteArn(this, "GeminiKey", props.geminiSecretArn),
         );
-        environment.PLAN_ASSISTANT_PROVIDER = "gemini";
         if (props.geminiModel) environment.GEMINI_MODEL = props.geminiModel;
       }
+      if (props.groqSecretArn) {
+        secrets.GROQ_API_KEY = ecs.Secret.fromSecretsManager(
+          secretsmanager.Secret.fromSecretCompleteArn(this, "GroqKey", props.groqSecretArn),
+        );
+        if (props.groqModel) environment.GROQ_MODEL = props.groqModel;
+      }
+      // Quien configura un proveedor gratuito lo quiere usar: gana sobre Claude (y Gemini sobre Groq).
+      if (props.geminiSecretArn) environment.PLAN_ASSISTANT_PROVIDER = "gemini";
+      else if (props.groqSecretArn) environment.PLAN_ASSISTANT_PROVIDER = "groq";
       return { environment, ...(Object.keys(secrets).length ? { secrets } : {}) };
     };
 

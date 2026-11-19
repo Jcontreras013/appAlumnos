@@ -176,6 +176,34 @@ describe("seguridad de la infraestructura", () => {
     expect(container?.Environment?.map((e) => e.Name)).not.toContain("GEMINI_API_KEY");
   });
 
+  it("con la llave de Groq, academic usa Groq y la llave llega como secreto", () => {
+    const stack = new EscolarStack(new App(), "ConGroq", {
+      stage: "dev",
+      jwtSecretArn: JWT_ARN,
+      groqSecretArn: "arn:aws:secretsmanager:us-east-1:111111111111:secret:escolar/dev/groq-AbCdEf",
+      groqModel: "openai/gpt-oss-20b",
+      env: { account: "111111111111", region: "us-east-1" },
+    });
+    const tasks = Template.fromStack(stack).findResources("AWS::ECS::TaskDefinition");
+    const academic = Object.entries(tasks).find(([id]) => id.startsWith("AcademicTask"))?.[1] as {
+      Properties: {
+        ContainerDefinitions: Array<{
+          Secrets?: Array<{ Name: string }>;
+          Environment?: Array<{ Name: string; Value: string }>;
+        }>;
+      };
+    };
+    const container = academic.Properties.ContainerDefinitions[0];
+    expect(container?.Secrets?.map((s) => s.Name)).toContain("GROQ_API_KEY");
+    expect(container?.Environment).toEqual(
+      expect.arrayContaining([
+        { Name: "PLAN_ASSISTANT_PROVIDER", Value: "groq" },
+        { Name: "GROQ_MODEL", Value: "openai/gpt-oss-20b" },
+      ]),
+    );
+    expect(container?.Environment?.map((e) => e.Name)).not.toContain("GROQ_API_KEY");
+  });
+
   it("las llaves de los avisos al celular llegan como secretos a identity, solo si se indican", () => {
     const withoutPush = JSON.stringify(template.findResources("AWS::ECS::TaskDefinition"));
     expect(withoutPush).not.toContain("VAPID_PRIVATE_KEY");

@@ -1,10 +1,10 @@
-import { type PlanField, parsePlanContent, WEEKDAYS } from "@escolar/shared";
 import {
   DRAFT_MESSAGES,
   draftPrompt,
-  onlyClassDays,
   PlanDraftError,
   type PlanDrafter,
+  planJsonSchema,
+  readDraftJson,
   SYSTEM_PROMPT,
 } from "./plan-assistant";
 
@@ -31,24 +31,6 @@ const REFUSED_REASONS = new Set([
   "LANGUAGE",
 ]);
 
-/** El formato de la respuesta (JSON Schema) sale de la plantilla del centro. */
-export function geminiSchemaFor(fields: PlanField[]) {
-  const properties: Record<string, unknown> = {};
-  for (const field of fields) {
-    const description = [field.label, field.help].filter(Boolean).join(". ");
-    properties[field.key] =
-      field.type === "dias"
-        ? {
-            type: "object",
-            description,
-            properties: Object.fromEntries(WEEKDAYS.map((d) => [d, { type: "string" }])),
-            required: [...WEEKDAYS],
-          }
-        : { type: "string", description };
-  }
-  return { type: "object", properties, required: fields.map((f) => f.key) };
-}
-
 interface GeminiResponse {
   candidates?: Array<{
     content?: { parts?: Array<{ text?: string; thought?: boolean }> };
@@ -60,14 +42,6 @@ interface GeminiResponse {
 interface GeminiError {
   error?: { code?: number; message?: string; status?: string; details?: Array<{ reason?: string }> };
 }
-
-/** Quita un cerco ```json … ``` si el modelo lo agregara (con respuesta JSON no debería). */
-const unfence = (text: string) =>
-  text
-    .trim()
-    .replace(/^```(?:json)?\s*/i, "")
-    .replace(/```$/, "")
-    .trim();
 
 export function geminiPlanDrafter(options: {
   apiKey: string;
@@ -85,7 +59,7 @@ export function geminiPlanDrafter(options: {
         contents: [{ role: "user", parts: [{ text: draftPrompt(request) }] }],
         generationConfig: {
           responseMimeType: "application/json",
-          responseJsonSchema: geminiSchemaFor(request.fields),
+          responseJsonSchema: planJsonSchema(request.fields),
         },
       };
       let response: Response;
@@ -135,23 +109,7 @@ export function geminiPlanDrafter(options: {
         .filter((p) => !p.thought && typeof p.text === "string")
         .map((p) => p.text)
         .join("");
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(unfence(text));
-      } catch (err) {
-        throw new PlanDraftError("incomplete", DRAFT_MESSAGES.incomplete, { cause: err });
-      }
-      const { content, errors } = parsePlanContent(request.fields, parsed);
-      // Un campo puede quedar vacío (p. ej. sin tarea esa semana), pero no la plantilla entera.
-      const filled = Object.values(content).some((v) =>
-        typeof v === "string" ? v !== "" : Object.values(v ?? {}).some((day) => day !== ""),
-      );
-      if (Object.keys(errors).length > 0 || !filled) {
-        throw new PlanDraftError("incomplete", DRAFT_MESSAGES.incomplete, {
-          cause: new Error(`Gemini devolvió la plantilla incompleta: ${JSON.stringify(errors)}`),
-        });
-      }
-      return onlyClassDays(request.fields, content, request.classDays);
+      return readDraftJson(text, request, "Gemini");
     },
   };
 }

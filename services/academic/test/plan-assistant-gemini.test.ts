@@ -1,8 +1,8 @@
 import { DEFAULT_PLAN_TEMPLATE, WEEKDAYS } from "@escolar/shared";
 import { describe, expect, it } from "vitest";
 import { planAssistantFromEnv } from "../src/config";
-import { DRAFT_MESSAGES, type PlanDraftRequest } from "../src/lib/plan-assistant";
-import { DEFAULT_GEMINI_MODEL, geminiPlanDrafter, geminiSchemaFor } from "../src/lib/plan-assistant-gemini";
+import { DRAFT_MESSAGES, type PlanDraftRequest, planJsonSchema } from "../src/lib/plan-assistant";
+import { DEFAULT_GEMINI_MODEL, geminiPlanDrafter } from "../src/lib/plan-assistant-gemini";
 
 /** Asistente de planificación con Gemini: la petición a Google y cómo se lee su respuesta. */
 
@@ -78,7 +78,7 @@ describe("Gemini: la petición", () => {
   });
 
   it("el formato pide un texto por campo y uno por cada día en los campos por día", () => {
-    const schema = geminiSchemaFor(fields) as {
+    const schema = planJsonSchema(fields) as {
       properties: Record<string, { type: string; required?: string[]; description?: string }>;
     };
     const days = fields.find((f) => f.type === "dias");

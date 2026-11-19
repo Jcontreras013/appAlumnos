@@ -302,8 +302,8 @@ libro de texto, materiales, alumnos que necesitan apoyo) y el asistente llena la
 con un borrador según el Currículo Nacional Básico. El borrador **no se guarda**: llena el formulario
 y el docente lo revisa, lo ajusta y lo guarda o lo envía como siempre.
 
-- Funciona con **Gemini** (Google) o con **Claude** (Anthropic), con la misma indicación y la misma
-  plantilla. Al modelo solo van la asignatura, el grado, el tema, los días con clase según el
+- Funciona con **Gemini** (Google), **Groq** o **Claude** (Anthropic), con la misma indicación y la
+  misma plantilla. Al modelo solo van la asignatura, el grado, el tema, los días con clase según el
   horario, el tema de la semana anterior y las indicaciones del docente; **nunca datos de alumnos**.
 - Solo quien escribe la planificación lo usa, mientras está en borrador o devuelta; hasta 20
   borradores por docente al día, y cada uso queda en la bitácora del centro.
@@ -323,19 +323,30 @@ cuenta de facturación pasa a «Nivel 1» y Google solo responde si tiene saldo 
 contesta `402 … prepayment credits are depleted` y el docente ve «no está bien configurado». Si es
 el caso, crea un proyecto nuevo sin facturación y saca la llave ahí.
 
-**Claude.** Llave de console.anthropic.com en `ANTHROPIC_API_KEY` (modelo `claude-opus-5-5`). Con
-las dos llaves se usa Claude, salvo `PLAN_ASSISTANT_PROVIDER=gemini`.
+**Groq (capa gratuita sin tarjeta).** La llave (empieza con `gsk_`) se saca en console.groq.com →
+«API Keys». Va en `GROQ_API_KEY`; `GROQ_MODEL` elige el modelo (por defecto `openai/gpt-oss-120b`,
+que en Groq responde con el formato estricto de la plantilla). La capa gratuita tiene límites por
+minuto y por día que alcanzan para un piloto; si se pasan, el docente ve «llegó a su límite de uso
+por ahora». Groq cambia su lista de modelos seguido: si el modelo deja de existir, el docente ve «no
+está bien configurado» y en los registros sale `404 model_not_found`; se arregla con `GROQ_MODEL`.
+
+**Claude.** Llave de console.anthropic.com en `ANTHROPIC_API_KEY` (modelo `claude-opus-5-5`).
+
+Con varias llaves se usa la primera en este orden: Claude, Gemini, Groq. `PLAN_ASSISTANT_PROVIDER`
+(`claude`, `gemini` o `groq`) elige otro.
 
 - En la demo con Docker, guarda la llave en un archivo `.env` junto a `docker-compose.demo.yml`:
   Docker Compose lo lee solo, y el proyecto lo deja fuera de git y de las imágenes. En PowerShell,
   con la llave copiada (así no aparece en pantalla):
-  `Set-Content -Path .env -Value "GEMINI_API_KEY=$(Get-Clipboard)" -Encoding ascii`, y luego
-  `docker compose -f docker-compose.demo.yml up`. Para ver que la tomó:
+  `Set-Content -Path .env -Value "GROQ_API_KEY=$(Get-Clipboard)" -Encoding ascii` (o
+  `GEMINI_API_KEY=...`), y luego `docker compose -f docker-compose.demo.yml up`. Las variables
+  definidas en la ventana de PowerShell (`$env:...`) ganan sobre el `.env`. Para ver que la tomó:
   `docker logs escolar-demo-academic-1 2>&1 | Select-String "Asistente"` debe mostrar
-  «Asistente de planificación activo» con `"provider":"gemini"`.
+  «Asistente de planificación activo» con el proveedor.
 - En AWS, guarda la llave como secreto (el valor del secreto es la llave) y despliega con
-  `-c geminiSecretArn=arn:aws:secretsmanager:...` (o `-c anthropicSecretArn=...`). El balanceador y
-  Service Connect esperan hasta 3 minutos, porque un borrador tarda de 20 a 60 s.
+  `-c geminiSecretArn=arn:aws:secretsmanager:...` (o `-c groqSecretArn=...`, con `-c groqModel=...`
+  si hace falta, o `-c anthropicSecretArn=...`). El balanceador y Service Connect esperan hasta 3
+  minutos, porque un borrador tarda de 20 a 60 s.
 - Si un borrador falla, el docente ve un mensaje sencillo; el motivo exacto (lo que respondió el
   proveedor) queda en los registros de `academic`.
 

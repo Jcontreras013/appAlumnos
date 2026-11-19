@@ -4,6 +4,7 @@ import { createDb, runMigrations } from "./db/client";
 import { httpIdentityClient } from "./lib/identity-client";
 import { claudePlanDrafter, type PlanDrafter } from "./lib/plan-assistant";
 import { geminiPlanDrafter } from "./lib/plan-assistant-gemini";
+import { groqPlanDrafter } from "./lib/plan-assistant-groq";
 
 const config = loadConfig();
 
@@ -17,7 +18,9 @@ const planDrafter: PlanDrafter | null = !assistant
   ? null
   : assistant.provider === "gemini"
     ? geminiPlanDrafter({ apiKey: assistant.apiKey, model: assistant.model })
-    : claudePlanDrafter();
+    : assistant.provider === "groq"
+      ? groqPlanDrafter({ apiKey: assistant.apiKey, model: assistant.model })
+      : claudePlanDrafter();
 const app = await buildApp({
   db,
   identity: httpIdentityClient(config.identityUrl),
@@ -26,7 +29,7 @@ const app = await buildApp({
 });
 if (assistant) {
   app.log.info(
-    { provider: assistant.provider, model: assistant.provider === "gemini" ? assistant.model : undefined },
+    { provider: assistant.provider, model: assistant.provider === "claude" ? undefined : assistant.model },
     "Asistente de planificación activo",
   );
 } else if (config.planAssistantWarning) {

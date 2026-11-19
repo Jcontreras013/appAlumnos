@@ -97,10 +97,13 @@ services:
     environment:
       DATABASE_URL: postgres://escolar:escolar@db:5432/escolar_academic
       IDENTITY_URL: http://identity:3001
-      # Asistente de planificación con IA: se activa si la computadora tiene GEMINI_API_KEY (Gemini,
-      # capa gratuita de Google) o ANTHROPIC_API_KEY (Claude). Con las dos, PLAN_ASSISTANT_PROVIDER elige.
+      # Asistente de planificación con IA: se activa con GEMINI_API_KEY (Gemini), GROQ_API_KEY (Groq)
+      # o ANTHROPIC_API_KEY (Claude), en la computadora o en un archivo .env junto a este. Con varias,
+      # PLAN_ASSISTANT_PROVIDER elige.
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: ${GROQ_MODEL:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       PLAN_ASSISTANT_PROVIDER: ${PLAN_ASSISTANT_PROVIDER:-}
     healthcheck:

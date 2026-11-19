@@ -16,6 +16,8 @@ new EscolarStack(app, `Escolar-${stage}`, {
   anthropicSecretArn: app.node.tryGetContext("anthropicSecretArn"),
   geminiSecretArn: app.node.tryGetContext("geminiSecretArn"),
   geminiModel: app.node.tryGetContext("geminiModel"),
+  groqSecretArn: app.node.tryGetContext("groqSecretArn"),
+  groqModel: app.node.tryGetContext("groqModel"),
   pushSecretArn: app.node.tryGetContext("pushSecretArn"),
 });
 
