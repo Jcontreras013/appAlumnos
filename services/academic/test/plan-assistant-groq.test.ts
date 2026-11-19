@@ -1,7 +1,7 @@
 import { DEFAULT_PLAN_TEMPLATE } from "@escolar/shared";
 import { describe, expect, it } from "vitest";
 import { planAssistantFromEnv } from "../src/config";
-import { DRAFT_MESSAGES, type PlanDraftRequest } from "../src/lib/plan-assistant";
+import { causeChain, DRAFT_MESSAGES, type PlanDraftRequest } from "../src/lib/plan-assistant";
 import { DEFAULT_GROQ_MODEL, groqPlanDrafter } from "../src/lib/plan-assistant-groq";
 
 /** Asistente de planificación con Groq: la petición y cómo se lee su respuesta. */
@@ -205,5 +205,18 @@ describe("Groq en la configuración", () => {
 
   it("un proveedor desconocido no arranca, aunque coincida con algo heredado de los objetos", () => {
     expect(() => planAssistantFromEnv({ PLAN_ASSISTANT_PROVIDER: "constructor" })).toThrow(/no reconocido/);
+  });
+});
+
+describe("el motivo en los registros", () => {
+  it("incluye las causas encadenadas de una falla de conexión", () => {
+    const dns = Object.assign(new Error("getaddrinfo ENOTFOUND api.groq.com"), { code: "ENOTFOUND" });
+    const fetchFailed = new TypeError("fetch failed", { cause: dns });
+    expect(causeChain(fetchFailed)).toBe("fetch failed ← getaddrinfo ENOTFOUND api.groq.com");
+    const reset = Object.assign(new Error("socket hang up"), { code: "ECONNRESET" });
+    expect(causeChain(new TypeError("fetch failed", { cause: reset }))).toBe(
+      "fetch failed ← socket hang up (ECONNRESET)",
+    );
+    expect(causeChain("texto")).toBe("texto");
   });
 });

@@ -36,7 +36,8 @@ import type { DbOrTx } from "../db/client";
 import { auditEvents, lessonPlans, planTemplates, scheduleSlots } from "../db/schema";
 import type { AcademicDeps } from "../deps";
 import { audit } from "../lib/audit";
-import { PlanDraftError } from "../lib/plan-assistant";
+import { causeChain, PlanDraftError } from "../lib/plan-assistant";
+
 import {
   assignmentById,
   canAuthor,
@@ -324,7 +325,7 @@ export async function planRoutes(app: FastifyInstance, { db, today, planDrafter 
     } catch (err) {
       if (err instanceof PlanDraftError) {
         // El docente ve el mensaje; el motivo exacto (p. ej. lo que respondió el proveedor) queda aquí.
-        const detail = err.cause instanceof Error ? err.cause.message : err.cause;
+        const detail = causeChain(err.cause);
         request.log.warn({ reason: err.reason, detail }, "El asistente no preparó el borrador");
         const status = err.reason === "refused" ? 422 : err.reason === "incomplete" ? 502 : 503;
         throw new ApiError(status, `draft_${err.reason}`, err.message);

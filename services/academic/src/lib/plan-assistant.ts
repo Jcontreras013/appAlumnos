@@ -51,6 +51,26 @@ export class PlanDraftError extends Error {
   }
 }
 
+/**
+ * El motivo de una falla con sus causas encadenadas: "fetch failed" solo no dice nada, el porqué
+ * (p. ej. "getaddrinfo ENOTFOUND api.groq.com") viene en la causa de la causa.
+ */
+export function causeChain(cause: unknown): unknown {
+  if (!(cause instanceof Error)) return cause;
+  const parts: string[] = [];
+  let current: unknown = cause;
+  for (let depth = 0; current instanceof Error && depth < 4; depth++) {
+    const code = (current as { code?: unknown }).code;
+    parts.push(
+      typeof code === "string" && !current.message.includes(code)
+        ? `${current.message} (${code})`
+        : current.message,
+    );
+    current = current.cause;
+  }
+  return parts.join(" ← ");
+}
+
 /** Lo que ve el docente cuando no sale el borrador (igual con cualquier proveedor). */
 export const DRAFT_MESSAGES = {
   refused:
