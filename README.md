@@ -317,11 +317,22 @@ La capa gratuita tiene límite de consultas por minuto (si se pasa, el docente v
 de uso por ahora») y en ella Google puede usar lo que se envía para mejorar sus productos. Al crecer
 a muchos centros conviene la capa de pago.
 
+La capa gratuita es **por proyecto**: la llave tiene que ser de un proyecto **sin facturación**
+(en AI Studio → Dashboard → Projects, «Nivel de facturación» dice nivel gratuito). Un proyecto con
+cuenta de facturación pasa a «Nivel 1» y Google solo responde si tiene saldo prepagado; sin saldo
+contesta `402 … prepayment credits are depleted` y el docente ve «no está bien configurado». Si es
+el caso, crea un proyecto nuevo sin facturación y saca la llave ahí.
+
 **Claude.** Llave de console.anthropic.com en `ANTHROPIC_API_KEY` (modelo `claude-opus-5-5`). Con
 las dos llaves se usa Claude, salvo `PLAN_ASSISTANT_PROVIDER=gemini`.
 
-- En la demo con Docker, define la llave antes de levantarla (PowerShell):
-  `$env:GEMINI_API_KEY = "tu-llave"` y luego `docker compose -f docker-compose.demo.yml up`.
+- En la demo con Docker, guarda la llave en un archivo `.env` junto a `docker-compose.demo.yml`:
+  Docker Compose lo lee solo, y el proyecto lo deja fuera de git y de las imágenes. En PowerShell,
+  con la llave copiada (así no aparece en pantalla):
+  `Set-Content -Path .env -Value "GEMINI_API_KEY=$(Get-Clipboard)" -Encoding ascii`, y luego
+  `docker compose -f docker-compose.demo.yml up`. Para ver que la tomó:
+  `docker logs escolar-demo-academic-1 2>&1 | Select-String "Asistente"` debe mostrar
+  «Asistente de planificación activo» con `"provider":"gemini"`.
 - En AWS, guarda la llave como secreto (el valor del secreto es la llave) y despliega con
   `-c geminiSecretArn=arn:aws:secretsmanager:...` (o `-c anthropicSecretArn=...`). El balanceador y
   Service Connect esperan hasta 3 minutos, porque un borrador tarda de 20 a 60 s.
