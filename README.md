@@ -40,6 +40,7 @@ Para colegios privados quedan además facturación (con CAI) y wallet de cafeter
 | 5    | Portal de familias: notas, asistencia y tareas de sus hijos; acceso con identidad; boleta imprimible        | ✅ Listo |
 | 6    | Piloto: corregir datos sin perder notas, Excel, indicadores del piloto, verificación en dos pasos (2FA)     | ✅ Listo |
 | 7    | Escuela: avisos, horario, seguimiento, traslados, constancias, bitácora; nota final, recuperación, cierre   | ✅ Listo |
+| 8    | Mensajes entre maestros y dirección (tipo chat), con «visto» y avisos al celular en horario de atención     | ✅ Listo |
 | —    | Para colegios privados: facturación con CAI y wallet de cafetería                                           | Después  |
 
 ## Arquitectura
@@ -313,6 +314,29 @@ y el docente lo revisa, lo ajusta y lo guarda o lo envía como siempre.
 - En AWS, guarda la llave como secreto y despliega con `-c anthropicSecretArn=arn:aws:secretsmanager:...`.
   El balanceador y Service Connect esperan hasta 3 minutos, porque un borrador tarda de 20 a 60 s.
 
+## Mensajes entre el personal
+
+Chat de dos personas entre maestros y dirección del mismo centro (las familias llegan en otra etapa).
+Está en **Mensajes**, con un contador de conversaciones sin leer en el menú.
+
+- Cada quien ve solo sus conversaciones y solo personas activas de su centro. Los mensajes **no se
+  editan ni se borran** (un trigger de la base de datos lo impide): son el registro de lo que se habló.
+- «✓» enviado, «✓✓» visto. La conversación se actualiza sola cada pocos segundos mientras está a la
+  vista; la lista y el contador, cada pocos segundos más.
+- Si alguien deja el centro, la conversación se conserva pero ya no se le escribe.
+- **Avisos al celular** (Web Push, opcional): de lunes a viernes de 6:00 a 19:00, hora de Honduras. Lo
+  que llega fuera de ese horario se avisa en un solo aviso al empezar la jornada. El aviso dice quién
+  escribió, nunca el texto. En iPhone hay que agregar CONECTA a la pantalla de inicio. Al cerrar sesión
+  el teléfono deja de recibir avisos.
+- Los avisos se activan con `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` y `VAPID_SUBJECT` en `identity`
+  (se generan con `pnpm push:keys tu-correo@dominio.hn`); sin ellas el chat funciona sin avisos. La
+  demo con Docker genera sus propias llaves; los avisos llegan si se abre por HTTPS (por ejemplo, con
+  un túnel) o en `localhost`.
+- En AWS: `pnpm -s push:keys tu-correo@dominio.hn --json` (en PowerShell, con
+  `| Out-File -Encoding ascii push.json`), luego
+  `aws secretsmanager create-secret --name escolar/dev/push --secret-string file://push.json`, borra
+  `push.json` y despliega con `-c pushSecretArn=arn:aws:secretsmanager:...`.
+
 ## Licencia de las copias vendidas (Gumroad)
 
 Las copias de CONECTA que se venden por Gumroad piden una clave de licencia; la demo y el servidor
@@ -395,7 +419,7 @@ producción conviene pasar a subredes privadas con VPC endpoints.
 
 ```
 apps/web                 Next.js 16: panel por rol, cuaderno sin internet (service worker), seguimiento, alumnos, estructura académica, usuarios, colegios
-services/identity        Fastify + Drizzle + Postgres: auth, tenants, usuarios, auditoría
+services/identity        Fastify + Drizzle + Postgres: auth, tenants, usuarios, auditoría, mensajes del personal
 services/academic        Fastify + Drizzle + Postgres: estructura, matrícula, licencias, notas, asistencia, tablero regional
   drizzle/               migraciones SQL versionadas
   test/                  tests de API contra Postgres en memoria

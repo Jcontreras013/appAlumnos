@@ -1,12 +1,28 @@
 "use client";
 
+import type { UnreadMessagesDto } from "@escolar/shared";
 import type { Route } from "next";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
+import { fetchPanelJson, usePoll } from "@/components/messages/use-poll";
 
 export interface NavItem {
   href: Route;
   label: string;
+  /** Muestra el contador de conversaciones sin leer (se actualiza solo). */
+  unreadBadge?: boolean;
+}
+
+/** Contador de mensajes sin leer: se consulta cada medio minuto mientras el panel está a la vista. */
+function useUnreadMessages(initial: number, enabled: boolean) {
+  const [count, setCount] = useState(initial);
+  usePoll(async () => {
+    if (!enabled) return;
+    const data = await fetchPanelJson<UnreadMessagesDto>("/panel/mensajes/no-leidos");
+    if (data) setCount(data.conversations);
+  }, 30_000);
+  return count;
 }
 
 export interface UpcomingItem {
@@ -14,8 +30,20 @@ export interface UpcomingItem {
   phase: number;
 }
 
-export function Nav({ items, upcoming }: { items: NavItem[]; upcoming: UpcomingItem[] }) {
+export function Nav({
+  items,
+  upcoming,
+  unreadMessages = 0,
+}: {
+  items: NavItem[];
+  upcoming: UpcomingItem[];
+  unreadMessages?: number;
+}) {
   const pathname = usePathname();
+  const unread = useUnreadMessages(
+    unreadMessages,
+    items.some((i) => i.unreadBadge),
+  );
   // La opción más específica que coincide: en /panel/region/indicadores se marca "Indicadores", no
   // también "Tablero de centros".
   const matches = (href: string) => (href === "/panel" ? pathname === "/panel" : pathname.startsWith(href));
@@ -32,11 +60,17 @@ export function Nav({ items, upcoming }: { items: NavItem[]; upcoming: UpcomingI
             key={item.href}
             href={item.href}
             aria-current={active ? "page" : undefined}
-            className={`whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition ${
+            className={`flex items-center justify-between gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition ${
               active ? "bg-brand-50 text-brand-700" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
             }`}
           >
             {item.label}
+            {item.unreadBadge && unread > 0 && (
+              <span className="grid h-5 min-w-5 place-items-center rounded-full bg-brand-600 px-1.5 text-xs font-semibold text-white">
+                {unread > 99 ? "99+" : unread}
+                <span className="sr-only"> conversaciones sin leer</span>
+              </span>
+            )}
           </Link>
         );
       })}

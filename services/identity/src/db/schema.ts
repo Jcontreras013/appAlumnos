@@ -9,6 +9,7 @@ import {
   jsonb,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   unique,
@@ -211,8 +212,88 @@ export const auditEvents = pgTable(
   (t) => [index("audit_events_school_created_idx").on(t.schoolId, t.createdAt)],
 );
 
+// ───────────────────────────── Mensajes entre el personal ─────────────────────────────
+
+/** Conversación de dos personas del mismo centro. */
+export const conversations = pgTable(
+  "conversations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    schoolId: uuid("school_id")
+      .notNull()
+      .references(() => schools.id, { onDelete: "restrict" }),
+    /** Los dos ids ordenados ("a:b"): entre las mismas dos personas hay una sola conversación. */
+    pairKey: text("pair_key").notNull(),
+    createdAt: createdAt(),
+    lastMessageAt: timestamp("last_message_at", { withTimezone: true }),
+    lastSenderId: uuid("last_sender_id"),
+  },
+  (t) => [unique("conversations_pair_unique").on(t.schoolId, t.pairKey)],
+);
+
+export const conversationMembers = pgTable(
+  "conversation_members",
+  {
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    schoolId: uuid("school_id").notNull(),
+    /** Hasta dónde leyó: los mensajes del otro posteriores a esto están sin leer. */
+    lastReadAt: timestamp("last_read_at", { withTimezone: true }),
+    /** Último mensaje del que se le avisó al celular (para no repetir el aviso). */
+    notifiedAt: timestamp("notified_at", { withTimezone: true }),
+  },
+  (t) => [
+    primaryKey({ columns: [t.conversationId, t.userId] }),
+    index("conversation_members_user_idx").on(t.userId, t.schoolId),
+  ],
+);
+
+/** Los mensajes no se editan ni se borran: son el registro de lo que se habló. */
+export const messages = pgTable(
+  "messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    schoolId: uuid("school_id").notNull(),
+    senderUserId: uuid("sender_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    body: text("body").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("messages_conversation_created_idx").on(t.conversationId, t.createdAt),
+    check("messages_body_length", sql`char_length(${t.body}) between 1 and 2000`),
+  ],
+);
+
+/** Teléfonos (o navegadores) donde la persona activó los avisos. */
+export const pushSubscriptions = pgTable(
+  "push_subscriptions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    endpoint: text("endpoint").notNull().unique("push_subscriptions_endpoint_unique"),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("push_subscriptions_user_idx").on(t.userId)],
+);
+
 export type Department = typeof departments.$inferSelect;
 export type District = typeof districts.$inferSelect;
 export type School = typeof schools.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type Membership = typeof memberships.$inferSelect;
+export type Conversation = typeof conversations.$inferSelect;
+export type Message = typeof messages.$inferSelect;
+export type PushSubscriptionRow = typeof pushSubscriptions.$inferSelect;

@@ -6,6 +6,8 @@
  * - Logo del centro: la copia guardada mientras llega la nueva.
  * Todo lo demás pasa directo a la red. Los cambios que el maestro hace sin internet no pasan por
  * aquí: se guardan en IndexedDB y la página los envía al volver la conexión.
+ *
+ * También muestra los avisos de mensajes (Web Push) y, al tocarlos, abre la conversación.
  */
 const VERSION = "v1";
 const PAGES = `escolar-paginas-${VERSION}`;
@@ -198,6 +200,54 @@ self.addEventListener("message", (event) => {
         return reply({ cached });
       }
       return reply(null);
+    })(),
+  );
+});
+
+// ───────────────────────────── Avisos de mensajes ─────────────────────────────
+
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    // Un aviso que no se entiende igual se muestra, sin detalle.
+  }
+  const title = typeof data.title === "string" && data.title ? data.title : "CONECTA";
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: typeof data.body === "string" ? data.body : "",
+      tag: typeof data.tag === "string" && data.tag ? data.tag : "conecta",
+      renotify: true,
+      data: { url: typeof data.url === "string" ? data.url : "/panel/mensajes" },
+    }),
+  );
+});
+
+/** Solo direcciones del propio panel: un aviso nunca lleva a otro sitio. */
+function panelUrl(path) {
+  try {
+    const url = new URL(path, self.location.origin);
+    if (url.origin === self.location.origin && url.pathname.startsWith("/panel")) return url.href;
+  } catch {
+    // Dirección inválida: se abre la lista de mensajes.
+  }
+  return new URL("/panel/mensajes", self.location.origin).href;
+}
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = panelUrl(event.notification.data?.url);
+  event.waitUntil(
+    (async () => {
+      const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      const open = windows.find((w) => new URL(w.url).origin === self.location.origin);
+      if (open) {
+        await open.focus();
+        if ("navigate" in open) await open.navigate(target).catch(() => self.clients.openWindow(target));
+        return;
+      }
+      await self.clients.openWindow(target);
     })(),
   );
 });

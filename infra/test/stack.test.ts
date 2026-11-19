@@ -147,6 +147,24 @@ describe("seguridad de la infraestructura", () => {
     expect(container?.Environment?.map((e) => e.Name)).not.toContain("ANTHROPIC_API_KEY");
   });
 
+  it("las llaves de los avisos al celular llegan como secretos a identity, solo si se indican", () => {
+    const withoutPush = JSON.stringify(template.findResources("AWS::ECS::TaskDefinition"));
+    expect(withoutPush).not.toContain("VAPID_PRIVATE_KEY");
+    const stack = new EscolarStack(new App(), "ConAvisos", {
+      stage: "dev",
+      jwtSecretArn: JWT_ARN,
+      pushSecretArn: "arn:aws:secretsmanager:us-east-1:111111111111:secret:escolar/dev/push-AbCdEf",
+      env: { account: "111111111111", region: "us-east-1" },
+    });
+    const tasks = Template.fromStack(stack).findResources("AWS::ECS::TaskDefinition");
+    const identity = Object.entries(tasks).find(([id]) => id.startsWith("IdentityTask"))?.[1] as {
+      Properties: { ContainerDefinitions: Array<{ Secrets?: Array<{ Name: string }> }> };
+    };
+    expect(identity.Properties.ContainerDefinitions[0]?.Secrets?.map((s) => s.Name)).toEqual(
+      expect.arrayContaining(["VAPID_PUBLIC_KEY", "VAPID_PRIVATE_KEY", "VAPID_SUBJECT"]),
+    );
+  });
+
   it("falla con un mensaje claro si falta el secreto JWT", () => {
     expect(() => new EscolarStack(new App(), "SinSecreto", { stage: "dev" })).toThrow(/jwtSecretArn/);
   });

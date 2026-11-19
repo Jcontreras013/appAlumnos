@@ -47,6 +47,12 @@ export interface EscolarStackProps extends StackProps {
    * sin él, el asistente de planificación aparece como no disponible.
    */
   anthropicSecretArn?: string;
+  /**
+   * ARN del secreto con las llaves de los avisos de mensajes al celular (VAPID_PUBLIC_KEY,
+   * VAPID_PRIVATE_KEY, VAPID_SUBJECT; se generan con `pnpm push:keys`). Opcional: sin él los
+   * mensajes funcionan, pero el teléfono no avisa.
+   */
+  pushSecretArn?: string;
 }
 
 /**
@@ -214,12 +220,24 @@ export class EscolarStack extends Stack {
       return { task, service };
     };
 
+    const pushSecret = props.pushSecretArn
+      ? secretsmanager.Secret.fromSecretCompleteArn(this, "PushSecret", props.pushSecretArn)
+      : undefined;
     const identity = backendService("identity", {
       port: 3001,
       secrets: {
         JWT_KEY_ID: ecs.Secret.fromSecretsManager(jwtSecret, "JWT_KEY_ID"),
         JWT_PRIVATE_KEY: ecs.Secret.fromSecretsManager(jwtSecret, "JWT_PRIVATE_KEY"),
         JWT_PUBLIC_KEY: ecs.Secret.fromSecretsManager(jwtSecret, "JWT_PUBLIC_KEY"),
+        // Avisos de mensajes al celular: identity los manda directo a los servicios de avisos de
+        // Google, Apple y Mozilla (sale a internet por su IP pública, como hacia ECR).
+        ...(pushSecret
+          ? {
+              VAPID_PUBLIC_KEY: ecs.Secret.fromSecretsManager(pushSecret, "VAPID_PUBLIC_KEY"),
+              VAPID_PRIVATE_KEY: ecs.Secret.fromSecretsManager(pushSecret, "VAPID_PRIVATE_KEY"),
+              VAPID_SUBJECT: ecs.Secret.fromSecretsManager(pushSecret, "VAPID_SUBJECT"),
+            }
+          : {}),
       },
     });
     const identityService = identity.service;

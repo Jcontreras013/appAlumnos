@@ -30,6 +30,17 @@ const FIRST_LOGIN: HelpSection = {
   tip: "Tras 5 intentos fallidos la cuenta se bloquea 15 minutos. Es para proteger los datos de los alumnos.",
 };
 
+const MESSAGES: HelpSection = {
+  title: "Mensajes con el personal",
+  steps: [
+    "En «Mensajes», toca «Nuevo mensaje» y elige a la persona (puedes buscarla por nombre). Por ahora es solo entre maestros y dirección.",
+    "Escribe y toca «Enviar». Una marca (✓) quiere decir que se envió; dos marcas verdes (✓✓), que ya lo leyó.",
+    "El número junto a «Mensajes» en el menú te dice cuántas conversaciones tienen algo sin leer.",
+    "Para que el teléfono te avise, toca «Activar avisos» arriba de tus conversaciones. En iPhone, primero toca Compartir → «Agregar a inicio» y abre CONECTA desde ese ícono.",
+  ],
+  tip: "Los avisos llegan de lunes a viernes de 6:00 a. m. a 7:00 p. m.; lo que te escriban de noche te lo avisamos al empezar la jornada. Los mensajes no se borran: quedan como registro del centro.",
+};
+
 export const HELP_GUIDES: HelpGuide[] = [
   {
     key: "docente",
@@ -90,6 +101,7 @@ export const HELP_GUIDES: HelpGuide[] = [
           "En «Avisos» ves lo que la dirección publica para el personal.",
         ],
       },
+      MESSAGES,
       {
         title: "Reportar un incidente de conducta",
         steps: [
@@ -178,6 +190,7 @@ export const HELP_GUIDES: HelpGuide[] = [
           "Las familias lo ven en «Mis hijos».",
         ],
       },
+      MESSAGES,
       {
         title: "Traslados entre centros",
         steps: [

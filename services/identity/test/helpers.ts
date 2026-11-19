@@ -7,6 +7,7 @@ import { DEFAULT_TOKEN_SETTINGS, type TokenSettings } from "../src/config";
 import { type Db, migrationsFolder } from "../src/db/client";
 import * as schema from "../src/db/schema";
 import { generateSigningKeys } from "../src/lib/keys";
+import type { PushSender } from "../src/lib/push";
 import { grantAccess } from "../src/lib/users";
 
 export const SUPERADMIN = { email: "root@plataforma.test", password: "superadmin-segura-123" };
@@ -16,7 +17,10 @@ export const PASSWORD = "contraseña-de-prueba-1";
  * Levanta el servicio completo contra un Postgres real en memoria (PGlite) con las migraciones
  * reales. No necesita Docker ni una base externa, así que corre igual en local y en CI.
  */
-export async function setupIdentity(settings: Partial<TokenSettings> & { requireMfa?: boolean } = {}) {
+export async function setupIdentity(
+  settings: Partial<TokenSettings> & { requireMfa?: boolean } = {},
+  options: { push?: PushSender; now?: () => Date } = {},
+) {
   const client = new PGlite();
   const db = drizzle(client, { schema }) as unknown as Db;
   await migrate(drizzle(client, { schema }), { migrationsFolder: migrationsFolder() });
@@ -27,6 +31,8 @@ export async function setupIdentity(settings: Partial<TokenSettings> & { require
     keys,
     settings: { ...DEFAULT_TOKEN_SETTINGS, ...settings, loginRateLimitPerMinute: 1000 },
     logger: false,
+    push: options.push ?? null,
+    now: options.now,
   });
   await grantAccess(db, { name: "Root", role: "superadmin", ...SUPERADMIN });
 

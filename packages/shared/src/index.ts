@@ -8,6 +8,7 @@ export * from "./exports";
 export * from "./family";
 export * from "./format";
 export * from "./license";
+export * from "./messages";
 export * from "./money";
 export * from "./onboarding";
 export * from "./passwords";
