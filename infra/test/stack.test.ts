@@ -171,6 +171,39 @@ describe("seguridad de la infraestructura", () => {
     });
   });
 
+  it("si la base se reinicia, ECS no reemplaza las tareas: la revisión de salud no depende de ella", () => {
+    const tasks = Object.entries(template.findResources("AWS::ECS::TaskDefinition"));
+    for (const prefix of ["IdentityTask", "AcademicTask"]) {
+      const task = tasks.find(([id]) => id.startsWith(prefix))?.[1] as {
+        Properties: { ContainerDefinitions: Array<{ HealthCheck: { Command: string[] } }> };
+      };
+      const command = task.Properties.ContainerDefinitions[0]?.HealthCheck.Command.join(" ") ?? "";
+      expect(command).toContain("/health'");
+      expect(command).not.toContain("/health/ready");
+    }
+  });
+
+  it("el panel mantiene las conexiones más tiempo que el balanceador (sin 502 sueltos)", () => {
+    template.hasResourceProperties("AWS::ECS::TaskDefinition", {
+      ContainerDefinitions: Match.arrayWith([
+        Match.objectLike({
+          Name: "web",
+          Environment: Match.arrayWith([{ Name: "KEEP_ALIVE_TIMEOUT", Value: "185000" }]),
+        }),
+      ]),
+    });
+  });
+
+  it("respaldos y mantenimiento de la base de madrugada en Honduras, y registro de consultas lentas", () => {
+    template.hasResourceProperties("AWS::RDS::DBInstance", {
+      PreferredBackupWindow: "07:00-07:30",
+      PreferredMaintenanceWindow: "Sun:08:00-Sun:08:30",
+    });
+    template.hasResourceProperties("AWS::RDS::DBParameterGroup", {
+      Parameters: { log_min_duration_statement: "1000" },
+    });
+  });
+
   it("la llave de Claude llega como secreto a academic, solo si se indica", () => {
     const withoutKey = JSON.stringify(template.findResources("AWS::ECS::TaskDefinition"));
     expect(withoutKey).not.toContain("ANTHROPIC_API_KEY");
@@ -306,8 +339,14 @@ describe("producción (100 centros)", () => {
     });
   });
 
-  it("en producción el bucket de adjuntos se conserva aunque se borre el stack", () => {
+  it("en producción el bucket de adjuntos se conserva aunque se borre el stack, con versiones por 90 días", () => {
     prod.hasResource("AWS::S3::Bucket", { DeletionPolicy: "Retain", UpdateReplacePolicy: "Retain" });
+    prod.hasResourceProperties("AWS::S3::Bucket", {
+      VersioningConfiguration: { Status: "Enabled" },
+      LifecycleConfiguration: {
+        Rules: [Match.objectLike({ NoncurrentVersionExpiration: { NoncurrentDays: 90 } })],
+      },
+    });
   });
 
   it("los tres servicios escalan de 2 a 4 tareas según la CPU", () => {
@@ -330,8 +369,20 @@ describe("producción (100 centros)", () => {
     prod.resourceCountIs("AWS::WAFv2::WebACLAssociation", 1);
   });
 
-  it("alarmas por correo: errores, panel caído, CPU, memoria y base de datos", () => {
-    expect(Object.keys(prod.findResources("AWS::CloudWatch::Alarm")).length).toBeGreaterThanOrEqual(11);
+  it("alarmas por correo: errores, panel caído o lento, CPU, memoria y base de datos", () => {
+    expect(Object.keys(prod.findResources("AWS::CloudWatch::Alarm")).length).toBeGreaterThanOrEqual(14);
+    prod.hasResourceProperties("AWS::CloudWatch::Alarm", {
+      MetricName: "HTTPCode_ELB_5XX_Count",
+    });
+    prod.hasResourceProperties("AWS::CloudWatch::Alarm", {
+      MetricName: "TargetResponseTime",
+      ExtendedStatistic: "p95",
+      Threshold: 5,
+    });
+    prod.hasResourceProperties("AWS::CloudWatch::Alarm", {
+      MetricName: "DatabaseConnections",
+      Threshold: 150,
+    });
     prod.hasResourceProperties("AWS::SNS::Subscription", {
       Protocol: "email",
       Endpoint: "alertas@ejemplo.hn",

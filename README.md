@@ -295,6 +295,44 @@ pnpm test
   asistencia y notas. Medido en una computadora: tablero departamental ~1.4 s, indicadores del piloto
   ~0.6 s, Excel del departamento ~1.5 s (los centros se calculan de 4 en 4).
 
+## Robustez
+
+Lo que evita que un problema puntual se convierta en una caída, y cómo se comprobó:
+
+- **Base de datos:** cada consulta tiene un límite de 30 s y cada conexión 5 s para abrirse
+  (`DB_STATEMENT_TIMEOUT_MS`, `DB_CONNECT_TIMEOUT_MS`). Si la base corta conexiones (reinicio,
+  cambio de zona en Multi-AZ), el servicio no se cae: responde 503 «intenta de nuevo» y sigue.
+- **El cuaderno nunca pierde lo registrado:** se guarda primero en el teléfono y se reenvía hasta
+  que el servidor lo confirma; un 503 se reintenta solo.
+- **Despliegues sin cortes:** las consultas (GET) del panel a los servicios se reintentan una vez si
+  la conexión se corta, y las conexiones se mantienen abiertas más tiempo que el balanceador y Service
+  Connect (sin «502» sueltos).
+- **Asistente con respaldo:** si el proveedor de IA principal falla, se usa el siguiente que tenga
+  llave (ver abajo).
+
+**Prueba de carga del cierre de parcial** ([scripts/prueba-de-carga.mjs](scripts/prueba-de-carga.mjs)):
+maestros abriendo el cuaderno, guardando notas y pasando asistencia a la vez, y la dirección viendo
+el seguimiento. Con la demo cargada y `identity` y `academic` corriendo:
+
+```bash
+psql postgres://escolar:escolar@localhost:5432/escolar_identity -At -c "select u.email from users u join memberships m on m.user_id = u.id where m.role = 'docente' and u.email is not null" > /tmp/maestros.txt
+```
+
+```bash
+CUENTAS=/tmp/maestros.txt USUARIOS=150 DURACION=40 node scripts/prueba-de-carga.mjs
+```
+
+Medido en una computadora de 4 núcleos, con **una sola copia** de cada servicio (en AWS son 2 a 4):
+
+| Prueba                                       | Resultado                                                   |
+| -------------------------------------------- | ----------------------------------------------------------- |
+| 150 maestros a la vez                        | ~380 peticiones/s, 0 errores; el 95 % responde en < 0.3 s   |
+| 400 maestros a la vez                        | ~420 peticiones/s, 0 errores; el 95 % responde en ~1 s      |
+| 150 maestros y la base se reinicia dos veces | 0 caídas; solo 503 «intenta de nuevo» durante cada reinicio |
+| 200 inicios de sesión al mismo segundo       | todos en menos de 1 s                                       |
+
+Escribe notas y asistencia de verdad: úsala solo con la demo o un ambiente de pruebas.
+
 ## Asistente de planificación con IA
 
 En el editor de la planificación semanal, el docente escribe el tema (y, si quiere, indicaciones:
@@ -333,7 +371,10 @@ está bien configurado» y en los registros sale `404 model_not_found`; se arreg
 **Claude.** Llave de console.anthropic.com en `ANTHROPIC_API_KEY` (modelo `claude-opus-5-5`).
 
 Con varias llaves se usa la primera en este orden: Claude, Gemini, Groq. `PLAN_ASSISTANT_PROVIDER`
-(`claude`, `gemini` o `groq`) elige otro.
+(`claude`, `gemini` o `groq`) elige otro. **Las demás llaves quedan de respaldo:** si el principal
+está ocupado, llegó a su límite o tiene la llave vencida, el borrador sale del siguiente sin que el
+docente lo note (en los registros queda «se usa el de respaldo»). Un rechazo por el contenido no se
+reintenta con otro. `PLAN_ASSISTANT_FALLBACK=off` usa solo el principal.
 
 - En la demo con Docker, guarda la llave en un archivo `.env` junto a `docker-compose.demo.yml`:
   Docker Compose lo lee solo, y el proyecto lo deja fuera de git y de las imágenes. En PowerShell,

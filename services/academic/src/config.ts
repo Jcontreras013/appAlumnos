@@ -21,6 +21,8 @@ export interface AcademicConfig {
   identityUrl: string;
   /** Asistente de planificación con IA; null si la instalación no lo tiene. */
   planAssistant: PlanAssistantConfig | null;
+  /** Proveedores de respaldo (con llave) por si el principal falla. */
+  planAssistantBackups: PlanAssistantConfig[];
   /** Por qué el asistente quedó apagado aunque se pidió (para avisarlo en los registros). */
   planAssistantWarning: string | null;
 }
@@ -60,6 +62,29 @@ export function planAssistantFromEnv(env: NodeJS.ProcessEnv): {
   return { config: { provider, apiKey, model: model ? value(model) : undefined }, warning: null };
 }
 
+/**
+ * Respaldo del asistente: los demás proveedores que tienen llave, en el mismo orden. Si el principal
+ * falla (ocupado, sin cupo, llave vencida), se usa el siguiente. PLAN_ASSISTANT_FALLBACK=off lo evita.
+ */
+export function planAssistantBackupsFromEnv(
+  env: NodeJS.ProcessEnv,
+  primary: PlanAssistantConfig | null,
+): PlanAssistantConfig[] {
+  const value = (name: string) => env[name]?.trim() || undefined;
+  if (!primary || value("PLAN_ASSISTANT_FALLBACK") === "off") return [];
+  return (Object.keys(PROVIDERS) as Provider[])
+    .filter((p) => p !== primary.provider && value(PROVIDERS[p].key))
+    .map((p): PlanAssistantConfig => {
+      if (p === "claude") return { provider: p };
+      const model = PROVIDERS[p].model;
+      return {
+        provider: p,
+        apiKey: value(PROVIDERS[p].key) as string,
+        model: model ? value(model) : undefined,
+      };
+    });
+}
+
 export function loadConfig(): AcademicConfig {
   const assistant = planAssistantFromEnv(process.env);
   return {
@@ -68,6 +93,7 @@ export function loadConfig(): AcademicConfig {
     runMigrationsOnStart: optionalEnv("RUN_MIGRATIONS", "true") === "true",
     identityUrl: optionalEnv("IDENTITY_URL", "http://localhost:3001"),
     planAssistant: assistant.config,
+    planAssistantBackups: planAssistantBackupsFromEnv(process.env, assistant.config),
     planAssistantWarning: assistant.warning,
   };
 }

@@ -18,7 +18,8 @@ import { z } from "zod";
  * docente; nunca datos de alumnos. El borrador no se guarda: el docente lo revisa y lo guarda.
  *
  * Hay tres proveedores con la misma indicación y la misma plantilla: Claude (aquí), Gemini
- * (plan-assistant-gemini.ts) y Groq (plan-assistant-groq.ts). La instalación elige uno (ver config.ts).
+ * (plan-assistant-gemini.ts) y Groq (plan-assistant-groq.ts). La instalación elige el principal y,
+ * si tiene llave de otros, quedan de respaldo (ver config.ts y fallbackPlanDrafter).
  */
 
 export interface PlanDraftRequest {
@@ -69,6 +70,44 @@ export function causeChain(cause: unknown): unknown {
     current = current.cause;
   }
   return parts.join(" ← ");
+}
+
+/**
+ * Varios proveedores en fila: si el primero falla porque está ocupado, llegó a su límite, está mal
+ * configurado o devolvió algo incompleto, se pide el borrador al siguiente y el docente no se entera.
+ * Un rechazo por el contenido no se reintenta con otro (se respeta). Tampoco se pasa al siguiente si
+ * ya se gastó más de `budgetMs` (p. ej. el primero tardó hasta agotar su tiempo): no alcanzaría antes
+ * de que el panel deje de esperar.
+ */
+export function fallbackPlanDrafter(
+  drafters: Array<{ name: string; drafter: PlanDrafter }>,
+  options: {
+    budgetMs?: number;
+    onFallback?: (from: string, to: string, err: unknown) => void;
+    now?: () => number;
+  } = {},
+): PlanDrafter {
+  const [first, ...rest] = drafters;
+  if (!first) throw new Error("fallbackPlanDrafter necesita al menos un proveedor");
+  if (rest.length === 0) return first.drafter;
+  const budgetMs = options.budgetMs ?? 30_000;
+  const now = options.now ?? Date.now;
+  return {
+    async draft(request) {
+      const started = now();
+      for (let i = 0; ; i++) {
+        const current = drafters[i] as (typeof drafters)[number];
+        try {
+          return await current.drafter.draft(request);
+        } catch (err) {
+          const next = drafters[i + 1];
+          const refused = err instanceof PlanDraftError && err.reason === "refused";
+          if (!next || refused || now() - started > budgetMs) throw err;
+          options.onFallback?.(current.name, next.name, err);
+        }
+      }
+    },
+  };
 }
 
 /** Lo que ve el docente cuando no sale el borrador (igual con cualquier proveedor). */

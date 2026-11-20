@@ -11,6 +11,9 @@ export interface CreateServiceOptions {
   readiness?: () => Promise<void>;
 }
 
+/** Más que los 5 min que el proxy de Service Connect mantiene una conexión sin uso. */
+export const KEEP_ALIVE_MS = 310_000;
+
 /** Campos que nunca deben llegar a los logs. */
 const REDACT = [
   "req.headers.authorization",
@@ -46,6 +49,10 @@ export async function createService(options: CreateServiceOptions): Promise<Fast
     requestIdHeader: "x-request-id",
     genReqId: () => randomUUID(),
     bodyLimit: 1024 * 1024,
+    // El proxy de Service Connect deja abiertas las conexiones hasta 5 min sin uso. Si el servicio
+    // las cerrara antes, el proxy podría mandar una petición por una conexión ya cerrada y el
+    // usuario vería un error suelto. Regla: el servidor espera más que quien le reusa la conexión.
+    keepAliveTimeout: KEEP_ALIVE_MS,
   });
 
   await app.register(helmet, { global: true });

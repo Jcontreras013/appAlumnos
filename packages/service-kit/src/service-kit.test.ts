@@ -11,8 +11,9 @@ import {
   tenantOf,
 } from "./auth";
 import { databaseUrlFromEnv } from "./config";
-import { conflict, isUniqueViolation, parseOrThrow } from "./errors";
-import { createService } from "./server";
+import { createDb, poolConfig, requestPoolConfig } from "./db";
+import { conflict, isDatabaseUnavailable, isUniqueViolation, parseOrThrow } from "./errors";
+import { createService, KEEP_ALIVE_MS } from "./server";
 
 const keys = await generateKeyPair(JWT_ALGORITHM, { extractable: true });
 const otherKeys = await generateKeyPair(JWT_ALGORITHM);
@@ -47,6 +48,13 @@ beforeAll(async () => {
   });
   app.get("/explota", async () => {
     throw new Error("detalle interno: password=1234");
+  });
+  app.get("/base-reiniciando", async () => {
+    throw Object.assign(new Error("Failed query: select 1"), {
+      cause: Object.assign(new Error("terminating connection due to administrator command"), {
+        code: "57P01",
+      }),
+    });
   });
 });
 afterAll(() => app.close());
@@ -129,6 +137,27 @@ describe("errores", () => {
     expect(res.headers["x-content-type-options"]).toBe("nosniff");
   });
 
+  it("si la base se está reiniciando, responde 503 «intenta de nuevo» (no un error inesperado)", async () => {
+    const res = await get("/base-reiniciando");
+    expect(res.statusCode).toBe(503);
+    expect(res.headers["retry-after"]).toBe("5");
+    expect(res.json()).toMatchObject({ error: { code: "service_unavailable" } });
+  });
+
+  it("reconoce cuando la base no está disponible, aunque venga envuelto por el ORM", () => {
+    const shutdown = Object.assign(new Error("terminating connection due to administrator command"), {
+      code: "57P01",
+    });
+    expect(isDatabaseUnavailable({ message: "Failed query", cause: shutdown })).toBe(true);
+    expect(isDatabaseUnavailable(new Error("Connection terminated unexpectedly"))).toBe(true);
+    expect(isDatabaseUnavailable(new Error("timeout exceeded when trying to connect"))).toBe(true);
+    expect(isDatabaseUnavailable({ cause: { code: "ECONNREFUSED" } })).toBe(true);
+    const rollback = new Error("Client has encountered a connection error and is not queryable");
+    expect(isDatabaseUnavailable({ message: "Failed query: rollback", cause: rollback })).toBe(true);
+    expect(isDatabaseUnavailable({ cause: { code: "23505" } })).toBe(false);
+    expect(isDatabaseUnavailable(new Error("otro"))).toBe(false);
+  });
+
   it("detecta violaciones UNIQUE aunque vengan envueltas por el ORM", () => {
     const pgError = { code: "23505", constraint: "users_email_unique" };
     expect(isUniqueViolation({ message: "wrapped", cause: pgError }, "users_email_unique")).toBe(true);
@@ -154,5 +183,64 @@ describe("configuración", () => {
     } finally {
       process.env = saved;
     }
+  });
+});
+
+describe("conexiones", () => {
+  it("el servicio mantiene las conexiones más tiempo que el proxy que las reusa", () => {
+    expect(app.server.keepAliveTimeout).toBe(KEEP_ALIVE_MS);
+    expect(KEEP_ALIVE_MS).toBeGreaterThan(5 * 60 * 1000);
+  });
+});
+
+describe("base de datos", () => {
+  it("las peticiones tienen límite de tiempo; las migraciones no", () => {
+    const url = "postgres://u:p@db:5432/escolar_identity?sslmode=require";
+    const config = requestPoolConfig(url, {
+      connectTimeoutMs: 5000,
+      statementTimeoutMs: 30000,
+      idleInTransactionTimeoutMs: 60000,
+      maxConnections: 10,
+    });
+    expect(config).toMatchObject({
+      connectionTimeoutMillis: 5000,
+      statement_timeout: 30000,
+      idle_in_transaction_session_timeout: 60000,
+      keepAlive: true,
+      max: 10,
+      ssl: { rejectUnauthorized: false },
+    });
+    expect(config.maxLifetimeSeconds).toBeGreaterThan(0);
+    expect(poolConfig(url)).not.toHaveProperty("statement_timeout");
+  });
+
+  it("si la base cierra una conexión inactiva, el servicio no se cae", async () => {
+    const seen: Error[] = [];
+    const { pool } = createDb("postgres://u:p@127.0.0.1:1/x", {}, { onIdleError: (err) => seen.push(err) });
+    expect(pool.listenerCount("error")).toBe(1);
+    expect(() =>
+      pool.emit("error", new Error("terminating connection due to administrator command")),
+    ).not.toThrow();
+    expect(seen).toHaveLength(1);
+    await pool.end();
+  });
+
+  it("sin base de datos, la petición falla rápido en vez de quedarse esperando", async () => {
+    const { pool } = createDb(
+      "postgres://u:p@10.255.255.1:5432/x",
+      {},
+      {
+        limits: {
+          connectTimeoutMs: 300,
+          statementTimeoutMs: 1000,
+          idleInTransactionTimeoutMs: 1000,
+          maxConnections: 1,
+        },
+      },
+    );
+    const started = Date.now();
+    await expect(pool.query("select 1")).rejects.toThrow();
+    expect(Date.now() - started).toBeLessThan(3000);
+    await pool.end();
   });
 });

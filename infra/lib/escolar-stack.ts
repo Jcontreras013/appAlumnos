@@ -136,6 +136,15 @@ export class EscolarStack extends Stack {
       deletionProtection: isProd,
       removalPolicy: isProd ? RemovalPolicy.SNAPSHOT : RemovalPolicy.DESTROY,
       cloudwatchLogsExports: ["postgresql"],
+      // Respaldos y mantenimiento de madrugada en Honduras (UTC-6), nunca en horario de clases:
+      // respaldo diario a la 1:00 a. m. y actualizaciones de AWS los domingos a las 2:00 a. m.
+      preferredBackupWindow: "07:00-07:30",
+      preferredMaintenanceWindow: "Sun:08:00-Sun:08:30",
+      // Registra las consultas que tardan más de 1 s, para encontrar lo lento antes de que se note.
+      parameterGroup: new rds.ParameterGroup(this, "ParametrosPostgres", {
+        engine: rds.DatabaseInstanceEngine.postgres({ version: rds.PostgresEngineVersion.VER_16 }),
+        parameters: { log_min_duration_statement: "1000" },
+      }),
     });
     const dbSecret = database.secret;
     if (!dbSecret) throw new Error("RDS no generó el secreto de credenciales");
@@ -201,10 +210,13 @@ export class EscolarStack extends Stack {
           DB_PASSWORD: ecs.Secret.fromSecretsManager(dbSecret, "password"),
           ...options.secrets,
         },
+        // Solo revisa que el proceso responda (/health), no la base (/health/ready): si la base se
+        // reinicia o cambia de zona por un par de minutos, las tareas siguen vivas y se recuperan
+        // solas en cuanto vuelve, en vez de que ECS las reemplace todas a la vez.
         healthCheck: {
           command: [
             "CMD-SHELL",
-            `node -e "fetch('http://localhost:${options.port}/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"`,
+            `node -e "fetch('http://localhost:${options.port}/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"`,
           ],
           interval: Duration.seconds(30),
           startPeriod: Duration.seconds(60),
@@ -247,6 +259,15 @@ export class EscolarStack extends Stack {
       objectOwnership: s3.ObjectOwnership.BUCKET_OWNER_ENFORCED,
       removalPolicy: isProd ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY,
       autoDeleteObjects: !isProd,
+      // En producción se guardan versiones: si un archivo se borra o se sobrescribe por error, la
+      // versión anterior se puede recuperar durante 90 días.
+      versioned: isProd,
+      lifecycleRules: [
+        {
+          abortIncompleteMultipartUploadAfter: Duration.days(1),
+          ...(isProd ? { noncurrentVersionExpiration: Duration.days(90) } : {}),
+        },
+      ],
     });
     // Identity llega a S3 por dentro de la VPC (sin costo y sin pasar por internet).
     vpc.addGatewayEndpoint("S3", {
@@ -351,6 +372,10 @@ export class EscolarStack extends Stack {
           IDENTITY_URL: "http://identity:3001",
           ACADEMIC_URL: "http://academic:3002",
           COOKIE_SECURE: certificate ? "true" : "false",
+          // El balanceador reusa cada conexión hasta 3 min (idleTimeout). Next.js las cierra a los
+          // 5 s por defecto, y entonces el balanceador a veces manda una petición por una conexión
+          // ya cerrada y el usuario ve un «502» suelto. El servidor debe esperar más que el balanceador.
+          KEEP_ALIVE_TIMEOUT: String(185_000),
         },
         logDriver: ecs.LogDrivers.awsLogs({
           streamPrefix: "web",
@@ -453,6 +478,19 @@ export class EscolarStack extends Stack {
       2,
     );
     alarm(
+      "AlarmaErroresBalanceador",
+      "El balanceador está devolviendo errores propios (502/503/504): tareas caídas o conexiones cortadas",
+      web.loadBalancer.metrics.httpCodeElb(elbv2.HttpCodeElb.ELB_5XX_COUNT, { period: fiveMinutes }),
+      10,
+      2,
+    );
+    alarm(
+      "AlarmaPanelLento",
+      "El panel está lento: el 5 % de las peticiones más lentas tarda más de 5 s",
+      web.loadBalancer.metrics.targetResponseTime({ period: fiveMinutes, statistic: "p95" }),
+      5,
+    );
+    alarm(
       "AlarmaPanelCaido",
       "El balanceador no tiene ninguna tarea sana del panel",
       web.targetGroup.metrics.unhealthyHostCount({ period: Duration.minutes(1) }),
@@ -482,6 +520,12 @@ export class EscolarStack extends Stack {
       "Base de datos: CPU alta por 15 minutos",
       database.metricCPUUtilization({ period: fiveMinutes }),
       80,
+    );
+    alarm(
+      "AlarmaBaseConexiones",
+      "Base de datos: muchas conexiones abiertas (cerca del máximo de la instancia)",
+      database.metricDatabaseConnections({ period: fiveMinutes }),
+      isProd ? 150 : 60,
     );
     new cloudwatch.Alarm(this, "AlarmaBaseDisco", {
       alarmDescription: "Base de datos: queda poco disco (menos de 5 GB)",
