@@ -23,6 +23,11 @@ export interface IdentityConfig extends TokenSettings {
   jwtPublicKeyPem: string;
   /** Llaves de los avisos al celular (Web Push). Sin ellas los mensajes funcionan, sin avisos. */
   vapid: { publicKey: string; privateKey: string; subject: string } | null;
+  /**
+   * Fotos, videos y documentos de los mensajes: FILES_BUCKET (S3, en AWS) o FILES_DIR (una carpeta,
+   * en la demo). Sin ninguna, la carpeta `.adjuntos` junto al servicio.
+   */
+  files: { kind: "s3"; bucket: string } | { kind: "local"; dir: string | null };
 }
 
 export const DEFAULT_TOKEN_SETTINGS: TokenSettings = {
@@ -51,6 +56,9 @@ export function loadConfig(): IdentityConfig {
     jwtPrivateKeyPem: pemEnv("JWT_PRIVATE_KEY"),
     jwtPublicKeyPem: pemEnv("JWT_PUBLIC_KEY"),
     vapid: vapidFromEnv(),
+    files: process.env.FILES_BUCKET?.trim()
+      ? { kind: "s3", bucket: process.env.FILES_BUCKET.trim() }
+      : { kind: "local", dir: process.env.FILES_DIR?.trim() || null },
   };
 }
 

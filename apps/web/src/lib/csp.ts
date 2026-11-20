@@ -9,6 +9,8 @@ export function contentSecurityPolicy(nonce?: string): string {
     nonce ? `script-src 'self' 'nonce-${nonce}'` : "script-src 'self' 'unsafe-inline'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
+    // Videos de los mensajes (blob: es la vista previa antes de enviarlos).
+    "media-src 'self' blob:",
     "font-src 'self' data:",
     "connect-src 'self'",
     "worker-src 'self'",

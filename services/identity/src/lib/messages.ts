@@ -1,7 +1,14 @@
-import { MESSAGING_ROLES, type MessagingRole, type PushPayload, withinNotifyHours } from "@escolar/shared";
+import {
+  type AttachmentKind,
+  MESSAGING_ROLES,
+  type MessagingRole,
+  type PushPayload,
+  withinNotifyHours,
+} from "@escolar/shared";
 import { and, asc, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import type { DbOrTx } from "../db/client";
 import { conversationMembers, conversations, memberships, pushSubscriptions, users } from "../db/schema";
+import { noticeText } from "./attachments";
 import type { PushSender } from "./push";
 
 /** Personas del centro que usan los mensajes: cuenta y acceso activos, con un cargo habilitado. */
@@ -55,9 +62,13 @@ export async function pushToUsers(
   return results.filter((r) => r === "sent").length;
 }
 
-export const messagePayload = (conversationId: string, senderName: string): PushPayload => ({
+export const messagePayload = (
+  conversationId: string,
+  senderName: string,
+  attachment: AttachmentKind | null = null,
+): PushPayload => ({
   title: senderName,
-  body: "Te envió un mensaje.",
+  body: noticeText(attachment),
   url: `/panel/mensajes/${conversationId}`,
   tag: `conversacion-${conversationId}`,
 });

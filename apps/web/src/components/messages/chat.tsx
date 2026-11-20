@@ -1,9 +1,23 @@
 "use client";
 
-import { type ConversationDto, MESSAGE_MAX_LENGTH, type MessageDto } from "@escolar/shared";
+import {
+  ATTACHMENTS_PER_SEND,
+  type ConversationDto,
+  MESSAGE_MAX_LENGTH,
+  type MessageDto,
+} from "@escolar/shared";
 import Link from "next/link";
 import { Fragment, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { type SendResult, sendMessageAction } from "@/app/panel/mensajes/actions";
+import { AttachmentView, FileBadge } from "./attachment-view";
+import {
+  PICK_DOCUMENTS,
+  PICK_MEDIA,
+  type PreparedFile,
+  prepareFile,
+  refreshSession,
+  uploadAttachment,
+} from "./attachments";
 import { Avatar } from "./conversation-list";
 import { dayKey, dayLabel, messageTime, notifyMessagesChanged, ROLE_SHORT } from "./format";
 import { fetchPanelJson, usePoll } from "./use-poll";
@@ -15,6 +29,9 @@ interface Pending {
   sentAt: string;
   status: "sending" | "failed";
   error?: string;
+  /** Foto, video o documento que se está subiendo, con su avance (0 a 1). */
+  file?: PreparedFile;
+  progress?: number;
 }
 
 const byTime = (a: MessageDto, b: MessageDto) => a.sentAt.localeCompare(b.sentAt) || a.id.localeCompare(b.id);
@@ -35,11 +52,11 @@ function Ticks({ seen }: { seen: boolean }) {
   );
 }
 
-function Bubble({ mine, children }: { mine: boolean; children: ReactNode }) {
+function Bubble({ mine, media, children }: { mine: boolean; media?: boolean; children: ReactNode }) {
   return (
     <div className={`flex ${mine ? "justify-end" : "justify-start"}`}>
       <div
-        className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-sm shadow-sm sm:max-w-[70%] ${
+        className={`max-w-[85%] rounded-2xl text-sm shadow-sm sm:max-w-[70%] ${media ? "p-1.5" : "px-3.5 py-2"} ${
           mine
             ? "rounded-br-md bg-brand-100 text-slate-900"
             : "rounded-bl-md border border-slate-200 bg-white text-slate-900"
@@ -48,6 +65,57 @@ function Bubble({ mine, children }: { mine: boolean; children: ReactNode }) {
         {children}
       </div>
     </div>
+  );
+}
+
+/** Vista previa de lo que se eligió o se está subiendo. */
+function FileThumb({ file, size = "h-16 w-16" }: { file: PreparedFile; size?: string }) {
+  if (file.kind === "foto" && file.preview) {
+    // biome-ignore lint/performance/noImgElement: vista previa local (blob:) antes de enviarla.
+    return <img src={file.preview} alt={file.name} className={`${size} rounded-lg object-cover`} />;
+  }
+  if (file.kind === "video" && file.preview) {
+    return (
+      <span className={`relative block ${size}`}>
+        <video
+          src={file.preview}
+          muted
+          playsInline
+          preload="metadata"
+          className="h-full w-full rounded-lg bg-black object-cover"
+        />
+        <span
+          aria-hidden="true"
+          className="absolute inset-0 grid place-items-center text-lg text-white drop-shadow"
+        >
+          ▶
+        </span>
+      </span>
+    );
+  }
+  return (
+    <span className={`grid ${size} place-items-center rounded-lg border border-slate-200 bg-white`}>
+      <FileBadge name={file.name} />
+    </span>
+  );
+}
+
+function ClipIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      aria-hidden="true"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M20.5 11.5l-8.2 8.2a5 5 0 01-7.1-7.1l8.5-8.5a3.3 3.3 0 014.7 4.7l-8.5 8.5a1.7 1.7 0 01-2.4-2.4l7.8-7.8"
+      />
+    </svg>
   );
 }
 
@@ -63,6 +131,13 @@ export function Chat({ initial }: { initial: ConversationDto }) {
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [newBelow, setNewBelow] = useState(false);
   const [online, setOnline] = useState(true);
+  /** Fotos, videos y documentos elegidos, esperando a que se toque «Enviar». */
+  const [staged, setStaged] = useState<PreparedFile[]>([]);
+  const [stageError, setStageError] = useState<string | null>(null);
+  const [preparing, setPreparing] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const mediaInput = useRef<HTMLInputElement>(null);
+  const docInput = useRef<HTMLInputElement>(null);
 
   const scroller = useRef<HTMLDivElement>(null);
   const textarea = useRef<HTMLTextAreaElement>(null);
@@ -130,6 +205,12 @@ export function Chat({ initial }: { initial: ConversationDto }) {
     if (nearBottom.current) setNewBelow(false);
   };
 
+  /** Una foto o un video cambian de alto al cargar: si se estaba al final, se sigue al final. */
+  const onMediaLoad = () => {
+    const el = scroller.current;
+    if (el && nearBottom.current) el.scrollTop = el.scrollHeight;
+  };
+
   const toBottom = () => {
     const el = scroller.current;
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
@@ -189,11 +270,78 @@ export function Chat({ initial }: { initial: ConversationDto }) {
     }
   }
 
+  /** Sube un archivo como mensaje; la burbuja muestra el avance hasta que el servidor lo confirma. */
+  async function upload(file: PreparedFile, retry?: Pending) {
+    const localId = retry?.localId ?? `local-${++localIds.current}`;
+    const update = (patch: Partial<Pending>) =>
+      setPending((list) => list.map((p) => (p.localId === localId ? { ...p, ...patch } : p)));
+    if (retry) update({ status: "sending", error: undefined, progress: 0 });
+    else {
+      setPending((list) => [
+        ...list,
+        { localId, body: "", sentAt: new Date().toISOString(), status: "sending", file, progress: 0 },
+      ]);
+    }
+    nearBottom.current = true;
+    const result = await uploadAttachment(id, file, (progress) => update({ progress }));
+    if (result.ok) {
+      setPending((list) => list.filter((p) => p.localId !== localId));
+      if (file.preview) URL.revokeObjectURL(file.preview);
+      merge([result.message]);
+      notifyMessagesChanged();
+    } else {
+      update({ status: "failed", error: result.error });
+    }
+  }
+
+  /** «Enviar»: primero los archivos elegidos (uno por uno, para no saturar la conexión), luego el texto. */
+  async function sendAll() {
+    const files = staged;
+    const text = draft;
+    setStaged([]);
+    setStageError(null);
+    if (files.length > 0) {
+      setDraft("");
+      requestAnimationFrame(resize);
+      await refreshSession();
+      for (const file of files) await upload(file);
+    }
+    if (text.trim()) await send(text);
+  }
+
+  async function onPick(list: FileList | null) {
+    setMenuOpen(false);
+    if (!list || list.length === 0) return;
+    const room = ATTACHMENTS_PER_SEND - staged.length;
+    const chosen = [...list].slice(0, Math.max(0, room));
+    const errors: string[] = [];
+    if (list.length > room) errors.push(`Puedes enviar hasta ${ATTACHMENTS_PER_SEND} archivos a la vez.`);
+    setPreparing(true);
+    const ready: PreparedFile[] = [];
+    for (const file of chosen) {
+      const prepared = await prepareFile(file);
+      if ("error" in prepared) errors.push(prepared.error);
+      else ready.push(prepared);
+    }
+    setPreparing(false);
+    setStaged((current) => [...current, ...ready]);
+    setStageError(errors.length > 0 ? errors.join(" ") : null);
+  }
+
+  function unstage(index: number) {
+    setStaged((current) => {
+      const file = current[index];
+      if (file?.preview) URL.revokeObjectURL(file.preview);
+      return current.filter((_, i) => i !== index);
+    });
+  }
+
+  const canSubmit = (draft.trim().length > 0 || staged.length > 0) && !preparing;
   const firstName = other.name.split(/\s+/)[0] ?? other.name;
   let previousDay = "";
 
   return (
-    <section className="card flex h-[calc(100dvh-14.5rem)] min-h-[24rem] flex-col overflow-hidden md:h-[calc(100dvh-12rem)]">
+    <section className="card flex h-[calc(100dvh-14.5rem)] min-h-[24rem] flex-col overflow-clip md:h-[calc(100dvh-12rem)]">
       <header className="flex items-center gap-3 border-b border-slate-200 px-4 py-3">
         <Link
           href="/panel/mensajes"
@@ -255,9 +403,14 @@ export function Chat({ initial }: { initial: ConversationDto }) {
                     </span>
                   </p>
                 )}
-                <Bubble mine={m.mine}>
-                  <p className="whitespace-pre-wrap break-words">{m.body}</p>
-                  <p className="mt-1 flex items-center justify-end gap-1.5 text-[11px] text-slate-500">
+                <Bubble mine={m.mine} media={m.attachment !== null && m.attachment.kind !== "archivo"}>
+                  {m.attachment && <AttachmentView attachment={m.attachment} onLoad={onMediaLoad} />}
+                  {m.body && <p className="whitespace-pre-wrap break-words">{m.body}</p>}
+                  <p
+                    className={`mt-1 flex items-center justify-end gap-1.5 text-[11px] text-slate-500 ${
+                      m.attachment && m.attachment.kind !== "archivo" ? "px-1.5 pb-0.5" : ""
+                    }`}
+                  >
                     {messageTime(m.sentAt)}
                     {m.mine && <Ticks seen={m.seen} />}
                   </p>
@@ -267,9 +420,35 @@ export function Chat({ initial }: { initial: ConversationDto }) {
           })}
           {pending.map((p) => (
             <Bubble key={p.localId} mine>
-              <p className="whitespace-pre-wrap break-words">{p.body}</p>
+              {p.file ? (
+                <div className="flex items-center gap-3">
+                  <FileThumb file={p.file} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{p.file.name}</p>
+                    {p.status === "sending" && (
+                      <div
+                        className="mt-1.5 h-1.5 w-32 overflow-hidden rounded-full bg-white"
+                        role="progressbar"
+                        aria-label="Avance del envío"
+                        aria-valuenow={Math.round((p.progress ?? 0) * 100)}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
+                      >
+                        <div
+                          className="h-full rounded-full bg-brand-600 transition-[width]"
+                          style={{ width: `${Math.round((p.progress ?? 0) * 100)}%` }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <p className="whitespace-pre-wrap break-words">{p.body}</p>
+              )}
               {p.status === "sending" ? (
-                <p className="mt-1 text-right text-[11px] text-slate-500">Enviando…</p>
+                <p className="mt-1 text-right text-[11px] text-slate-500">
+                  {p.file ? `Enviando… ${Math.round((p.progress ?? 0) * 100)}%` : "Enviando…"}
+                </p>
               ) : (
                 <div className="mt-1 space-y-1 text-right text-xs">
                   <p className="font-medium text-red-700">{p.error ?? "No se envió"}</p>
@@ -277,14 +456,17 @@ export function Chat({ initial }: { initial: ConversationDto }) {
                     <button
                       type="button"
                       className="font-semibold text-brand-700 underline"
-                      onClick={() => void send(p.body, p)}
+                      onClick={() => void (p.file ? upload(p.file, p) : send(p.body, p))}
                     >
                       Reintentar
                     </button>
                     <button
                       type="button"
                       className="text-slate-500 underline"
-                      onClick={() => setPending((list) => list.filter((x) => x.localId !== p.localId))}
+                      onClick={() => {
+                        if (p.file?.preview) URL.revokeObjectURL(p.file.preview);
+                        setPending((list) => list.filter((x) => x.localId !== p.localId));
+                      }}
                     >
                       Descartar
                     </button>
@@ -305,14 +487,91 @@ export function Chat({ initial }: { initial: ConversationDto }) {
         )}
       </div>
 
+      {canSend && (staged.length > 0 || stageError || preparing) && (
+        <div className="border-t border-slate-200 bg-white px-3 pt-3">
+          {stageError && (
+            <p role="alert" className="mb-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-800">
+              {stageError}
+            </p>
+          )}
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {staged.map((file, i) => (
+              <div key={file.id} className="relative shrink-0">
+                <FileThumb file={file} />
+                <button
+                  type="button"
+                  onClick={() => unstage(i)}
+                  className="absolute -right-1.5 -top-1.5 grid h-6 w-6 place-items-center rounded-full bg-slate-800 text-xs text-white shadow"
+                  aria-label={`Quitar ${file.name}`}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+            {preparing && <p className="self-center text-xs text-slate-500">Preparando…</p>}
+          </div>
+        </div>
+      )}
+
       {canSend ? (
         <form
-          className="flex items-end gap-2 border-t border-slate-200 bg-white p-3"
+          className="relative flex items-end gap-2 border-t border-slate-200 bg-white p-3"
           onSubmit={(e) => {
             e.preventDefault();
-            void send(draft);
+            void sendAll();
           }}
         >
+          <input
+            ref={mediaInput}
+            type="file"
+            accept={PICK_MEDIA}
+            multiple
+            hidden
+            onChange={(e) => {
+              void onPick(e.target.files);
+              e.target.value = "";
+            }}
+          />
+          <input
+            ref={docInput}
+            type="file"
+            accept={PICK_DOCUMENTS}
+            multiple
+            hidden
+            onChange={(e) => {
+              void onPick(e.target.files);
+              e.target.value = "";
+            }}
+          />
+          <div className="relative shrink-0">
+            <button
+              type="button"
+              className="btn-secondary px-2.5 py-2"
+              aria-label="Adjuntar foto, video o documento"
+              aria-expanded={menuOpen}
+              onClick={() => setMenuOpen((open) => !open)}
+            >
+              <ClipIcon />
+            </button>
+            {menuOpen && (
+              <div className="absolute bottom-12 left-0 z-10 w-48 overflow-hidden rounded-xl border border-slate-200 bg-white text-sm shadow-lg">
+                <button
+                  type="button"
+                  className="block w-full px-4 py-2.5 text-left hover:bg-slate-50"
+                  onClick={() => mediaInput.current?.click()}
+                >
+                  📷 Foto o video
+                </button>
+                <button
+                  type="button"
+                  className="block w-full border-t border-slate-100 px-4 py-2.5 text-left hover:bg-slate-50"
+                  onClick={() => docInput.current?.click()}
+                >
+                  📄 Documento
+                </button>
+              </div>
+            )}
+          </div>
           <label htmlFor={`mensaje-${id}`} className="sr-only">
             Escribe un mensaje
           </label>
@@ -323,7 +582,7 @@ export function Chat({ initial }: { initial: ConversationDto }) {
               rows={1}
               value={draft}
               maxLength={MESSAGE_MAX_LENGTH}
-              placeholder="Escribe un mensaje"
+              placeholder={staged.length > 0 ? "Agrega un mensaje (opcional)" : "Escribe un mensaje"}
               className="input max-h-40 resize-none"
               onChange={(e) => {
                 setDraft(e.target.value);
@@ -338,7 +597,7 @@ export function Chat({ initial }: { initial: ConversationDto }) {
                   !e.nativeEvent.isComposing
                 ) {
                   e.preventDefault();
-                  void send(draft);
+                  if (canSubmit) void sendAll();
                 }
               }}
             />
@@ -348,7 +607,7 @@ export function Chat({ initial }: { initial: ConversationDto }) {
               </p>
             )}
           </div>
-          <button type="submit" className="btn-primary shrink-0" disabled={!draft.trim()}>
+          <button type="submit" className="btn-primary shrink-0" disabled={!canSubmit}>
             Enviar
           </button>
         </form>

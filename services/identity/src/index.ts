@@ -1,6 +1,7 @@
 import { buildApp } from "./app";
 import { loadConfig } from "./config";
 import { createDb, runMigrations } from "./db/client";
+import { DEFAULT_FILES_DIR, localFileStore, s3FileStore } from "./lib/files";
 import { loadSigningKeys } from "./lib/keys";
 import { sendPendingNotices } from "./lib/messages";
 import { webPushSender } from "./lib/push";
@@ -18,7 +19,17 @@ const keys = await loadSigningKeys({
   publicKeyPem: config.jwtPublicKeyPem,
 });
 const push = config.vapid ? webPushSender(config.vapid) : null;
-const app = await buildApp({ db, keys, settings: config, push });
+const files =
+  config.files.kind === "s3"
+    ? s3FileStore(config.files.bucket)
+    : localFileStore(config.files.dir ?? DEFAULT_FILES_DIR);
+const app = await buildApp({ db, keys, settings: config, push, files });
+app.log.info(
+  config.files.kind === "s3"
+    ? { bucket: config.files.bucket }
+    : { dir: config.files.dir ?? DEFAULT_FILES_DIR },
+  "Adjuntos de los mensajes",
+);
 
 // Avisos de los mensajes que llegaron fuera del horario de atención: se revisa cada 5 minutos y se
 // manda al empezar la jornada.

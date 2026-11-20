@@ -3,6 +3,7 @@
 import { type ConversationSummaryDto, matchesSearch } from "@escolar/shared";
 import Link from "next/link";
 import { useState } from "react";
+import { attachmentPreview } from "./attachment-view";
 import { initials, listTime, ROLE_SHORT } from "./format";
 import { fetchPanelJson, usePoll } from "./use-poll";
 
@@ -93,7 +94,13 @@ export function ConversationList({
                     </span>
                     <span className="mt-0.5 flex items-center justify-between gap-2">
                       <span className={`truncate text-sm ${c.unread ? "text-slate-700" : "text-slate-500"}`}>
-                        {c.lastMessage ? `${c.lastMessage.mine ? "Tú: " : ""}${c.lastMessage.body}` : ""}
+                        {c.lastMessage
+                          ? `${c.lastMessage.mine ? "Tú: " : ""}${
+                              c.lastMessage.attachment
+                                ? attachmentPreview(c.lastMessage.attachment)
+                                : c.lastMessage.body
+                            }`
+                          : ""}
                       </span>
                       {c.unread > 0 && (
                         <span className="grid h-5 min-w-5 shrink-0 place-items-center rounded-full bg-brand-600 px-1.5 text-xs font-semibold text-white">

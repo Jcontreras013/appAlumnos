@@ -124,6 +124,53 @@ describe("seguridad de la infraestructura", () => {
     });
   });
 
+  it("fotos, videos y documentos de los mensajes: bucket privado, cifrado y solo para identity", () => {
+    template.hasResourceProperties("AWS::S3::Bucket", {
+      PublicAccessBlockConfiguration: {
+        BlockPublicAcls: true,
+        BlockPublicPolicy: true,
+        IgnorePublicAcls: true,
+        RestrictPublicBuckets: true,
+      },
+      BucketEncryption: {
+        ServerSideEncryptionConfiguration: [{ ServerSideEncryptionByDefault: { SSEAlgorithm: "AES256" } }],
+      },
+    });
+    // Solo por HTTPS.
+    template.hasResourceProperties("AWS::S3::BucketPolicy", {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({ Effect: "Deny", Condition: { Bool: { "aws:SecureTransport": "false" } } }),
+        ]),
+      },
+    });
+    const tasks = template.findResources("AWS::ECS::TaskDefinition");
+    const env = (prefix: string) => {
+      const task = Object.entries(tasks).find(([id]) => id.startsWith(prefix))?.[1] as
+        | { Properties: { ContainerDefinitions: Array<{ Environment?: Array<{ Name: string }> }> } }
+        | undefined;
+      return task?.Properties.ContainerDefinitions[0]?.Environment?.map((e) => e.Name) ?? [];
+    };
+    expect(env("IdentityTask")).toContain("FILES_BUCKET");
+    expect(env("AcademicTask")).not.toContain("FILES_BUCKET");
+    // Solo el rol de identity puede leer y escribir en el bucket.
+    const policies = Object.entries(template.findResources("AWS::IAM::Policy")).filter(([, p]) =>
+      JSON.stringify(p).includes("s3:PutObject"),
+    );
+    expect(policies.map(([id]) => id).every((id) => id.startsWith("IdentityTaskTaskRole"))).toBe(true);
+    expect(policies.length).toBeGreaterThan(0);
+    template.hasResourceProperties("AWS::EC2::VPCEndpoint", { VpcEndpointType: "Gateway" });
+  });
+
+  it("un video largo no se corta entre web e identity", () => {
+    const identity = Object.entries(template.findResources("AWS::ECS::Service")).find(([id]) =>
+      id.startsWith("IdentityService"),
+    )?.[1] as { Properties: { ServiceConnectConfiguration: { Services: Array<Record<string, unknown>> } } };
+    expect(identity.Properties.ServiceConnectConfiguration.Services[0]).toMatchObject({
+      Timeout: { PerRequestTimeoutSeconds: 600 },
+    });
+  });
+
   it("la llave de Claude llega como secreto a academic, solo si se indica", () => {
     const withoutKey = JSON.stringify(template.findResources("AWS::ECS::TaskDefinition"));
     expect(withoutKey).not.toContain("ANTHROPIC_API_KEY");
@@ -257,6 +304,10 @@ describe("producción (100 centros)", () => {
       StorageEncrypted: true,
       EnablePerformanceInsights: true,
     });
+  });
+
+  it("en producción el bucket de adjuntos se conserva aunque se borre el stack", () => {
+    prod.hasResource("AWS::S3::Bucket", { DeletionPolicy: "Retain", UpdateReplacePolicy: "Retain" });
   });
 
   it("los tres servicios escalan de 2 a 4 tareas según la CPU", () => {

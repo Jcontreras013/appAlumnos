@@ -67,8 +67,11 @@ services:
       LOGIN_RATE_LIMIT_PER_MINUTE: "300"
       # En la demo la verificación en dos pasos es opcional (se puede mostrar desde «Mi cuenta»).
       REQUIRE_MFA: "false"
+      # Fotos, videos y documentos de los mensajes (en AWS van a un bucket de S3).
+      FILES_DIR: /data/adjuntos
     volumes:
       - keys:/keys:ro
+      - adjuntos:/data/adjuntos
     command:
       [
         "sh",
@@ -179,3 +182,4 @@ services:
 volumes:
   pgdata:
   keys:
+  adjuntos:

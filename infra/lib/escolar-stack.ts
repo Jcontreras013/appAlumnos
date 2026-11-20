@@ -10,6 +10,7 @@ import * as ecsPatterns from "aws-cdk-lib/aws-ecs-patterns";
 import * as elbv2 from "aws-cdk-lib/aws-elasticloadbalancingv2";
 import * as logs from "aws-cdk-lib/aws-logs";
 import * as rds from "aws-cdk-lib/aws-rds";
+import * as s3 from "aws-cdk-lib/aws-s3";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import * as sns from "aws-cdk-lib/aws-sns";
 import * as subscriptions from "aws-cdk-lib/aws-sns-subscriptions";
@@ -237,8 +238,27 @@ export class EscolarStack extends Stack {
     const pushSecret = props.pushSecretArn
       ? secretsmanager.Secret.fromSecretCompleteArn(this, "PushSecret", props.pushSecretArn)
       : undefined;
+    // Fotos, videos y documentos de los mensajes: bucket privado y cifrado, solo por HTTPS. No hay
+    // enlaces públicos: identity entrega cada archivo después de revisar quién lo pide.
+    const attachmentsBucket = new s3.Bucket(this, "Adjuntos", {
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true,
+      objectOwnership: s3.ObjectOwnership.BUCKET_OWNER_ENFORCED,
+      removalPolicy: isProd ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY,
+      autoDeleteObjects: !isProd,
+    });
+    // Identity llega a S3 por dentro de la VPC (sin costo y sin pasar por internet).
+    vpc.addGatewayEndpoint("S3", {
+      service: ec2.GatewayVpcEndpointAwsService.S3,
+      subnets: [{ subnetType: ec2.SubnetType.PUBLIC }],
+    });
+
     const identity = backendService("identity", {
       port: 3001,
+      environment: { FILES_BUCKET: attachmentsBucket.bucketName, AWS_REGION: this.region },
+      // Un video puede tardar minutos en bajar con una conexión lenta: Service Connect no lo corta.
+      requestTimeout: Duration.minutes(10),
       secrets: {
         JWT_KEY_ID: ecs.Secret.fromSecretsManager(jwtSecret, "JWT_KEY_ID"),
         JWT_PRIVATE_KEY: ecs.Secret.fromSecretsManager(jwtSecret, "JWT_PRIVATE_KEY"),
@@ -255,6 +275,7 @@ export class EscolarStack extends Stack {
       },
     });
     const identityService = identity.service;
+    attachmentsBucket.grantReadWrite(identity.task.taskRole);
 
     /** Asistente de planificación: la llave del proveedor llega como secreto, nunca en claro. */
     const assistantSettings = () => {

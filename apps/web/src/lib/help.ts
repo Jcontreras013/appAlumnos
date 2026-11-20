@@ -35,10 +35,11 @@ const MESSAGES: HelpSection = {
   steps: [
     "En «Mensajes», toca «Nuevo mensaje» y elige a la persona (puedes buscarla por nombre). Por ahora es solo entre maestros y dirección.",
     "Escribe y toca «Enviar». Una marca (✓) quiere decir que se envió; dos marcas verdes (✓✓), que ya lo leyó.",
+    "Para mandar fotos, videos o documentos, toca el clip (📎) junto al mensaje: «Foto o video» abre la cámara o la galería; «Documento», tus archivos PDF, Word, Excel o PowerPoint. Puedes elegir hasta 5 a la vez y agregar un mensaje antes de «Enviar».",
     "El número junto a «Mensajes» en el menú te dice cuántas conversaciones tienen algo sin leer.",
     "Para que el teléfono te avise, toca «Activar avisos» arriba de tus conversaciones. En iPhone, primero toca Compartir → «Agregar a inicio» y abre CONECTA desde ese ícono.",
   ],
-  tip: "Los avisos llegan de lunes a viernes de 6:00 a. m. a 7:00 p. m.; lo que te escriban de noche te lo avisamos al empezar la jornada. Los mensajes no se borran: quedan como registro del centro.",
+  tip: "Los avisos llegan de lunes a viernes de 6:00 a. m. a 7:00 p. m.; lo que te escriban de noche te lo avisamos al empezar la jornada. Los mensajes y lo que se adjunta no se borran: quedan como registro del centro. Los videos pueden durar hasta un minuto; las fotos se achican solas para gastar menos datos.",
 };
 
 export const HELP_GUIDES: HelpGuide[] = [

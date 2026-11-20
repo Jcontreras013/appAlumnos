@@ -269,9 +269,42 @@ export const messages = pgTable(
   },
   (t) => [
     index("messages_conversation_created_idx").on(t.conversationId, t.createdAt),
-    check("messages_body_length", sql`char_length(${t.body}) between 1 and 2000`),
+    // Vacío solo en los mensajes que son un adjunto (el servicio lo exige en los de texto).
+    check("messages_body_length", sql`char_length(${t.body}) <= 2000`),
   ],
 );
+
+/**
+ * Foto, video o documento de un mensaje (uno por mensaje). El archivo vive en el almacén (S3 o una
+ * carpeta); aquí, quién lo puede ver y cómo entregarlo. Como los mensajes, no se cambia ni se borra.
+ */
+export const messageAttachments = pgTable(
+  "message_attachments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    messageId: uuid("message_id")
+      .notNull()
+      .unique()
+      .references(() => messages.id, { onDelete: "cascade" }),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    schoolId: uuid("school_id").notNull(),
+    kind: text("kind", { enum: ["foto", "video", "archivo"] }).notNull(),
+    fileName: text("file_name").notNull(),
+    contentType: text("content_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    storageKey: text("storage_key").notNull().unique(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("message_attachments_conversation_idx").on(t.conversationId),
+    check("message_attachments_kind", sql`${t.kind} in ('foto', 'video', 'archivo')`),
+    check("message_attachments_size", sql`${t.sizeBytes} > 0`),
+    check("message_attachments_name", sql`char_length(${t.fileName}) between 1 and 200`),
+  ],
+);
+export type MessageAttachment = typeof messageAttachments.$inferSelect;
 
 /** Teléfonos (o navegadores) donde la persona activó los avisos. */
 export const pushSubscriptions = pgTable(

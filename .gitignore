@@ -14,5 +14,8 @@ next-env.d.ts
 .DS_Store
 *.log
 
+# Adjuntos de los mensajes en desarrollo (FILES_DIR por defecto)
+.adjuntos/
+
 # Demo en Windows sin Docker (scripts/demo-windows.ps1)
 demo-logs/

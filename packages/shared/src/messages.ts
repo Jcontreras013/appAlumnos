@@ -45,19 +45,119 @@ export interface ConversationPersonDto {
 export interface ConversationSummaryDto {
   id: string;
   other: ConversationPersonDto;
-  lastMessage: { body: string; sentAt: string; mine: boolean } | null;
+  lastMessage: {
+    body: string;
+    sentAt: string;
+    mine: boolean;
+    /** Si el último fue una foto, un video o un documento. */
+    attachment: { kind: AttachmentKind; name: string } | null;
+  } | null;
   /** Mensajes del otro que todavía no leí. */
   unread: number;
 }
 
 export interface MessageDto {
   id: string;
+  /** Vacío en los mensajes que son solo un adjunto. */
   body: string;
   sentAt: string;
   mine: boolean;
   /** En los míos: si el otro ya lo leyó. */
   seen: boolean;
+  attachment: AttachmentDto | null;
 }
+
+// ───────────────────────────── Fotos, videos y documentos ─────────────────────────────
+
+/**
+ * Cada adjunto viaja en su propio mensaje (como en WhatsApp). Igual que el texto, no se borra: queda
+ * como registro de la conversación. Las fotos se achican en el celular antes de enviarse.
+ */
+export const ATTACHMENT_KINDS = ["foto", "video", "archivo"] as const;
+export type AttachmentKind = (typeof ATTACHMENT_KINDS)[number];
+
+const MB = 1024 * 1024;
+/** Tamaño máximo por adjunto. */
+export const ATTACHMENT_MAX_BYTES: Record<AttachmentKind, number> = {
+  foto: 10 * MB,
+  video: 50 * MB,
+  archivo: 10 * MB,
+};
+/** Videos cortos: el panel no deja enviar uno más largo (el tamaño lo revisa también el servicio). */
+export const VIDEO_MAX_SECONDS = 60;
+/** Cuántos adjuntos se eligen de una vez. */
+export const ATTACHMENTS_PER_SEND = 5;
+/** Las fotos se achican a este lado mayor (en píxeles) antes de enviarse. */
+export const PHOTO_MAX_SIDE = 1600;
+
+/** Tipos que se aceptan, con su clase y la extensión con la que se descargan. */
+export const ATTACHMENT_TYPES: Record<string, { kind: AttachmentKind; ext: string }> = {
+  "image/jpeg": { kind: "foto", ext: "jpg" },
+  "image/png": { kind: "foto", ext: "png" },
+  "image/webp": { kind: "foto", ext: "webp" },
+  "video/mp4": { kind: "video", ext: "mp4" },
+  "video/quicktime": { kind: "video", ext: "mov" },
+  "video/webm": { kind: "video", ext: "webm" },
+  "video/3gpp": { kind: "video", ext: "3gp" },
+  "application/pdf": { kind: "archivo", ext: "pdf" },
+  "application/msword": { kind: "archivo", ext: "doc" },
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": { kind: "archivo", ext: "docx" },
+  "application/vnd.ms-excel": { kind: "archivo", ext: "xls" },
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": { kind: "archivo", ext: "xlsx" },
+  "application/vnd.ms-powerpoint": { kind: "archivo", ext: "ppt" },
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": {
+    kind: "archivo",
+    ext: "pptx",
+  },
+};
+
+/** El tipo de un archivo por su extensión (algunos celulares no lo dicen al elegirlo). */
+export function attachmentTypeOf(fileName: string, declared?: string): string | null {
+  if (declared && ATTACHMENT_TYPES[declared]) return declared;
+  const ext = fileName.split(".").pop()?.toLowerCase();
+  if (ext === "jpeg") return "image/jpeg";
+  const found = Object.entries(ATTACHMENT_TYPES).find(([, t]) => t.ext === ext);
+  return found ? found[0] : null;
+}
+
+/** Nombre seguro para guardar y descargar: sin rutas ni caracteres de control, y no muy largo. */
+export function cleanFileName(name: string, fallbackExt: string): string {
+  const base = name.split(/[\\/]/).pop() ?? "";
+  const cleaned = [...base]
+    .filter((ch) => {
+      const code = ch.charCodeAt(0);
+      return code >= 32 && code !== 127 && !'"<>|:*?'.includes(ch);
+    })
+    .join("")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!cleaned || cleaned === "." || cleaned === "..") return `adjunto.${fallbackExt}`;
+  if (cleaned.length <= 120) return cleaned;
+  const dot = cleaned.lastIndexOf(".");
+  const ext = dot > 0 ? cleaned.slice(dot) : "";
+  return cleaned.slice(0, 120 - ext.length) + ext;
+}
+
+export interface AttachmentDto {
+  id: string;
+  kind: AttachmentKind;
+  name: string;
+  contentType: string;
+  /** En bytes. */
+  size: number;
+}
+
+/** "2.4 MB", "830 KB" */
+export function formatFileSize(bytes: number): string {
+  if (bytes >= MB) return `${(bytes / MB).toFixed(1).replace(/\.0$/, "")} MB`;
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+export const ATTACHMENT_LABELS: Record<AttachmentKind, string> = {
+  foto: "Foto",
+  video: "Video",
+  archivo: "Documento",
+};
 
 export interface ConversationDto {
   id: string;

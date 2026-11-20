@@ -21,6 +21,7 @@
     "push:keys": "tsx src/scripts/generate-push-keys.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "3.1161.0",
     "@escolar/service-kit": "workspace:*",
     "@escolar/shared": "workspace:*",
     "@fastify/helmet": "13.2.0",

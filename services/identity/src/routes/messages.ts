@@ -1,8 +1,24 @@
-import { badRequest, conflict, notFound, parseOrThrow, requireRole, tenantOf } from "@escolar/service-kit";
+import { randomUUID } from "node:crypto";
+import type { Readable } from "node:stream";
 import {
+  ApiError,
+  badRequest,
+  conflict,
+  notFound,
+  parseOrThrow,
+  requireRole,
+  tenantOf,
+} from "@escolar/service-kit";
+import {
+  ATTACHMENT_MAX_BYTES,
+  ATTACHMENT_TYPES,
+  type AttachmentDto,
+  type AttachmentKind,
+  attachmentTypeOf,
   type ConversationDto,
   type ConversationPersonDto,
   type ConversationSummaryDto,
+  cleanFileName,
   MESSAGING_ROLES,
   type MessageContactDto,
   type MessageDto,
@@ -22,11 +38,14 @@ import {
   conversationMembers,
   conversations,
   type Message,
+  type MessageAttachment,
+  messageAttachments,
   messages,
   pushSubscriptions,
   users,
 } from "../db/schema";
 import type { IdentityDeps } from "../deps";
+import { checkedUpload, contentDisposition, parseRange } from "../lib/attachments";
 import { messagePayload, messagingStaff, pairKeyOf, pushToUsers } from "../lib/messages";
 
 const idParams = z.object({ id: z.uuid() });
@@ -44,7 +63,7 @@ const MAX_DEVICES = 10;
  * centro de la sesión y por las conversaciones de quien pregunta: nadie lee conversaciones ajenas,
  * aunque conozca su id.
  */
-export async function messageRoutes(app: FastifyInstance, { db, push, now }: IdentityDeps) {
+export async function messageRoutes(app: FastifyInstance, { db, push, files, now }: IdentityDeps) {
   const guard = { preHandler: [app.authenticate, requireRole(...MESSAGING_ROLES)] };
   const other = alias(conversationMembers, "other");
 
@@ -77,13 +96,37 @@ export async function messageRoutes(app: FastifyInstance, { db, push, now }: Ide
     return { userId, name, role: staff.get(userId)?.role ?? null };
   }
 
-  const toMessageDto = (m: Message, me: string, otherReadAt: Date | null): MessageDto => ({
+  const toAttachmentDto = (a: MessageAttachment): AttachmentDto => ({
+    id: a.id,
+    kind: a.kind,
+    name: a.fileName,
+    contentType: a.contentType,
+    size: a.sizeBytes,
+  });
+
+  const toMessageDto = (
+    m: Message,
+    me: string,
+    otherReadAt: Date | null,
+    attachment: MessageAttachment | undefined,
+  ): MessageDto => ({
     id: m.id,
     body: m.body,
     sentAt: m.createdAt.toISOString(),
     mine: m.senderUserId === me,
     seen: m.senderUserId === me && otherReadAt !== null && m.createdAt <= otherReadAt,
+    attachment: attachment ? toAttachmentDto(attachment) : null,
   });
+
+  /** Los adjuntos de esos mensajes, por mensaje. */
+  async function attachmentsOf(messageIds: string[]) {
+    if (messageIds.length === 0) return new Map<string, MessageAttachment>();
+    const rows = await db
+      .select()
+      .from(messageAttachments)
+      .where(inArray(messageAttachments.messageId, messageIds));
+    return new Map(rows.map((a) => [a.messageId, a]));
+  }
 
   /** Compañeros a los que se les puede escribir. */
   app.get("/messages/contacts", guard, async (request): Promise<MessageContactDto[]> => {
@@ -125,13 +168,20 @@ export async function messageRoutes(app: FastifyInstance, { db, push, now }: Ide
       ),
     ]);
     const lastBy = new Map(last.map((m) => [m.conversationId, m]));
+    const lastAttachments = await attachmentsOf(last.map((m) => m.id));
     return rows.map((r) => {
       const m = lastBy.get(r.id);
+      const a = m ? lastAttachments.get(m.id) : undefined;
       return {
         id: r.id,
         other: { userId: r.otherUserId, name: r.otherName, role: staff.get(r.otherUserId)?.role ?? null },
         lastMessage: m
-          ? { body: m.body, sentAt: m.createdAt.toISOString(), mine: m.senderUserId === me }
+          ? {
+              body: m.body,
+              sentAt: m.createdAt.toISOString(),
+              mine: m.senderUserId === me,
+              attachment: a ? { kind: a.kind, name: a.fileName } : null,
+            }
           : null,
         unread: unread.get(r.id) ?? 0,
       };
@@ -229,61 +279,207 @@ export async function messageRoutes(app: FastifyInstance, { db, push, now }: Ide
         .where(and(eq(conversationMembers.conversationId, id), eq(conversationMembers.userId, c.me)));
     }
     const otherPerson = await person(c.schoolId, c.otherUserId, c.otherName);
+    const shown = page.slice(0, PAGE).reverse();
+    const attached = await attachmentsOf(shown.map((m) => m.id));
     return {
       id,
       other: otherPerson,
-      messages: page
-        .slice(0, PAGE)
-        .reverse()
-        .map((m) => toMessageDto(m, c.me, c.otherReadAt)),
+      messages: shown.map((m) => toMessageDto(m, c.me, c.otherReadAt, attached.get(m.id))),
       hasOlder: page.length > PAGE,
       canSend: otherPerson.role !== null,
     };
   });
 
-  app.post("/messages/conversations/:id/messages", guard, async (request, reply) => {
-    const { id } = parseOrThrow(idParams, request.params);
-    const { body } = parseOrThrow(messageInputSchema, request.body);
+  /** Quien escribe y a quien: los dos tienen que seguir en el centro. */
+  async function canWrite(request: FastifyRequest, id: string) {
     const c = await load(request, id);
     const staff = await messagingStaff(db, c.schoolId, [c.me, c.otherUserId]);
     if (!staff.has(c.otherUserId)) {
       throw conflict(`${c.otherName} ya no trabaja en el centro: no se le pueden mandar mensajes`);
     }
     if (!staff.has(c.me)) throw conflict("Tu acceso a este centro ya no está activo");
-    // Dentro del horario de atención se avisa al momento; fuera, al empezar la jornada.
+    return { ...c, senderName: staff.get(c.me)?.name ?? request.auth.name };
+  }
+
+  /**
+   * Guarda el mensaje (y su adjunto, si trae) y avisa al otro. Dentro del horario de atención se
+   * avisa al momento; fuera, al empezar la jornada.
+   */
+  async function deliver(
+    request: FastifyRequest,
+    c: Awaited<ReturnType<typeof canWrite>>,
+    body: string,
+    attachment?: Omit<typeof messageAttachments.$inferInsert, "messageId" | "conversationId" | "schoolId">,
+  ): Promise<MessageDto> {
     const notifyNow = push !== null && withinNotifyHours(now());
-    const message = await db.transaction(async (tx) => {
+    const { message, saved } = await db.transaction(async (tx) => {
       const [row] = await tx
         .insert(messages)
-        .values({ conversationId: id, schoolId: c.schoolId, senderUserId: c.me, body })
+        .values({ conversationId: c.conversation.id, schoolId: c.schoolId, senderUserId: c.me, body })
         .returning();
       if (!row) throw new Error("No se envió el mensaje");
+      const [saved] = attachment
+        ? await tx
+            .insert(messageAttachments)
+            .values({
+              ...attachment,
+              messageId: row.id,
+              conversationId: row.conversationId,
+              schoolId: c.schoolId,
+            })
+            .returning()
+        : [];
       await tx
         .update(conversations)
         .set({ lastMessageAt: row.createdAt, lastSenderId: c.me })
-        .where(eq(conversations.id, id));
+        .where(eq(conversations.id, row.conversationId));
       await tx
         .update(conversationMembers)
         .set({ lastReadAt: row.createdAt })
-        .where(and(eq(conversationMembers.conversationId, id), eq(conversationMembers.userId, c.me)));
+        .where(
+          and(
+            eq(conversationMembers.conversationId, row.conversationId),
+            eq(conversationMembers.userId, c.me),
+          ),
+        );
       if (notifyNow) {
         await tx
           .update(conversationMembers)
           .set({ notifiedAt: row.createdAt })
           .where(
-            and(eq(conversationMembers.conversationId, id), eq(conversationMembers.userId, c.otherUserId)),
+            and(
+              eq(conversationMembers.conversationId, row.conversationId),
+              eq(conversationMembers.userId, c.otherUserId),
+            ),
           );
       }
-      return row;
+      return { message: row, saved };
     });
     if (push && notifyNow) {
       // El aviso no frena el envío: si el servicio de avisos tarda o falla, el mensaje ya quedó.
-      const sender = staff.get(c.me)?.name ?? request.auth.name;
-      void pushToUsers(db, push, [c.otherUserId], messagePayload(id, sender)).catch((err) =>
+      const payload = messagePayload(message.conversationId, c.senderName, saved?.kind ?? null);
+      void pushToUsers(db, push, [c.otherUserId], payload).catch((err) =>
         request.log.warn({ err }, "No se envió el aviso del mensaje"),
       );
     }
-    return reply.status(201).send(toMessageDto(message, c.me, c.otherReadAt));
+    return toMessageDto(message, c.me, c.otherReadAt, saved);
+  }
+
+  app.post("/messages/conversations/:id/messages", guard, async (request, reply) => {
+    const { id } = parseOrThrow(idParams, request.params);
+    const { body } = parseOrThrow(messageInputSchema, request.body);
+    const c = await canWrite(request, id);
+    return reply.status(201).send(await deliver(request, c, body));
+  });
+
+  // ───────────────────────────── Fotos, videos y documentos ─────────────────────────────
+
+  /**
+   * Sube un adjunto y lo manda como mensaje. El cuerpo de la petición es el archivo tal cual; el tipo
+   * va en Content-Type, el tamaño en Content-Length y el nombre en X-File-Name (codificado como URL).
+   * El archivo se revisa mientras llega y se guarda antes de crear el mensaje; si algo falla, se borra.
+   */
+  await app.register(async (scope) => {
+    scope.removeAllContentTypeParsers();
+    scope.addContentTypeParser("*", (_request, payload, done) => done(null, payload));
+    scope.post("/messages/conversations/:id/attachments", guard, async (request, reply) => {
+      const { id } = parseOrThrow(idParams, request.params);
+      const declaredType =
+        String(request.headers["content-type"] ?? "")
+          .split(";")[0]
+          ?.trim() ?? "";
+      let rawName = "";
+      try {
+        rawName = decodeURIComponent(String(request.headers["x-file-name"] ?? ""));
+      } catch {
+        throw badRequest("Nombre de archivo inválido");
+      }
+      const contentType = attachmentTypeOf(rawName, declaredType);
+      const type = contentType ? ATTACHMENT_TYPES[contentType] : undefined;
+      if (!contentType || !type) {
+        throw new ApiError(
+          415,
+          "unsupported_media",
+          "Solo se pueden enviar fotos (JPG, PNG), videos (MP4, MOV) y documentos (PDF, Word, Excel, PowerPoint).",
+        );
+      }
+      const size = Number(request.headers["content-length"]);
+      if (!Number.isInteger(size) || size <= 0)
+        throw new ApiError(411, "length_required", "Falta el tamaño del archivo");
+      const max = ATTACHMENT_MAX_BYTES[type.kind];
+      if (size > max) {
+        request.raw.resume();
+        throw new ApiError(
+          413,
+          "too_large",
+          `El archivo pesa demasiado: el máximo es ${Math.round(max / (1024 * 1024))} MB.`,
+        );
+      }
+      const c = await canWrite(request, id);
+      const key = `${c.schoolId}/${id}/${randomUUID()}.${type.ext}`;
+      const body = checkedUpload(request.body as Readable, {
+        contentType,
+        declaredSize: size,
+        kind: type.kind,
+        max,
+      });
+      await files.put(key, body, size, contentType);
+      try {
+        const dto = await deliver(request, c, "", {
+          kind: type.kind,
+          fileName: cleanFileName(rawName, type.ext),
+          contentType,
+          sizeBytes: size,
+          storageKey: key,
+        });
+        return reply.status(201).send(dto);
+      } catch (err) {
+        await files.delete(key).catch(() => {});
+        throw err;
+      }
+    });
+  });
+
+  /**
+   * Entrega un adjunto a quien está en la conversación. Acepta un tramo (`Range`), que es como los
+   * navegadores reproducen los videos. Los documentos se descargan; fotos y videos se muestran.
+   */
+  app.get("/messages/attachments/:id", guard, async (request, reply) => {
+    const { id } = parseOrThrow(idParams, request.params);
+    const [row] = await db
+      .select({ attachment: messageAttachments })
+      .from(messageAttachments)
+      .innerJoin(
+        conversationMembers,
+        and(
+          eq(conversationMembers.conversationId, messageAttachments.conversationId),
+          eq(conversationMembers.userId, request.auth.userId),
+        ),
+      )
+      .where(and(eq(messageAttachments.id, id), eq(messageAttachments.schoolId, tenantOf(request))));
+    if (!row) throw notFound("Archivo no encontrado");
+    const a = row.attachment;
+    const range = parseRange(request.headers.range, a.sizeBytes);
+    if (range === "invalid") {
+      return reply.status(416).header("content-range", `bytes */${a.sizeBytes}`).send();
+    }
+    const stream = await files.get(a.storageKey, range ?? undefined);
+    reply
+      .header("content-type", a.contentType)
+      .header("content-disposition", contentDisposition(a.kind as AttachmentKind, a.fileName))
+      .header("accept-ranges", "bytes")
+      .header("cache-control", "private, max-age=86400, immutable")
+      .header("x-content-type-options", "nosniff")
+      .header("content-security-policy", "default-src 'none'; sandbox");
+    if (range) {
+      reply
+        .status(206)
+        .header("content-range", `bytes ${range.start}-${range.end}/${a.sizeBytes}`)
+        .header("content-length", range.end - range.start + 1);
+    } else {
+      reply.header("content-length", a.sizeBytes);
+    }
+    return reply.send(stream);
   });
 
   // ───────────────────────────── Avisos en el celular ─────────────────────────────

@@ -360,6 +360,19 @@ Está en **Mensajes**, con un contador de conversaciones sin leer en el menú.
 - «✓» enviado, «✓✓» visto. La conversación se actualiza sola cada pocos segundos mientras está a la
   vista; la lista y el contador, cada pocos segundos más.
 - Si alguien deja el centro, la conversación se conserva pero ya no se le escribe.
+- **Fotos, videos y documentos** (botón del clip): fotos (JPG, PNG, WebP), videos cortos (MP4, MOV,
+  WebM o 3GP, hasta 60 s y 50 MB) y documentos (PDF, Word, Excel, PowerPoint, hasta 10 MB), hasta 5 a
+  la vez. Cada adjunto viaja en su propio mensaje y, como el texto, no se borra.
+  - Las fotos se achican en el teléfono (1600 px por lado, JPEG) antes de enviarse: gastan menos datos
+    y pierden los datos ocultos de la cámara, como la ubicación.
+  - `identity` revisa cada archivo mientras llega: el contenido tiene que ser del tipo que dice (no se
+    acepta un programa con nombre de foto) y no pasar del tamaño. Lo entrega solo a quienes están en la
+    conversación, por tramos (`Range`) para que los videos se reproduzcan también en iPhone.
+  - Se guardan fuera de la base de datos: en AWS, en un bucket de S3 privado y cifrado (sin enlaces
+    públicos; `identity` llega a él por un endpoint de la VPC); en la demo con Docker, en el volumen
+    `adjuntos`; en desarrollo, en `services/identity/.adjuntos` (`FILES_DIR` lo cambia).
+  - El panel los sube por `/api/mensajes/:id/adjuntos`, fuera del proxy de `/panel`: el proxy guarda
+    en memoria el cuerpo de cada petición y corta a los 10 MB.
 - **Avisos al celular** (Web Push, opcional): de lunes a viernes de 6:00 a 19:00, hora de Honduras. Lo
   que llega fuera de ese horario se avisa en un solo aviso al empezar la jornada. El aviso dice quién
   escribió, nunca el texto. En iPhone hay que agregar CONECTA a la pantalla de inicio. Al cerrar sesión
