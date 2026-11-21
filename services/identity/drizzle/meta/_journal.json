@@ -64,6 +64,20 @@
       "when": 1794519015328,
       "tag": "0008_verificacion_en_dos_pasos",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1795102212823,
+      "tag": "0009_mensajes",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1795197948473,
+      "tag": "0010_adjuntos",
+      "breakpoints": true
     }
   ]
 }

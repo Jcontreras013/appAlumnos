@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { AssignmentDto } from "./academic";
+import type { DayOffDto } from "./calendar";
 import { isIsoDate } from "./weeks";
 
 // ───────────────────────────── Licencias y sustituciones ─────────────────────────────
@@ -103,6 +104,8 @@ export interface CoverageDto {
   totals: Record<CoverageStatus, number>;
   /** Maestros con licencia vigente ese día. */
   teachersOnLeave: number;
+  /** Ese día no hay clases: ninguna clase queda «sin maestro». */
+  dayOff: DayOffDto | null;
 }
 
 // ───────────────────────────── Tablero departamental / distrital ─────────────────────────────
@@ -119,7 +122,10 @@ export interface RegionalSchoolSummaryDto {
   teachers: number;
   classes: number;
   teachersOnLeave: number;
+  /** Clases sin maestro hoy (0 si hoy el centro no tiene clases). */
   uncoveredClasses: number;
+  /** Si hoy el centro no tiene clases, el motivo. */
+  dayOffToday: string | null;
   /** Asistencia de los alumnos en los últimos 7 días (null si no se ha registrado). */
   attendanceRate7d: number | null;
   studentsAtRisk: number;
@@ -167,6 +173,23 @@ export interface RegionalSchoolDetailDto {
   plans: import("./academic").PlanBoardRowDto[];
   /** Asistencia de los últimos 7 días por sección (null si la sección no pasó lista). */
   attendanceBySection: RegionalSectionAttendanceDto[];
+  /** Conducta del año lectivo: cuántos incidentes y las suspensiones y expulsiones, con el alumno. */
+  conduct: RegionalConductDto;
+}
+
+export interface RegionalConductDto {
+  incidents: number;
+  serious: number;
+  suspensions: number;
+  expulsions: number;
+  /** Suspensiones y expulsiones (sin la descripción del incidente), la más reciente primero. */
+  measures: Array<
+    import("./conduct").ConductRecordDto & {
+      studentId: string;
+      studentName: string;
+      sectionLabel: string | null;
+    }
+  >;
 }
 
 export interface RegionalSectionAttendanceDto {

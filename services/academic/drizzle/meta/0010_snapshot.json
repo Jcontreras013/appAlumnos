@@ -1,5 +1,5 @@
 {
-  "id": "01a5a4da-06ee-4ed6-b541-5749f4931658",
+  "id": "16959261-8173-4864-b231-b99e56811197",
   "prevId": "db4fd42f-77d8-40e0-a9b6-0f57b3f52616",
   "version": "7",
   "dialect": "postgresql",
@@ -500,8 +500,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.discipline_records": {
-      "name": "discipline_records",
+    "public.conduct_incidents": {
+      "name": "conduct_incidents",
       "schema": "",
       "columns": {
         "id": {
@@ -523,23 +523,23 @@
           "primaryKey": false,
           "notNull": true
         },
-        "kind": {
-          "name": "kind",
-          "type": "discipline_kind",
-          "typeSchema": "public",
+        "date": {
+          "name": "date",
+          "type": "date",
           "primaryKey": false,
           "notNull": true
         },
         "severity": {
           "name": "severity",
-          "type": "discipline_severity",
+          "type": "conduct_severity",
           "typeSchema": "public",
           "primaryKey": false,
           "notNull": true
         },
-        "date": {
-          "name": "date",
-          "type": "date",
+        "category": {
+          "name": "category",
+          "type": "conduct_category",
+          "typeSchema": "public",
           "primaryKey": false,
           "notNull": true
         },
@@ -549,39 +549,14 @@
           "primaryKey": false,
           "notNull": true
         },
-        "measure": {
-          "name": "measure",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "suspension_from": {
-          "name": "suspension_from",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "suspension_to": {
-          "name": "suspension_to",
-          "type": "date",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "notify_family": {
-          "name": "notify_family",
-          "type": "boolean",
-          "primaryKey": false,
-          "notNull": true,
-          "default": false
-        },
-        "author_user_id": {
-          "name": "author_user_id",
+        "reported_by_user_id": {
+          "name": "reported_by_user_id",
           "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
-        "author_name": {
-          "name": "author_name",
+        "reported_by_name": {
+          "name": "reported_by_name",
           "type": "text",
           "primaryKey": false,
           "notNull": true
@@ -595,8 +570,29 @@
         }
       },
       "indexes": {
-        "discipline_records_student_idx": {
-          "name": "discipline_records_student_idx",
+        "conduct_incidents_school_date_idx": {
+          "name": "conduct_incidents_school_date_idx",
+          "columns": [
+            {
+              "expression": "school_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "date",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "conduct_incidents_student_idx": {
+          "name": "conduct_incidents_student_idx",
           "columns": [
             {
               "expression": "school_id",
@@ -621,9 +617,123 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        }
+      },
+      "foreignKeys": {
+        "conduct_incidents_student_fk": {
+          "name": "conduct_incidents_student_fk",
+          "tableFrom": "conduct_incidents",
+          "tableTo": "students",
+          "columnsFrom": [
+            "school_id",
+            "student_id"
+          ],
+          "columnsTo": [
+            "school_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "conduct_incidents_tenant_key": {
+          "name": "conduct_incidents_tenant_key",
+          "nullsNotDistinct": false,
+          "columns": [
+            "school_id",
+            "id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.conduct_measures": {
+      "name": "conduct_measures",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
         },
-        "discipline_records_school_date_idx": {
-          "name": "discipline_records_school_date_idx",
+        "school_id": {
+          "name": "school_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "incident_id": {
+          "name": "incident_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "conduct_measure",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "starts_on": {
+          "name": "starts_on",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ends_on": {
+          "name": "ends_on",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "notes": {
+          "name": "notes",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "decided_by_user_id": {
+          "name": "decided_by_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "decided_by_name": {
+          "name": "decided_by_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "cancelled_at": {
+          "name": "cancelled_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "cancelled_by_user_id": {
+          "name": "cancelled_by_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "conduct_measures_incident_idx": {
+          "name": "conduct_measures_incident_idx",
           "columns": [
             {
               "expression": "school_id",
@@ -632,7 +742,7 @@
               "nulls": "last"
             },
             {
-              "expression": "date",
+              "expression": "incident_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -645,38 +755,29 @@
         }
       },
       "foreignKeys": {
-        "discipline_records_student_fk": {
-          "name": "discipline_records_student_fk",
-          "tableFrom": "discipline_records",
-          "tableTo": "students",
+        "conduct_measures_incident_fk": {
+          "name": "conduct_measures_incident_fk",
+          "tableFrom": "conduct_measures",
+          "tableTo": "conduct_incidents",
           "columnsFrom": [
             "school_id",
-            "student_id"
+            "incident_id"
           ],
           "columnsTo": [
             "school_id",
             "id"
           ],
-          "onDelete": "cascade",
+          "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "discipline_records_tenant_key": {
-          "name": "discipline_records_tenant_key",
-          "nullsNotDistinct": false,
-          "columns": [
-            "school_id",
-            "id"
-          ]
-        }
-      },
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
-        "discipline_records_suspension_dates": {
-          "name": "discipline_records_suspension_dates",
-          "value": "\"discipline_records\".\"kind\" <> 'suspension' OR (\"discipline_records\".\"suspension_from\" IS NOT NULL AND \"discipline_records\".\"suspension_to\" >= \"discipline_records\".\"suspension_from\")"
+        "conduct_measures_dates": {
+          "name": "conduct_measures_dates",
+          "value": "(\"conduct_measures\".\"kind\" = 'suspension' and \"conduct_measures\".\"ends_on\" is not null and \"conduct_measures\".\"ends_on\" >= \"conduct_measures\".\"starts_on\") or (\"conduct_measures\".\"kind\" <> 'suspension' and \"conduct_measures\".\"ends_on\" is null)"
         }
       },
       "isRLSEnabled": false
@@ -3111,20 +3212,33 @@
         "justificada"
       ]
     },
-    "public.discipline_kind": {
-      "name": "discipline_kind",
+    "public.conduct_category": {
+      "name": "conduct_category",
       "schema": "public",
       "values": [
-        "llamado_verbal",
-        "llamado_escrito",
-        "citacion",
+        "irrespeto",
+        "agresion",
+        "acoso",
+        "dano",
+        "fraude",
+        "fuga",
+        "objetos",
+        "otra"
+      ]
+    },
+    "public.conduct_measure": {
+      "name": "conduct_measure",
+      "schema": "public",
+      "values": [
+        "llamado_atencion",
+        "citacion_familia",
         "compromiso",
         "suspension",
         "expulsion"
       ]
     },
-    "public.discipline_severity": {
-      "name": "discipline_severity",
+    "public.conduct_severity": {
+      "name": "conduct_severity",
       "schema": "public",
       "values": [
         "leve",

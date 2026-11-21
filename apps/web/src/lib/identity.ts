@@ -2,6 +2,8 @@ import "server-only";
 import type {
   AccountUpdate,
   AuditEventDto,
+  ConversationDto,
+  ConversationSummaryDto,
   CreatedUserDto,
   CreateSchoolInput,
   CreateUserInput,
@@ -10,9 +12,13 @@ import type {
   LoginResponseDto,
   LoginResultDto,
   MeResponseDto,
+  MessageContactDto,
+  MessageDto,
   MfaEnabledDto,
   MfaSetupDto,
   PasswordResetDto,
+  PushKeyDto,
+  PushSubscriptionInput,
   RegionalUserInput,
   RoleChange,
   SchoolDto,
@@ -22,6 +28,7 @@ import type {
   StaffImportRowDto,
   TokenPairDto,
   TransferTargetDto,
+  UnreadMessagesDto,
   UserDto,
 } from "@escolar/shared";
 import { ServiceError, serviceCall } from "./api";
@@ -123,4 +130,25 @@ export const identity = {
 
   setSchoolActive: (token: string, id: string, active: boolean) =>
     call<SchoolDto>(`/schools/${id}/status`, { method: "POST", token, body: { active } }),
+
+  // Mensajes entre el personal
+  messageContacts: (token: string) => call<MessageContactDto[]>("/messages/contacts", { token }),
+  conversations: (token: string) => call<ConversationSummaryDto[]>("/messages/conversations", { token }),
+  unreadMessages: (token: string) => call<UnreadMessagesDto>("/messages/unread", { token }),
+  startConversation: (token: string, userId: string) =>
+    call<{ id: string }>("/messages/conversations", { method: "POST", token, body: { userId } }),
+  conversation: (token: string, id: string, options: { read?: boolean; before?: string } = {}) => {
+    const query = new URLSearchParams();
+    if (options.read) query.set("leer", "1");
+    if (options.before) query.set("antes", options.before);
+    const qs = query.size ? `?${query}` : "";
+    return call<ConversationDto>(`/messages/conversations/${id}${qs}`, { token });
+  },
+  sendMessage: (token: string, id: string, body: string) =>
+    call<MessageDto>(`/messages/conversations/${id}/messages`, { method: "POST", token, body: { body } }),
+  pushKey: (token: string) => call<PushKeyDto>("/push/key", { token }),
+  savePushSubscription: (token: string, subscription: PushSubscriptionInput) =>
+    call<void>("/push/subscriptions", { method: "POST", token, body: subscription }),
+  removePushSubscription: (token: string, endpoint: string) =>
+    call<void>("/push/subscriptions/remove", { method: "POST", token, body: { endpoint } }),
 };

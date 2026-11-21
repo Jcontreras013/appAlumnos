@@ -30,6 +30,30 @@ const FIRST_LOGIN: HelpSection = {
   tip: "Tras 5 intentos fallidos la cuenta se bloquea 15 minutos. Es para proteger los datos de los alumnos.",
 };
 
+const CALENDAR: HelpSection = {
+  title: "Calendario escolar: feriados y vacaciones",
+  steps: [
+    "En «Calendario escolar», agrega cada feriado (un solo día) y cada período de vacaciones (desde y hasta).",
+    "Esos días no se pide asistencia y ninguna clase aparece «sin maestro», aunque haya licencias.",
+    "Una semana entera sin clases no pide planificación: nada queda atrasado. Si solo un día es feriado, el asistente de planificación lo deja fuera.",
+    "Las familias ven los próximos días sin clases en el portal.",
+    "Funciona igual con el año de febrero a noviembre o con el de septiembre a junio (colegios bilingües).",
+  ],
+  tip: "Lo marcan la secretaría y la dirección; el resto del personal solo lo consulta.",
+};
+
+const MESSAGES: HelpSection = {
+  title: "Mensajes con el personal",
+  steps: [
+    "En «Mensajes», toca «Nuevo mensaje» y elige a la persona (puedes buscarla por nombre). Por ahora es solo entre maestros y dirección.",
+    "Escribe y toca «Enviar». Una marca (✓) quiere decir que se envió; dos marcas verdes (✓✓), que ya lo leyó.",
+    "Para mandar fotos, videos o documentos, toca el clip (📎) junto al mensaje: «Foto o video» abre la cámara o la galería; «Documento», tus archivos PDF, Word, Excel o PowerPoint. Puedes elegir hasta 5 a la vez y agregar un mensaje antes de «Enviar».",
+    "El número junto a «Mensajes» en el menú te dice cuántas conversaciones tienen algo sin leer.",
+    "Para que el teléfono te avise, toca «Activar avisos» arriba de tus conversaciones. En iPhone, primero toca Compartir → «Agregar a inicio» y abre CONECTA desde ese ícono.",
+  ],
+  tip: "Los avisos llegan de lunes a viernes de 6:00 a. m. a 7:00 p. m.; lo que te escriban de noche te lo avisamos al empezar la jornada. Los mensajes y lo que se adjunta no se borran: quedan como registro del centro. Los videos pueden durar hasta un minuto; las fotos se achican solas para gastar menos datos.",
+};
+
 export const HELP_GUIDES: HelpGuide[] = [
   {
     key: "docente",
@@ -73,6 +97,7 @@ export const HELP_GUIDES: HelpGuide[] = [
           "Guarda las veces que quieras. Cuando esté lista, toca «Enviar a revisión» antes del plazo de la semana.",
           "Si te la devuelven, verás las observaciones: corrígela y vuelve a enviarla.",
           "Puedes copiar la planificación de una semana anterior para no empezar de cero.",
+          "Si la materia se imparte en inglés (colegios bilingües), el asistente escribe el borrador en inglés.",
         ],
       },
       {
@@ -90,15 +115,18 @@ export const HELP_GUIDES: HelpGuide[] = [
           "En «Avisos» ves lo que la dirección publica para el personal.",
         ],
       },
+      MESSAGES,
       {
-        title: "Llamados de atención",
+        title: "Reportar un incidente de conducta",
         steps: [
-          "En «Disciplina» elige al alumno (solo ves a los de tus secciones), la medida y qué tan grave fue la falta.",
-          "Puedes registrar llamados de atención verbales o por escrito y citaciones a la familia. La suspensión y la expulsión las registra la dirección.",
-          "Escribe qué pasó y, si hubo, el acuerdo. Si marcas «Avisar a la familia», la familia lo ve en su portal.",
-          "Con «Imprimir acta» sale la hoja para que el alumno y su familia la firmen.",
-          "Si te equivocaste, puedes borrar lo que tú registraste.",
+          "En «Conducta», toca «Reportar un incidente».",
+          "Busca al alumno por su nombre (solo aparecen los de tus secciones), elige la fecha, la gravedad y el tipo de falta, y describe qué pasó.",
+          "La dirección o la coordinación deciden la medida. En «Conducta» ves tus reportes y lo que se decidió.",
+          "Si te equivocaste, puedes «Borrar reporte» mientras no tenga una medida.",
+          "En cada medida de tus reportes, «Imprimir acta» saca la hoja para que el alumno y su familia la firmen.",
+          "Si un alumno está suspendido, en la lista de asistencia aparece «Suspendido hasta el…» y «Todos presentes» no lo marca.",
         ],
+        tip: "La familia ve el tipo de falta y la medida, no tu descripción: puede nombrar a otros alumnos.",
       },
       {
         title: "Cuando cubres a un compañero",
@@ -131,7 +159,7 @@ export const HELP_GUIDES: HelpGuide[] = [
         title: "Organizar el año",
         steps: [
           "En «Estructura académica»: crea el año lectivo, ajusta las fechas de los parciales y la nota mínima.",
-          "Agrega los grados, las secciones (con su cupo) y las materias.",
+          "Agrega los grados, las secciones (con su cupo) y las materias. En los colegios bilingües, marca en cada materia si «se imparte en» español o inglés: el asistente de planificación escribe en ese idioma.",
           "Asigna qué docente da cada materia en cada sección.",
           "Si un docente se va, usa «Cambiar docente»: la clase pasa a la persona nueva con sus notas y planificaciones.",
           "Todo se puede corregir con «Editar». Lo que ya tiene alumnos o notas no se puede eliminar: el sistema te dice qué hacer.",
@@ -163,17 +191,6 @@ export const HELP_GUIDES: HelpGuide[] = [
         ],
       },
       {
-        title: "Disciplina: llamados de atención, suspensiones y expulsiones",
-        steps: [
-          "En «Disciplina» ves lo registrado en los últimos meses y quién está suspendido hoy. También desde la ficha de cada alumno.",
-          "Los docentes registran llamados de atención y citaciones de sus alumnos; coordinación, también actas de compromiso.",
-          "La suspensión (con sus fechas) y la expulsión solo las registra la dirección. Al registrar una expulsión, se retira la matrícula del alumno.",
-          "Lo que se marca «Avisar a la familia» aparece en el portal de la familia. Todo queda en la bitácora.",
-          "«Imprimir acta» saca la hoja de cada registro (llamado, citación, compromiso, suspensión o expulsión) con espacio para las firmas del alumno, la familia y la dirección.",
-          "Mientras dure una suspensión, el alumno aparece marcado «Suspendido» en la lista de asistencia del docente.",
-        ],
-      },
-      {
         title: "Horario de clases",
         steps: [
           "En «Horario», escribe las horas de clase del centro (los recreos no se escriben).",
@@ -189,6 +206,8 @@ export const HELP_GUIDES: HelpGuide[] = [
           "Las familias lo ven en «Mis hijos».",
         ],
       },
+      MESSAGES,
+      CALENDAR,
       {
         title: "Traslados entre centros",
         steps: [
@@ -212,6 +231,20 @@ export const HELP_GUIDES: HelpGuide[] = [
           "Decide los casos pendientes alumno por alumno, toca «Revisar» y luego «Matricular» en el año siguiente.",
           "Al final, marca el año nuevo como vigente en «Estructura académica».",
         ],
+      },
+      {
+        title: "Conducta: incidentes y medidas",
+        steps: [
+          "En «Conducta» ves los incidentes del año. «Esperan decisión» filtra los que todavía no tienen medida.",
+          "En cada incidente, «Decidir una medida»: llamado de atención, citación a la familia, compromiso de conducta, suspensión o expulsión. Escribe la nota para la familia: la ve en su portal.",
+          "En el llamado de atención eliges si se avisa a la familia («Avisar a la familia»); si no, queda solo en el registro del centro. Lo demás siempre se le avisa.",
+          "«Imprimir acta» saca la hoja de cada medida, con la identidad del alumno, su encargado y las líneas para firmar.",
+          "La suspensión pide su primer y último día (máximo 30 días). La suspensión y la expulsión las decide solo la dirección.",
+          "La expulsión retira la matrícula del alumno con esa fecha. Hay que confirmarla antes de registrarla.",
+          "Mientras dura una suspensión, el alumno aparece «Suspendido hasta el…» en la lista de asistencia del maestro.",
+          "Las medidas no se borran: si fue un error, «Anular» la deja en el historial como anulada. Anular una expulsión no vuelve a matricular: eso se hace desde la ficha del alumno.",
+        ],
+        tip: "Aplica las medidas según el reglamento interno del centro. La departamental ve cuántas suspensiones y expulsiones hay.",
       },
       {
         title: "Datos del centro",
@@ -244,6 +277,15 @@ export const HELP_GUIDES: HelpGuide[] = [
           "Habla con el docente a tiempo: la alerta aparece antes del cierre del parcial, cuando todavía se puede ayudar al alumno.",
         ],
       },
+      {
+        title: "Conducta",
+        steps: [
+          "En «Conducta» revisa los incidentes que reportan los docentes; «Esperan decisión» muestra los pendientes.",
+          "Registra el llamado de atención, la citación a la familia o el compromiso de conducta, con una nota para la familia. En el llamado eliges si se le avisa.",
+          "«Imprimir acta» saca la hoja de cada medida para firmarla.",
+          "La suspensión y la expulsión las decide la dirección.",
+        ],
+      },
     ],
   },
   {
@@ -253,6 +295,7 @@ export const HELP_GUIDES: HelpGuide[] = [
     roles: ["secretaria", "admin"],
     sections: [
       FIRST_LOGIN,
+      CALENDAR,
       {
         title: "Matrícula",
         steps: [
@@ -280,7 +323,7 @@ export const HELP_GUIDES: HelpGuide[] = [
       {
         title: "Boleta y constancia",
         steps: [
-          "En la ficha del alumno, «Boleta» abre la boleta informativa lista para imprimir.",
+          "En la ficha del alumno, «Boleta» abre la boleta informativa lista para imprimir. Arriba se elige «Español» o «English».",
           "«Constancia de matrícula» abre la constancia para firmar y sellar.",
         ],
       },
@@ -315,6 +358,7 @@ export const HELP_GUIDES: HelpGuide[] = [
           "Verás sus notas por materia y parcial, su asistencia, las faltas recientes y las tareas de la semana.",
           "Si aparece «Conviene hablar con sus maestros», acércate al centro: es una alerta temprana, todavía hay tiempo de ayudarlo.",
           "«Ver boleta» abre la boleta informativa para imprimir.",
+          "Si el centro decidió una medida de conducta (por ejemplo, una citación o una suspensión), aparece en «Conducta» con la nota de la dirección.",
           "Más abajo está el horario de clases de su sección.",
           "Si el centro registró un llamado de atención o una medida y te la avisó, aparece en «Llamados de atención y medidas».",
           "Arriba de «Mis hijos» aparecen los avisos del centro.",

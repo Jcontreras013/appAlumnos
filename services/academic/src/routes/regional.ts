@@ -24,6 +24,7 @@ import type { DbOrTx } from "../db/client";
 import { attendanceRecords, auditEvents, enrollments, studentFollowUps } from "../db/schema";
 import type { AcademicDeps } from "../deps";
 import { mapLimit } from "../lib/concurrency";
+import { regionalConduct } from "../lib/conduct";
 import { ensureDefaultPeriods, followUp } from "../lib/evaluation";
 import { familyChild } from "../lib/family";
 import { bearerOf } from "../lib/identity-client";
@@ -69,6 +70,7 @@ export async function summarize(
       classes: 0,
       teachersOnLeave: 0,
       uncoveredClasses: 0,
+      dayOffToday: null,
       attendanceRate7d: null,
       studentsAtRisk: 0,
       periodName: null,
@@ -101,6 +103,7 @@ export async function summarize(
     classes: assignments.length,
     teachersOnLeave: coverage.teachersOnLeave,
     uncoveredClasses: coverage.totals.sin_cubrir,
+    dayOffToday: coverage.dayOff?.name ?? null,
     attendanceRate7d: follow.attendance.rate7d,
     studentsAtRisk: follow.studentsAtRisk.length,
     periodName: follow.period?.name ?? null,
@@ -229,6 +232,7 @@ export async function regionalRoutes(app: FastifyInstance, { db, identity, today
       gradeProgress: follow.gradeProgress.items,
       plans: assignments.length ? (await weekBoard(db, id, assignments, mondayOf(date), date)).rows : [],
       attendanceBySection: await attendanceBySection(db, id, sections, date),
+      conduct: await regionalConduct(db, id),
     };
   });
 

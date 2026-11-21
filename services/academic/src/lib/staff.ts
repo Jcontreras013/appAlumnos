@@ -11,6 +11,7 @@ import { and, asc, desc, eq, gte, inArray, isNull, lte, ne, sql } from "drizzle-
 import type { FastifyRequest } from "fastify";
 import type { DbOrTx } from "../db/client";
 import { type Substitution, substitutions, type TeacherLeave, teacherLeaves } from "../db/schema";
+import { dayOffFor } from "./calendar";
 import { bearerOf, type IdentityClient } from "./identity-client";
 import { findCurrentYear, listAssignments } from "./queries";
 
@@ -195,10 +196,16 @@ export async function coverageFor(db: DbOrTx, schoolId: string, date: string): P
   });
   const totals = { normal: 0, cubierta: 0, sin_cubrir: 0 };
   for (const row of rows) totals[row.status]++;
+  // Un día sin clases nadie queda «sin maestro»: las licencias se siguen mostrando, sin alarma.
+  const dayOff = await dayOffFor(db, schoolId, date);
+  if (dayOff) {
+    totals.sin_cubrir = 0;
+  }
   return {
     date,
     rows,
     totals,
+    dayOff,
     teachersOnLeave: new Set(activeLeaves.map((l) => l.teacherUserId)).size,
   };
 }

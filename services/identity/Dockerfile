@@ -15,6 +15,8 @@ FROM node:22-slim AS runtime
 ENV NODE_ENV=production PORT=3001
 WORKDIR /app
 COPY --from=build --chown=node:node /out ./
+# Carpeta de los adjuntos de los mensajes en la demo (en AWS se usa un bucket de S3).
+RUN mkdir -p /data/adjuntos && chown node:node /data/adjuntos
 USER node
 EXPOSE 3001
 CMD ["node", "--enable-source-maps", "dist/index.js"]

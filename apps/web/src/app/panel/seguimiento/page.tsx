@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { FollowUpEditor } from "@/components/follow-up-editor";
 import { Kpi } from "@/components/kpi";
+import { FilterBar, FilterEmpty, FilterRow, FilterScope } from "@/components/quick-filter";
 import { academic } from "@/lib/academic";
 import { requireRole } from "@/lib/dal";
 
@@ -26,6 +27,7 @@ export default async function FollowUpPage({ searchParams }: PageProps<"/panel/s
   ]);
   const { period, gradeProgress, attendance, studentsAtRisk, daysToClose } = data;
   const pending = gradeProgress.total - gradeProgress.complete;
+  const sectionOptions = sections.map((s) => ({ value: s.id, label: s.label }));
   const behind = daysToClose !== null && daysToClose <= 7 && pending > 0;
   const items = [...gradeProgress.items].sort(
     (a, b) =>
@@ -68,11 +70,15 @@ export default async function FollowUpPage({ searchParams }: PageProps<"/panel/s
           hint={pending > 0 ? `${pending} por completar` : "listas para el SACE"}
         />
         <Kpi label="Asistencia (7 días)" value={pct(attendance.rate7d)} hint="tarde cuenta como asistió" />
-        <Kpi
-          label="Asistencia tomada hoy"
-          value={`${attendance.sectionsRecordedToday} / ${attendance.sections}`}
-          hint="secciones"
-        />
+        {attendance.dayOff ? (
+          <Kpi label="Asistencia tomada hoy" value="Sin clases" hint={attendance.dayOff.name} />
+        ) : (
+          <Kpi
+            label="Asistencia tomada hoy"
+            value={`${attendance.sectionsRecordedToday} / ${attendance.sections}`}
+            hint="secciones"
+          />
+        )}
         <Kpi
           label="Alumnos en riesgo"
           value={studentsAtRisk.length}
@@ -96,16 +102,22 @@ export default async function FollowUpPage({ searchParams }: PageProps<"/panel/s
       <section className="card flex flex-wrap items-center justify-between gap-4 p-4">
         <div>
           <h2 className="text-sm font-semibold text-slate-700">Planificación de esta semana</h2>
-          <p className="mt-1 text-sm text-slate-600">
-            <strong className="text-slate-900">
-              {data.plans.delivered} de {data.plans.total}
-            </strong>{" "}
-            clases entregadas · {data.plans.approved} aprobadas
-            {data.plans.overdue > 0 && (
-              <span className="font-semibold text-red-700"> · {data.plans.overdue} atrasadas</span>
-            )}{" "}
-            <span className="text-slate-400">(vencía el {formatDay(data.plans.deadline)})</span>
-          </p>
+          {data.plans.dayOff ? (
+            <p className="mt-1 text-sm text-slate-600">
+              Semana sin clases ({data.plans.dayOff.name}): no se pide planificación.
+            </p>
+          ) : (
+            <p className="mt-1 text-sm text-slate-600">
+              <strong className="text-slate-900">
+                {data.plans.delivered} de {data.plans.total}
+              </strong>{" "}
+              clases entregadas · {data.plans.approved} aprobadas
+              {data.plans.overdue > 0 && (
+                <span className="font-semibold text-red-700"> · {data.plans.overdue} atrasadas</span>
+              )}{" "}
+              <span className="text-slate-400">(vencía el {formatDay(data.plans.deadline)})</span>
+            </p>
+          )}
         </div>
         <Link href="/panel/planificacion" className="btn-secondary px-3 py-1.5">
           Ver planificaciones
@@ -119,57 +131,61 @@ export default async function FollowUpPage({ searchParams }: PageProps<"/panel/s
         {studentsAtRisk.length === 0 ? (
           <Empty>Ningún alumno en riesgo con lo registrado hasta ahora.</Empty>
         ) : (
-          <Table head={["Alumno", "Sección", "Asistencia", "Faltas", "Va reprobando", "Seguimiento"]}>
-            {studentsAtRisk.map((s) => (
-              <tr key={s.studentId}>
-                <td className="px-4 py-3 font-medium text-slate-900">
-                  <Link href={`/panel/alumnos/${s.studentId}`} className="hover:underline">
-                    {s.name}
-                  </Link>
-                </td>
-                <td className="whitespace-nowrap px-4 py-3">{s.sectionLabel}</td>
-                <td
-                  className={`px-4 py-3 tabular-nums ${
-                    s.attendanceRate !== null && s.attendanceRate < RISK_RULES.minAttendanceRate
-                      ? "font-semibold text-red-700"
-                      : ""
-                  }`}
-                >
-                  {pct(s.attendanceRate)}
-                </td>
-                <td
-                  className={`px-4 py-3 tabular-nums ${s.absences >= RISK_RULES.maxAbsences ? "font-semibold text-red-700" : ""}`}
-                >
-                  {s.absences}
-                </td>
-                <td className="px-4 py-3">
-                  {s.failing.length === 0 ? (
-                    <span className="text-slate-400">—</span>
-                  ) : (
-                    s.failing.map((f) => (
-                      <span
-                        key={f.subjectName}
-                        className="mr-1 inline-block rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-800"
-                      >
-                        {f.subjectName} ≈ {f.projected}
+          <FilterScope items={studentsAtRisk.map((s) => ({ text: s.name, group: s.sectionId }))}>
+            <FilterBar placeholder="Buscar alumno" groups={sectionOptions} />
+            <Table head={["Alumno", "Sección", "Asistencia", "Faltas", "Va reprobando", "Seguimiento"]}>
+              {studentsAtRisk.map((s) => (
+                <FilterRow key={s.studentId} text={s.name} group={s.sectionId}>
+                  <td className="px-4 py-3 font-medium text-slate-900">
+                    <Link href={`/panel/alumnos/${s.studentId}`} className="hover:underline">
+                      {s.name}
+                    </Link>
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3">{s.sectionLabel}</td>
+                  <td
+                    className={`px-4 py-3 tabular-nums ${
+                      s.attendanceRate !== null && s.attendanceRate < RISK_RULES.minAttendanceRate
+                        ? "font-semibold text-red-700"
+                        : ""
+                    }`}
+                  >
+                    {pct(s.attendanceRate)}
+                  </td>
+                  <td
+                    className={`px-4 py-3 tabular-nums ${s.absences >= RISK_RULES.maxAbsences ? "font-semibold text-red-700" : ""}`}
+                  >
+                    {s.absences}
+                  </td>
+                  <td className="px-4 py-3">
+                    {s.failing.length === 0 ? (
+                      <span className="text-slate-400">—</span>
+                    ) : (
+                      s.failing.map((f) => (
+                        <span
+                          key={f.subjectName}
+                          className="mr-1 inline-block rounded-full bg-red-50 px-2 py-0.5 text-xs font-medium text-red-800"
+                        >
+                          {f.subjectName} ≈ {f.projected}
+                        </span>
+                      ))
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    {s.lastFollowUp ? (
+                      <span className="block text-xs text-slate-600">
+                        {FOLLOW_UP_LABELS[s.lastFollowUp.kind]} · {formatDay(s.lastFollowUp.date)}
+                        {s.followUps > 1 && ` (${s.followUps} acciones)`}
                       </span>
-                    ))
-                  )}
-                </td>
-                <td className="px-4 py-3">
-                  {s.lastFollowUp ? (
-                    <span className="block text-xs text-slate-600">
-                      {FOLLOW_UP_LABELS[s.lastFollowUp.kind]} · {formatDay(s.lastFollowUp.date)}
-                      {s.followUps > 1 && ` (${s.followUps} acciones)`}
-                    </span>
-                  ) : (
-                    <span className="block text-xs font-semibold text-amber-700">Sin seguimiento</span>
-                  )}
-                  {canFollowUp && <FollowUpEditor studentId={s.studentId} studentName={s.name} />}
-                </td>
-              </tr>
-            ))}
-          </Table>
+                    ) : (
+                      <span className="block text-xs font-semibold text-amber-700">Sin seguimiento</span>
+                    )}
+                    {canFollowUp && <FollowUpEditor studentId={s.studentId} studentName={s.name} />}
+                  </td>
+                </FilterRow>
+              ))}
+            </Table>
+            <FilterEmpty message="Ningún alumno en riesgo coincide con la búsqueda." />
+          </FilterScope>
         )}
       </Card>
 
@@ -180,51 +196,64 @@ export default async function FollowUpPage({ searchParams }: PageProps<"/panel/s
         {items.length === 0 ? (
           <Empty>No hay clases asignadas este año.</Empty>
         ) : (
-          <Table head={["Sección", "Materia", "Docente", "Puntos repartidos", "Alumnos con notas", ""]}>
-            {items.map((i) => (
-              <tr key={i.assignment.id}>
-                <td className="whitespace-nowrap px-4 py-3">{i.assignment.sectionLabel}</td>
-                <td className="px-4 py-3">
-                  <a
-                    href={`/panel/cuaderno/notas/${i.assignment.id}?periodo=${period.id}`}
-                    className="font-medium text-slate-900 hover:underline"
-                  >
-                    {i.assignment.subjectName}
-                  </a>
-                </td>
-                <td className="px-4 py-3">{i.assignment.teacherName}</td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <div className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-100">
-                      <div
-                        className={`h-full ${i.possible >= 100 ? "bg-brand-500" : "bg-amber-400"}`}
-                        style={{ width: `${Math.min(i.possible, 100)}%` }}
-                      />
+          <FilterScope
+            items={items.map((i) => ({
+              text: `${i.assignment.subjectName} ${i.assignment.teacherName}`,
+              group: i.assignment.sectionId,
+            }))}
+          >
+            <FilterBar placeholder="Buscar materia o docente" groups={sectionOptions} />
+            <Table head={["Sección", "Materia", "Docente", "Puntos repartidos", "Alumnos con notas", ""]}>
+              {items.map((i) => (
+                <FilterRow
+                  key={i.assignment.id}
+                  text={`${i.assignment.subjectName} ${i.assignment.teacherName}`}
+                  group={i.assignment.sectionId}
+                >
+                  <td className="whitespace-nowrap px-4 py-3">{i.assignment.sectionLabel}</td>
+                  <td className="px-4 py-3">
+                    <a
+                      href={`/panel/cuaderno/notas/${i.assignment.id}?periodo=${period.id}`}
+                      className="font-medium text-slate-900 hover:underline"
+                    >
+                      {i.assignment.subjectName}
+                    </a>
+                  </td>
+                  <td className="px-4 py-3">{i.assignment.teacherName}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <div className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-100">
+                        <div
+                          className={`h-full ${i.possible >= 100 ? "bg-brand-500" : "bg-amber-400"}`}
+                          style={{ width: `${Math.min(i.possible, 100)}%` }}
+                        />
+                      </div>
+                      <span className="tabular-nums">{i.possible}</span>
                     </div>
-                    <span className="tabular-nums">{i.possible}</span>
-                  </div>
-                </td>
-                <td className="px-4 py-3 tabular-nums">
-                  {i.studentsComplete} / {i.students}
-                </td>
-                <td className="px-4 py-3">
-                  {i.complete ? (
-                    <span className="whitespace-nowrap rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
-                      Completa
-                    </span>
-                  ) : i.activities === 0 ? (
-                    <span className="whitespace-nowrap rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">
-                      Sin actividades
-                    </span>
-                  ) : (
-                    <span className="whitespace-nowrap rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800">
-                      En proceso
-                    </span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </Table>
+                  </td>
+                  <td className="px-4 py-3 tabular-nums">
+                    {i.studentsComplete} / {i.students}
+                  </td>
+                  <td className="px-4 py-3">
+                    {i.complete ? (
+                      <span className="whitespace-nowrap rounded-full bg-brand-50 px-2 py-0.5 text-xs font-semibold text-brand-700">
+                        Completa
+                      </span>
+                    ) : i.activities === 0 ? (
+                      <span className="whitespace-nowrap rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">
+                        Sin actividades
+                      </span>
+                    ) : (
+                      <span className="whitespace-nowrap rounded-full bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-800">
+                        En proceso
+                      </span>
+                    )}
+                  </td>
+                </FilterRow>
+              ))}
+            </Table>
+            <FilterEmpty message="Ninguna clase coincide con la búsqueda." />
+          </FilterScope>
         )}
       </Card>
 

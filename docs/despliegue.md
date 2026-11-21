@@ -10,9 +10,17 @@ una vez la persona responsable técnica, con una cuenta de AWS a nombre de quien
   carga (por ejemplo, a la hora de tomar asistencia en todas las escuelas).
 - PostgreSQL en **dos zonas** (si una falla, la otra sigue), cifrada, sin acceso desde internet.
 - **Respaldos automáticos de 30 días**: se puede volver la base a cualquier minuto de ese período.
+  El respaldo diario corre a la 1:00 a. m. y las actualizaciones de AWS los domingos a las 2:00 a. m.
+  (hora de Honduras), nunca en horario de clases.
+- **Fotos, videos y documentos de los mensajes** con versiones: si algo se borra por error, se
+  recupera durante 90 días.
 - **WAF**: límite de intentos de inicio de sesión por IP y bloqueo de IPs maliciosas conocidas.
-- **Alarmas por correo**: errores del panel, panel caído, CPU y memoria altas, poco disco o poca
-  memoria en la base.
+- **Alarmas por correo**: errores del panel o del balanceador, panel caído o lento, CPU y memoria
+  altas, muchas conexiones, poco disco o poca memoria en la base. La base registra las consultas que
+  tardan más de 1 s (en los logs de RDS en CloudWatch).
+- **Si la base se reinicia o cambia de zona**, los servicios no se caen: durante esos segundos
+  responden «intenta de nuevo» (el cuaderno reenvía solo lo pendiente) y se recuperan en cuanto
+  vuelve. ECS no reemplaza las tareas por eso.
 
 ## Costo aproximado (us-east-1)
 
@@ -36,17 +44,11 @@ Si la carga sube y se escala a 4 tareas en horas pico, el costo sube solo durant
 
 ## Pasos
 
-1. Preparar la cuenta para CDK (una vez):
+1. Crear las llaves con que se firman las sesiones (nunca se guardan en git):
 
    ```bash
    pnpm install
    ```
-
-   ```bash
-   pnpm --filter @escolar/infra exec cdk bootstrap
-   ```
-
-2. Crear las llaves con que se firman las sesiones (nunca se guardan en git):
 
    ```bash
    pnpm -s keys:generate --json > jwt.json
@@ -58,6 +60,13 @@ Si la carga sube y se escala a 4 tareas en horas pico, el costo sube solo durant
 
    ```bash
    rm jwt.json
+   ```
+
+2. Preparar la cuenta para CDK (una vez), con el ARN del secreto del paso 1. CDK arma la app para
+   saber dónde instalarse, y la app no arma sin ese secreto:
+
+   ```bash
+   pnpm --filter @escolar/infra exec cdk bootstrap -c jwtSecretArn=arn:aws:secretsmanager:...
    ```
 
 3. Pedir el certificado HTTPS del dominio en ACM y validarlo por DNS (AWS muestra un registro CNAME

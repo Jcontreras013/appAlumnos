@@ -21,6 +21,13 @@ export interface IdentityConfig extends TokenSettings {
   jwtKeyId: string;
   jwtPrivateKeyPem: string;
   jwtPublicKeyPem: string;
+  /** Llaves de los avisos al celular (Web Push). Sin ellas los mensajes funcionan, sin avisos. */
+  vapid: { publicKey: string; privateKey: string; subject: string } | null;
+  /**
+   * Fotos, videos y documentos de los mensajes: FILES_BUCKET (S3, en AWS) o FILES_DIR (una carpeta,
+   * en la demo). Sin ninguna, la carpeta `.adjuntos` junto al servicio.
+   */
+  files: { kind: "s3"; bucket: string } | { kind: "local"; dir: string | null };
 }
 
 export const DEFAULT_TOKEN_SETTINGS: TokenSettings = {
@@ -48,5 +55,22 @@ export function loadConfig(): IdentityConfig {
     jwtKeyId: optionalEnv("JWT_KEY_ID", "identity-1"),
     jwtPrivateKeyPem: pemEnv("JWT_PRIVATE_KEY"),
     jwtPublicKeyPem: pemEnv("JWT_PUBLIC_KEY"),
+    vapid: vapidFromEnv(),
+    files: process.env.FILES_BUCKET?.trim()
+      ? { kind: "s3", bucket: process.env.FILES_BUCKET.trim() }
+      : { kind: "local", dir: process.env.FILES_DIR?.trim() || null },
   };
+}
+
+function vapidFromEnv(): IdentityConfig["vapid"] {
+  const publicKey = optionalEnv("VAPID_PUBLIC_KEY", "");
+  const privateKey = optionalEnv("VAPID_PRIVATE_KEY", "");
+  const subject = optionalEnv("VAPID_SUBJECT", "");
+  if (!publicKey && !privateKey) return null;
+  if (!publicKey || !privateKey || !/^(mailto:|https:\/\/)/.test(subject)) {
+    throw new Error(
+      "Avisos al celular: faltan VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY o VAPID_SUBJECT (mailto:… o https://…). Genéralas con `pnpm push:keys`.",
+    );
+  }
+  return { publicKey, privateKey, subject };
 }

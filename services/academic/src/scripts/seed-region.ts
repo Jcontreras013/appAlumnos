@@ -17,6 +17,7 @@ import {
   type AttendanceSheetDto,
   type AttendanceStatus,
   addDays,
+  type ConductIncidentDto,
   type DepartmentDto,
   type MeResponseDto,
   mondayOf,
@@ -740,6 +741,55 @@ for (const [index, school] of SCHOOLS.entries()) {
         method: "POST",
         token,
         body: { currentPassword: access.temporaryPassword, newPassword: PASSWORD },
+      });
+    }
+
+    // ── Conducta: incidentes de Cuarto grado con medidas, y uno que espera decisión ──
+    const teacherToken = await loginAt(cuarto.teacher.email ?? "", created.school.id);
+    const asCuarto = <T>(path: string, method = "GET", body?: unknown) =>
+      request<T>(`${academicUrl}${path}`, { method, token: teacherToken, body });
+    const kids = (await acApi<AttendanceSheetDto>(`/attendance/${cuarto.sectionId}`)).students;
+    // kids[0] es de la familia de la demo: ve el llamado de atención en su portal.
+    const [phone, push, rude] = [kids[0], kids[4], kids[5]];
+    if (phone && push && rude) {
+      const leve = await asCuarto<ConductIncidentDto>("/conduct/incidents", "POST", {
+        studentId: phone.studentId,
+        date: addDays(today, -9),
+        severity: "leve",
+        category: "objetos",
+        description: "Usó el celular durante la prueba corta después de que se le pidió guardarlo.",
+      });
+      await acApi(`/conduct/incidents/${leve.id}/measures`, "POST", {
+        kind: "llamado_atencion",
+        startsOn: addDays(today, -8),
+        notes: "Se le recordó la norma del celular en clase. Les pedimos apoyarnos desde casa.",
+        notifyFamily: true,
+      });
+      const grave = await asCuarto<ConductIncidentDto>("/conduct/incidents", "POST", {
+        studentId: push.studentId,
+        date: addDays(today, -4),
+        severity: "grave",
+        category: "agresion",
+        description: "Empujó a un compañero en el recreo; el compañero cayó y se raspó la rodilla.",
+      });
+      await acApi(`/conduct/incidents/${grave.id}/measures`, "POST", {
+        kind: "citacion_familia",
+        startsOn: addDays(today, -3),
+        notes: "Les esperamos en la dirección a las 7:30 a. m. para conversar sobre lo ocurrido.",
+      });
+      await acApi(`/conduct/incidents/${grave.id}/measures`, "POST", {
+        kind: "suspension",
+        startsOn: addDays(today, -1),
+        endsOn: addDays(today, 1),
+        notes:
+          "Suspendido tres días. Regresa acompañado de su madre o padre para firmar el compromiso de conducta.",
+      });
+      await asCuarto("/conduct/incidents", "POST", {
+        studentId: rude.studentId,
+        date: addDays(today, -1),
+        severity: "leve",
+        category: "irrespeto",
+        description: "Contestó de mala manera a la maestra cuando se le pidió volver a su lugar.",
       });
     }
   }

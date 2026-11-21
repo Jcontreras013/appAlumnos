@@ -27,6 +27,9 @@ services:
     env_file: services/identity/.env
     environment:
       DATABASE_URL: postgres://escolar:escolar@db:5432/escolar_identity
+      FILES_DIR: /data/adjuntos
+    volumes:
+      - adjuntos:/data/adjuntos
     ports:
       - "3001:3001"
     depends_on:
@@ -41,6 +44,12 @@ services:
     environment:
       DATABASE_URL: postgres://escolar:escolar@db:5432/escolar_academic
       IDENTITY_URL: http://identity:3001
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: ${GROQ_MODEL:-}
+      PLAN_ASSISTANT_PROVIDER: ${PLAN_ASSISTANT_PROVIDER:-}
     ports:
       - "3002:3002"
     depends_on:
@@ -66,3 +75,4 @@ services:
 
 volumes:
   pgdata:
+  adjuntos:

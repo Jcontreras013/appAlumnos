@@ -1,7 +1,11 @@
 # Despliegue manual a AWS (Actions → "Desplegar en AWS" → Run workflow).
 # Requiere, una sola vez: `cdk bootstrap`, un rol IAM para GitHub (OIDC) guardado en el secreto
 # AWS_DEPLOY_ROLE_ARN y la variable JWT_SECRET_ARN. En el ambiente "prod" además CERTIFICATE_ARN
-# (obligatoria) y ALERT_EMAIL. Ver README → Despliegue en AWS y docs/despliegue.md.
+# (obligatoria) y ALERT_EMAIL. Opcionales en cualquier ambiente: GEMINI_SECRET_ARN (llave de Gemini),
+# GROQ_SECRET_ARN (llave de Groq) o ANTHROPIC_SECRET_ARN (llave de Claude) para activar el asistente de
+# planificación, GEMINI_MODEL o GROQ_MODEL para elegir el modelo, y PUSH_SECRET_ARN (llaves de los
+# avisos de mensajes al celular). Ver
+# README → Despliegue en AWS y docs/despliegue.md.
 name: Desplegar en AWS
 
 on:
@@ -45,8 +49,20 @@ jobs:
           JWT_SECRET_ARN: ${{ vars.JWT_SECRET_ARN }}
           CERTIFICATE_ARN: ${{ vars.CERTIFICATE_ARN }}
           ALERT_EMAIL: ${{ vars.ALERT_EMAIL }}
+          ANTHROPIC_SECRET_ARN: ${{ vars.ANTHROPIC_SECRET_ARN }}
+          GEMINI_SECRET_ARN: ${{ vars.GEMINI_SECRET_ARN }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
+          GROQ_SECRET_ARN: ${{ vars.GROQ_SECRET_ARN }}
+          GROQ_MODEL: ${{ vars.GROQ_MODEL }}
+          PUSH_SECRET_ARN: ${{ vars.PUSH_SECRET_ARN }}
         run: |
           ARGS=(-c "stage=$STAGE" -c "jwtSecretArn=$JWT_SECRET_ARN")
           if [ -n "$CERTIFICATE_ARN" ]; then ARGS+=(-c "certificateArn=$CERTIFICATE_ARN"); fi
           if [ -n "$ALERT_EMAIL" ]; then ARGS+=(-c "alertEmail=$ALERT_EMAIL"); fi
+          if [ -n "$ANTHROPIC_SECRET_ARN" ]; then ARGS+=(-c "anthropicSecretArn=$ANTHROPIC_SECRET_ARN"); fi
+          if [ -n "$GEMINI_SECRET_ARN" ]; then ARGS+=(-c "geminiSecretArn=$GEMINI_SECRET_ARN"); fi
+          if [ -n "$GEMINI_MODEL" ]; then ARGS+=(-c "geminiModel=$GEMINI_MODEL"); fi
+          if [ -n "$GROQ_SECRET_ARN" ]; then ARGS+=(-c "groqSecretArn=$GROQ_SECRET_ARN"); fi
+          if [ -n "$GROQ_MODEL" ]; then ARGS+=(-c "groqModel=$GROQ_MODEL"); fi
+          if [ -n "$PUSH_SECRET_ARN" ]; then ARGS+=(-c "pushSecretArn=$PUSH_SECRET_ARN"); fi
           pnpm --filter @escolar/infra exec cdk deploy --all --require-approval never "${ARGS[@]}"

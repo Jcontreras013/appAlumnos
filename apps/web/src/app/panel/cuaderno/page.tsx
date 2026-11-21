@@ -6,6 +6,7 @@ import {
   todayInHonduras,
 } from "@escolar/shared";
 import type { Metadata } from "next";
+import { DayOffBanner } from "@/components/day-off-banner";
 import { PrecacheClasses, SyncStatus } from "@/components/offline";
 import { academic } from "@/lib/academic";
 import { requireRole } from "@/lib/dal";
@@ -52,6 +53,8 @@ export default async function NotebookPage() {
     ...classes.map((c) => notesUrl(c.assignment.id)),
   ];
   const daysToClose = period ? daysBetween(today, period.closesOn) : null;
+  // Feriado o vacaciones (calendario escolar): viene con la lista de asistencia de hoy.
+  const dayOff = [...sheets.values()].find((s) => s?.dayOff)?.dayOff ?? null;
 
   return (
     <div className="space-y-6">
@@ -83,6 +86,12 @@ export default async function NotebookPage() {
           {classes.length > 0 && <PrecacheClasses urls={offlineUrls} />}
         </div>
       </div>
+
+      {dayOff && (
+        <DayOffBanner dayOff={dayOff}>
+          Hoy no hay clases: no hace falta pasar asistencia. Las notas se pueden seguir registrando.
+        </DayOffBanner>
+      )}
 
       {classes.length === 0 ? (
         <div className="card p-8 text-center text-sm text-slate-500">

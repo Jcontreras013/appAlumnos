@@ -63,8 +63,6 @@ export const AUDIT_LABELS: Record<string, string> = {
   "guardian.portal_revoked": "Quitó el acceso al portal a una familia",
   "student.follow_up_added": "Registró un seguimiento",
   "student.follow_up_deleted": "Borró un seguimiento",
-  "student.discipline_recorded": "Registró una medida de disciplina",
-  "student.discipline_deleted": "Borró una medida de disciplina",
   "student.expelled": "Expulsó a un alumno (matrícula retirada)",
   "enrollment.created": "Matriculó a un alumno",
   "enrollment.reactivated": "Volvió a matricular a un alumno",
@@ -76,10 +74,15 @@ export const AUDIT_LABELS: Record<string, string> = {
   "substitution.cancelled": "Canceló una sustitución",
   "activity.deleted": "Borró una actividad con notas",
   "plan_template.updated": "Cambió la plantilla de planificación",
+  "plan.ai_draft": "Generó un borrador de planificación con el asistente",
   "announcement.published": "Publicó un aviso",
   "announcement.removed": "Quitó un aviso",
   "export.school": "Descargó los datos del centro en Excel",
   "student.viewed_by_region": "Consultó la ficha de un alumno desde la departamental o distrital",
+  "conduct.incident_reported": "Reportó un incidente de conducta",
+  "conduct.incident_deleted": "Borró un incidente de conducta",
+  "conduct.measure_added": "Registró una medida disciplinaria",
+  "conduct.measure_cancelled": "Anuló una medida disciplinaria",
   "schedule.blocks_updated": "Cambió las horas de clase",
   "student.transfer_sent": "Trasladó a un alumno a otro centro",
   "student.transfer_received": "Recibió a un alumno trasladado",
@@ -87,6 +90,8 @@ export const AUDIT_LABELS: Record<string, string> = {
   "recovery.recorded": "Registró notas de recuperación",
   "promotion.committed": "Matriculó a los alumnos en el año siguiente",
   "schedule.section_updated": "Cambió el horario de una sección",
+  "calendar.day_off_added": "Marcó días sin clases en el calendario escolar",
+  "calendar.day_off_removed": "Quitó días sin clases del calendario escolar",
 };
 
 export const auditLabel = (action: string) => AUDIT_LABELS[action] ?? action;

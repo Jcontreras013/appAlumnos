@@ -58,6 +58,33 @@ export function isForeignKeyViolation(error: unknown): boolean {
   return false;
 }
 
+/** Códigos de Postgres de «el servidor se está apagando / reiniciando / no acepta conexiones». */
+const DB_DOWN_CODES = new Set(["57P01", "57P02", "57P03", "53300"]);
+const DB_DOWN_MESSAGES = [
+  "Connection terminated",
+  "timeout exceeded when trying to connect",
+  // La conexión ya se cortó y la transacción no pudo ni deshacerse (Postgres la deshace solo).
+  "Client has encountered a connection error and is not queryable",
+];
+const NETWORK_CODES = new Set(["ECONNREFUSED", "ECONNRESET", "ETIMEDOUT", "EPIPE", "ENOTFOUND", "EAI_AGAIN"]);
+
+/**
+ * La base no está disponible por un momento (reinicio, cambio de zona en Multi-AZ, sin conexiones
+ * libres). No es un error del usuario ni un bug: se responde 503 «intenta de nuevo», que el cuaderno
+ * sin internet reintenta solo (sus cambios no se pierden), y se registra como aviso, no como error.
+ */
+export function isDatabaseUnavailable(error: unknown): boolean {
+  for (let current: unknown = error, depth = 0; current && depth < 5; depth++) {
+    const e = current as { code?: string; message?: string; cause?: unknown };
+    if (e.code && (DB_DOWN_CODES.has(e.code) || e.code.startsWith("08") || NETWORK_CODES.has(e.code))) {
+      return true;
+    }
+    if (e.message && DB_DOWN_MESSAGES.some((m) => e.message?.startsWith(m))) return true;
+    current = e.cause;
+  }
+  return false;
+}
+
 function body(code: string, message: string, details?: unknown): ApiErrorDto {
   return { error: details === undefined ? { code, message } : { code, message, details } };
 }
@@ -77,6 +104,18 @@ export function errorHandler(error: FastifyError | Error, request: FastifyReques
     const message =
       statusCode === 429 ? "Demasiados intentos. Espera un momento e inténtalo de nuevo." : error.message;
     return reply.status(statusCode).send(body(code, message));
+  }
+  if (isDatabaseUnavailable(error)) {
+    request.log.warn({ err: error }, "La base de datos no respondió; se pidió reintentar");
+    return reply
+      .status(503)
+      .header("retry-after", "5")
+      .send(
+        body(
+          "service_unavailable",
+          "El servidor está ocupado en este momento. Intenta de nuevo en unos segundos.",
+        ),
+      );
   }
   // Errores inesperados: se registran completos pero al cliente solo le llega un mensaje genérico
   // con el id de la petición, para poder rastrearlo en los logs (CloudWatch) sin filtrar detalles.

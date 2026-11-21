@@ -198,6 +198,11 @@ export default async function StructurePage() {
                 className="inline-flex flex-wrap items-center gap-2 rounded-full bg-slate-100 px-2.5 py-1 text-sm text-slate-700"
               >
                 {s.name}
+                {s.language === "en" && (
+                  <span className="rounded-full bg-blue-100 px-1.5 text-xs font-semibold text-blue-800">
+                    Inglés
+                  </span>
+                )}
                 {canEdit && <SubjectEditor subject={s} />}
               </span>
             ))}

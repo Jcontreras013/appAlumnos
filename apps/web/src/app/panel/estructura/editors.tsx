@@ -1,6 +1,13 @@
 "use client";
 
-import type { AssignmentDto, GradeDto, SectionDto, SubjectDto } from "@escolar/shared";
+import {
+  type AssignmentDto,
+  type GradeDto,
+  type SectionDto,
+  SUBJECT_LANGUAGE_LABELS,
+  SUBJECT_LANGUAGES,
+  type SubjectDto,
+} from "@escolar/shared";
 import { Field, SelectField } from "@/components/form-controls";
 import { InlineEditor } from "@/components/inline-editor";
 import {
@@ -15,6 +22,12 @@ import {
 } from "./actions";
 
 type Option = { value: string; label: string };
+
+/** Idioma en que se imparte la materia (colegios bilingües): el asistente planifica en ese idioma. */
+export const LANGUAGE_OPTIONS: Option[] = SUBJECT_LANGUAGES.map((l) => ({
+  value: l,
+  label: SUBJECT_LANGUAGE_LABELS[l],
+}));
 
 export function GradeEditor({ grade }: { grade: GradeDto }) {
   return (
@@ -94,14 +107,24 @@ export function SubjectEditor({ subject }: { subject: SubjectDto }) {
       remove={deleteSubjectAction}
       removeLabel="Eliminar materia"
       fields={(state, idPrefix) => (
-        <Field
-          idPrefix={idPrefix}
-          name="name"
-          label="Materia"
-          required
-          state={state}
-          defaultValue={state.values?.name ?? subject.name}
-        />
+        <div className="grid grid-cols-[1fr_9rem] gap-3">
+          <Field
+            idPrefix={idPrefix}
+            name="name"
+            label="Materia"
+            required
+            state={state}
+            defaultValue={state.values?.name ?? subject.name}
+          />
+          <SelectField
+            idPrefix={idPrefix}
+            name="language"
+            label="Se imparte en"
+            options={LANGUAGE_OPTIONS}
+            defaultValue={subject.language}
+            state={state}
+          />
+        </div>
       )}
     />
   );

@@ -1,19 +1,21 @@
-import { isRegionalRole, ROLE_LABELS, type Role } from "@escolar/shared";
+import { isRegionalRole, MESSAGING_ROLES, ROLE_LABELS, type Role } from "@escolar/shared";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { ChangePasswordForm } from "@/components/change-password-form";
+import { LogoutButton } from "@/components/logout-button";
 import { MfaSetup } from "@/components/mfa-setup";
 import { Nav, type NavItem } from "@/components/nav";
 import { OfflineAgent } from "@/components/offline";
 import { SchoolLogo } from "@/components/school-logo";
 import { APP_MARK, APP_NAME } from "@/lib/brand";
 import { getSession } from "@/lib/dal";
+import { identity } from "@/lib/identity";
 import { currentLicense } from "@/lib/license";
 import { MODULES } from "@/lib/modules";
 import { logoutAction, switchMembershipAction } from "./actions";
 
 export default async function PanelLayout({ children }: { children: ReactNode }) {
-  const [{ user, school, current, memberships, mfa }, license] = await Promise.all([
+  const [{ user, school, current, memberships, mfa, accessToken }, license] = await Promise.all([
     getSession(),
     currentLicense(),
   ]);
@@ -24,6 +26,11 @@ export default async function PanelLayout({ children }: { children: ReactNode })
   const gated = unlicensed || user.mustChangePassword || mfa.setupRequired;
 
   const is = (...roles: Role[]) => roles.includes(user.role);
+  const messaging = !gated && is(...MESSAGING_ROLES);
+  // Si el servicio no responde, el menú sale igual (sin contador).
+  const unreadMessages = messaging
+    ? ((await identity.unreadMessages(accessToken).catch(() => null))?.conversations ?? 0)
+    : 0;
   const items: NavItem[] = [];
   if (isRegionalRole(user.role)) {
     items.push({ href: "/panel/region", label: "Tablero de centros" });
@@ -33,6 +40,7 @@ export default async function PanelLayout({ children }: { children: ReactNode })
   } else {
     items.push({ href: "/panel", label: "Inicio" });
   }
+  if (messaging) items.push({ href: "/panel/mensajes", label: "Mensajes", unreadBadge: true });
   if (is("superadmin")) {
     items.push({ href: "/panel/colegios", label: "Centros educativos" });
     items.push({ href: "/panel/departamentos", label: "Departamentos" });
@@ -46,7 +54,7 @@ export default async function PanelLayout({ children }: { children: ReactNode })
     items.push({ href: "/panel/seguimiento", label: "Seguimiento" });
   }
   if (is("admin", "coordinador", "secretaria", "docente")) {
-    items.push({ href: "/panel/disciplina", label: "Disciplina" });
+    items.push({ href: "/panel/conducta", label: "Conducta" });
   }
   if (is("admin", "secretaria", "coordinador")) items.push({ href: "/panel/alumnos", label: "Alumnos" });
   if (is("admin", "secretaria")) items.push({ href: "/panel/traslados", label: "Traslados" });
@@ -56,6 +64,7 @@ export default async function PanelLayout({ children }: { children: ReactNode })
   }
   if (is("admin", "coordinador", "secretaria", "docente")) {
     items.push({ href: "/panel/horario", label: "Horario" });
+    items.push({ href: "/panel/calendario", label: "Calendario escolar" });
     items.push({ href: "/panel/avisos", label: "Avisos" });
   }
   if (is("admin", "coordinador", "secretaria")) {
@@ -84,7 +93,7 @@ export default async function PanelLayout({ children }: { children: ReactNode })
           </span>
           <span className="truncate">{APP_NAME}</span>
         </div>
-        <Nav items={gated ? [] : items} upcoming={gated ? [] : upcoming} />
+        <Nav items={gated ? [] : items} upcoming={gated ? [] : upcoming} unreadMessages={unreadMessages} />
       </aside>
 
       <div className="flex min-w-0 flex-col">
@@ -142,11 +151,7 @@ export default async function PanelLayout({ children }: { children: ReactNode })
             >
               Mi cuenta
             </Link>
-            <form action={logoutAction}>
-              <button type="submit" className="btn-secondary px-3 py-1.5">
-                Cerrar sesión
-              </button>
-            </form>
+            <LogoutButton action={logoutAction} />
           </div>
         </header>
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-8 print:max-w-none print:p-0">

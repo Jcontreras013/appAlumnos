@@ -40,7 +40,8 @@ services:
       <<: *healthcheck
       test: ["CMD-SHELL", "pg_isready -U escolar -d escolar_identity"]
 
-  # Llaves para firmar las sesiones: se generan una sola vez y se guardan en un volumen.
+  # Llaves para firmar las sesiones y para los avisos de mensajes al celular: se generan una sola vez y
+  # se guardan en un volumen. Los avisos solo llegan si la demo se abre por HTTPS (p. ej. un túnel).
   keys:
     <<: *tools
     volumes:
@@ -49,9 +50,12 @@ services:
       - sh
       - -c
       - >-
-        test -s /keys/identity.env ||
+        (test -s /keys/identity.env ||
         (cd services/identity && ./node_modules/.bin/tsx src/scripts/generate-keys.ts > /keys/identity.env.tmp
-        && mv /keys/identity.env.tmp /keys/identity.env && echo "Llaves generadas")
+        && mv /keys/identity.env.tmp /keys/identity.env && echo "Llaves generadas"))
+        && (test -s /keys/push.env ||
+        (cd services/identity && ./node_modules/.bin/tsx src/scripts/generate-push-keys.ts demo@example.com
+        > /keys/push.env.tmp && mv /keys/push.env.tmp /keys/push.env && echo "Llaves de avisos generadas"))
 
   identity:
     build:
@@ -63,9 +67,17 @@ services:
       LOGIN_RATE_LIMIT_PER_MINUTE: "300"
       # En la demo la verificación en dos pasos es opcional (se puede mostrar desde «Mi cuenta»).
       REQUIRE_MFA: "false"
+      # Fotos, videos y documentos de los mensajes (en AWS van a un bucket de S3).
+      FILES_DIR: /data/adjuntos
     volumes:
       - keys:/keys:ro
-    command: ["sh", "-c", "set -a && . /keys/identity.env && exec node dist/index.js"]
+      - adjuntos:/data/adjuntos
+    command:
+      [
+        "sh",
+        "-c",
+        "set -a && . /keys/identity.env && if [ -s /keys/push.env ]; then . /keys/push.env; fi && exec node dist/index.js",
+      ]
     healthcheck:
       <<: *healthcheck
       test:
@@ -88,6 +100,15 @@ services:
     environment:
       DATABASE_URL: postgres://escolar:escolar@db:5432/escolar_academic
       IDENTITY_URL: http://identity:3001
+      # Asistente de planificación con IA: se activa con GEMINI_API_KEY (Gemini), GROQ_API_KEY (Groq)
+      # o ANTHROPIC_API_KEY (Claude), en la computadora o en un archivo .env junto a este. Con varias,
+      # PLAN_ASSISTANT_PROVIDER elige.
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: ${GROQ_MODEL:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      PLAN_ASSISTANT_PROVIDER: ${PLAN_ASSISTANT_PROVIDER:-}
     healthcheck:
       <<: *healthcheck
       test:
@@ -161,3 +182,4 @@ services:
 volumes:
   pgdata:
   keys:
+  adjuntos:

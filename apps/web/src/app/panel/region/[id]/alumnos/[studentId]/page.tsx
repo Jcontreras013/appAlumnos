@@ -12,6 +12,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
+import { ConductRecordList } from "@/components/conduct-incident";
 import { Kpi } from "@/components/kpi";
 import { SchoolLogo } from "@/components/school-logo";
 import { academic } from "@/lib/academic";
@@ -145,6 +146,12 @@ export default async function RegionStudentPage({
           </ul>
         )}
       </Card>
+
+      {child.conduct.length > 0 && (
+        <Card title="Conducta">
+          <ConductRecordList records={child.conduct} />
+        </Card>
+      )}
 
       <Card title="Notas por materia">
         {subjects.length === 0 ? (
