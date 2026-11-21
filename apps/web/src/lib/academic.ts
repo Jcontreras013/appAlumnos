@@ -15,6 +15,8 @@ import type {
   CoverageDto,
   CreatePlanInput,
   CreateStudentInput,
+  DayOffDto,
+  DayOffInput,
   FamilyChildDto,
   FamilyChildSummaryDto,
   FollowUpDto,
@@ -54,6 +56,7 @@ import type {
   ScheduleBlockDto,
   ScheduleBlocksInput,
   ScheduleDto,
+  SchoolCalendarDto,
   SchoolExportDto,
   SchoolFollowUpDto,
   SchoolYearDto,
@@ -68,6 +71,7 @@ import type {
   StudentFields,
   StudentListItemDto,
   SubjectDto,
+  SubjectInput,
   SubstitutionInput,
   TeacherClassDto,
   TransferDto,
@@ -110,10 +114,10 @@ export const academic = {
   deleteSection: (token: string, id: string) => call<void>(`/sections/${id}`, { method: "DELETE", token }),
 
   listSubjects: (token: string) => call<SubjectDto[]>("/subjects", { token }),
-  createSubject: (token: string, name: string) =>
-    call<SubjectDto>("/subjects", { method: "POST", token, body: { name } }),
-  updateSubject: (token: string, id: string, name: string) =>
-    call<SubjectDto>(`/subjects/${id}`, { method: "PUT", token, body: { name } }),
+  createSubject: (token: string, input: SubjectInput) =>
+    call<SubjectDto>("/subjects", { method: "POST", token, body: input }),
+  updateSubject: (token: string, id: string, input: SubjectInput) =>
+    call<SubjectDto>(`/subjects/${id}`, { method: "PUT", token, body: input }),
   deleteSubject: (token: string, id: string) => call<void>(`/subjects/${id}`, { method: "DELETE", token }),
 
   listAssignments: (token: string) => call<AssignmentDto[]>("/assignments", { token }),
@@ -247,6 +251,13 @@ export const academic = {
     call<AnnouncementDto>("/announcements", { method: "POST", token, body: input }),
   removeAnnouncement: (token: string, id: string) =>
     call<void>(`/announcements/${id}`, { method: "DELETE", token }),
+
+  // Calendario escolar
+  calendar: (token: string) => call<SchoolCalendarDto>("/calendar", { token }),
+  addDayOff: (token: string, input: DayOffInput) =>
+    call<DayOffDto>("/calendar/days-off", { method: "POST", token, body: input }),
+  removeDayOff: (token: string, id: string) =>
+    call<void>(`/calendar/days-off/${id}`, { method: "DELETE", token }),
   auditLog: (token: string, before?: string) =>
     call<AuditEventDto[]>(`/audit?limite=50${before ? `&antes=${encodeURIComponent(before)}` : ""}`, {
       token,

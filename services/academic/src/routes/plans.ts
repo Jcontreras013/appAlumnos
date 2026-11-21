@@ -15,6 +15,7 @@ import {
   type LessonPlanDto,
   missingRequiredFields,
   mondayOf,
+  openClassDays,
   PLAN_DRAFTS_PER_DAY,
   type PlanAssistantStatusDto,
   type PlanBoardDto,
@@ -36,6 +37,7 @@ import type { DbOrTx } from "../db/client";
 import { auditEvents, lessonPlans, planTemplates, scheduleSlots } from "../db/schema";
 import type { AcademicDeps } from "../deps";
 import { audit } from "../lib/audit";
+import { daysOffBetween } from "../lib/calendar";
 import { causeChain, PlanDraftError } from "../lib/plan-assistant";
 
 import {
@@ -297,6 +299,10 @@ export async function planRoutes(app: FastifyInstance, { db, today, planDrafter 
       .from(scheduleSlots)
       .where(and(eq(scheduleSlots.schoolId, row.schoolId), eq(scheduleSlots.assignmentId, assignment.id)));
     const scheduled = WEEKDAYS.filter((_, i) => slots.some((s) => s.weekday === i + 1));
+    // Sin los feriados y vacaciones de esa semana (el calendario escolar del centro).
+    const weekDaysOff = await daysOffBetween(db, row.schoolId, row.weekStart, addDays(row.weekStart, 4));
+    const classDays = scheduled.length ? scheduled : [...WEEKDAYS];
+    const openDays = openClassDays(row.weekStart, classDays, weekDaysOff);
     // Tema de la semana anterior en la misma clase, para dar continuidad.
     const topicField = row.fields.find((f) => f.key === "tema") ?? row.fields.find((f) => f.type === "texto");
     const [previous] = await db
@@ -317,7 +323,8 @@ export async function planRoutes(app: FastifyInstance, { db, today, planDrafter 
         subjectName: assignment.subjectName,
         sectionLabel: assignment.sectionLabel,
         weekStart: row.weekStart,
-        classDays: scheduled.length ? scheduled : [...WEEKDAYS],
+        classDays: openDays.length ? openDays : classDays,
+        language: assignment.subjectLanguage,
         topic: input.topic,
         notes: input.notes,
         previousTopic: typeof previousTopic === "string" && previousTopic ? previousTopic : undefined,

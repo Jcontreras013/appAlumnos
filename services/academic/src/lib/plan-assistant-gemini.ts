@@ -5,7 +5,7 @@ import {
   type PlanDrafter,
   planJsonSchema,
   readDraftJson,
-  SYSTEM_PROMPT,
+  systemPromptFor,
 } from "./plan-assistant";
 
 /*
@@ -55,7 +55,7 @@ export function geminiPlanDrafter(options: {
     async draft(request) {
       // Sin temperatura ni otros ajustes de muestreo: los modelos nuevos de Gemini los rechazan.
       const body = {
-        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        systemInstruction: { parts: [{ text: systemPromptFor(request.language) }] },
         contents: [{ role: "user", parts: [{ text: draftPrompt(request) }] }],
         generationConfig: {
           responseMimeType: "application/json",

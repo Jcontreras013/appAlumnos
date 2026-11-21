@@ -6,6 +6,7 @@ import {
   type PlanContent,
   type PlanField,
   parsePlanContent,
+  type SubjectLanguage,
   WEEKDAY_LABELS,
   WEEKDAYS,
   type Weekday,
@@ -34,6 +35,8 @@ export interface PlanDraftRequest {
   notes?: string;
   /** Tema de la semana anterior en la misma clase, para dar continuidad. */
   previousTopic?: string;
+  /** Idioma en que se imparte la materia (colegios bilingües). Por defecto, español. */
+  language?: SubjectLanguage;
 }
 
 /** Quien arma el borrador: en producción, Claude; en las pruebas, un doble. */
@@ -135,6 +138,27 @@ Cómo escribir el borrador:
 - No inventes códigos, numeraciones ni citas textuales de documentos oficiales. Si un campo pide el estándar o la expectativa de logro, redacta lo que el alumno logrará al terminar la semana.
 - Si el tema no corresponde al grado o a la asignatura, adáptalo a lo que sí corresponde y dilo en el campo de contenidos.`;
 
+/**
+ * Materias que se imparten en inglés (colegios bilingües, que suelen seguir el año escolar de
+ * Estados Unidos): el borrador sale en inglés y no se alinea al CNB, que es para las materias en
+ * español. Los nombres de los campos de la plantilla siguen en español; lo que se escribe en ellos,
+ * en inglés.
+ */
+export const SYSTEM_PROMPT_EN = `${SYSTEM_PROMPT.replace(
+  "docentes de centros educativos de Honduras. Redactas el borrador de la planificación semanal de una clase, alineado con el Currículo Nacional Básico (CNB) de la Secretaría de Educación.",
+  "docentes de colegios bilingües de Honduras. Redactas el borrador de la planificación semanal de una clase que se imparte en inglés, con lo que se espera para ese grado en un colegio bilingüe (si el docente indica los estándares que sigue el colegio, por ejemplo Common Core, alinéalo a ellos).",
+)
+  .replace(
+    "- Español de Honduras, claro y concreto, adecuado a la edad del grado.",
+    "- Escribe TODO el contenido en inglés (inglés de Estados Unidos), claro y concreto, adecuado a la edad del grado y a alumnos que aprenden en inglés como segunda lengua.",
+  )
+  .replace("en un aula pública con pocos recursos:", "en el aula con recursos comunes:")}
+- Aunque las instrucciones y los nombres de los campos estén en español, el texto de cada campo va en inglés.`;
+
+/** Las indicaciones del sistema según el idioma de la materia. */
+export const systemPromptFor = (language: SubjectLanguage = "es") =>
+  language === "en" ? SYSTEM_PROMPT_EN : SYSTEM_PROMPT;
+
 /** El formato de la respuesta sale de la plantilla del centro: un texto por campo, o uno por día. */
 function schemaFor(fields: PlanField[]) {
   const shape: Record<string, z.ZodType> = {};
@@ -172,6 +196,7 @@ export function draftPrompt(request: PlanDraftRequest): string {
     request.previousTopic ? `Tema de la semana anterior: ${request.previousTopic}` : null,
     `Tema de esta semana: ${request.topic}`,
     request.notes ? `Indicaciones del docente:\n${request.notes}` : null,
+    request.language === "en" ? "Idioma del borrador: inglés (la asignatura se imparte en inglés)." : null,
     "",
     `Campos de la plantilla del centro:\n${fields}`,
   ]
@@ -251,7 +276,7 @@ export function claudePlanDrafter(client = new Anthropic({ timeout: 120_000, max
         client.beta.messages.parse({
           model: MODEL,
           max_tokens: 16000,
-          system: SYSTEM_PROMPT,
+          system: systemPromptFor(request.language),
           // Si el modelo declina, el servidor reintenta con el modelo que corresponda.
           betas: ["server-side-fallback-2026-07-01"],
           fallbacks: "default",

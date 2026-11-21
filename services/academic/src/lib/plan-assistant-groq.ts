@@ -5,7 +5,7 @@ import {
   type PlanDrafter,
   planJsonSchema,
   readDraftJson,
-  SYSTEM_PROMPT,
+  systemPromptFor,
 } from "./plan-assistant";
 
 /*
@@ -52,7 +52,7 @@ export function groqPlanDrafter(options: {
       const body = {
         model,
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: systemPromptFor(request.language) },
           { role: "user", content: draftPrompt(request) },
         ],
         response_format: {

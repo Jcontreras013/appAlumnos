@@ -12,6 +12,7 @@ import type { IdentityClient } from "./lib/identity-client";
 import type { PlanDrafter } from "./lib/plan-assistant";
 import { announcementRoutes } from "./routes/announcements";
 import { auditLogRoutes } from "./routes/audit-log";
+import { calendarRoutes } from "./routes/calendar";
 import { conductRoutes } from "./routes/conduct";
 import { evaluationRoutes } from "./routes/evaluation";
 import { exportRoutes } from "./routes/exports";
@@ -70,6 +71,7 @@ export async function buildApp(options: BuildAppOptions) {
     await followUpRoutes(scope, deps);
     await announcementRoutes(scope, deps);
     await auditLogRoutes(scope, deps);
+    await calendarRoutes(scope, deps);
     await scheduleRoutes(scope, deps);
     await transferRoutes(scope, deps);
     await finalRoutes(scope, deps);

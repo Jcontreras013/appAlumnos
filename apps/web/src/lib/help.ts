@@ -30,6 +30,18 @@ const FIRST_LOGIN: HelpSection = {
   tip: "Tras 5 intentos fallidos la cuenta se bloquea 15 minutos. Es para proteger los datos de los alumnos.",
 };
 
+const CALENDAR: HelpSection = {
+  title: "Calendario escolar: feriados y vacaciones",
+  steps: [
+    "En «Calendario escolar», agrega cada feriado (un solo día) y cada período de vacaciones (desde y hasta).",
+    "Esos días no se pide asistencia y ninguna clase aparece «sin maestro», aunque haya licencias.",
+    "Una semana entera sin clases no pide planificación: nada queda atrasado. Si solo un día es feriado, el asistente de planificación lo deja fuera.",
+    "Las familias ven los próximos días sin clases en el portal.",
+    "Funciona igual con el año de febrero a noviembre o con el de septiembre a junio (colegios bilingües).",
+  ],
+  tip: "Lo marcan la secretaría y la dirección; el resto del personal solo lo consulta.",
+};
+
 const MESSAGES: HelpSection = {
   title: "Mensajes con el personal",
   steps: [
@@ -85,6 +97,7 @@ export const HELP_GUIDES: HelpGuide[] = [
           "Guarda las veces que quieras. Cuando esté lista, toca «Enviar a revisión» antes del plazo de la semana.",
           "Si te la devuelven, verás las observaciones: corrígela y vuelve a enviarla.",
           "Puedes copiar la planificación de una semana anterior para no empezar de cero.",
+          "Si la materia se imparte en inglés (colegios bilingües), el asistente escribe el borrador en inglés.",
         ],
       },
       {
@@ -146,7 +159,7 @@ export const HELP_GUIDES: HelpGuide[] = [
         title: "Organizar el año",
         steps: [
           "En «Estructura académica»: crea el año lectivo, ajusta las fechas de los parciales y la nota mínima.",
-          "Agrega los grados, las secciones (con su cupo) y las materias.",
+          "Agrega los grados, las secciones (con su cupo) y las materias. En los colegios bilingües, marca en cada materia si «se imparte en» español o inglés: el asistente de planificación escribe en ese idioma.",
           "Asigna qué docente da cada materia en cada sección.",
           "Si un docente se va, usa «Cambiar docente»: la clase pasa a la persona nueva con sus notas y planificaciones.",
           "Todo se puede corregir con «Editar». Lo que ya tiene alumnos o notas no se puede eliminar: el sistema te dice qué hacer.",
@@ -194,6 +207,7 @@ export const HELP_GUIDES: HelpGuide[] = [
         ],
       },
       MESSAGES,
+      CALENDAR,
       {
         title: "Traslados entre centros",
         steps: [
@@ -281,6 +295,7 @@ export const HELP_GUIDES: HelpGuide[] = [
     roles: ["secretaria", "admin"],
     sections: [
       FIRST_LOGIN,
+      CALENDAR,
       {
         title: "Matrícula",
         steps: [
@@ -308,7 +323,7 @@ export const HELP_GUIDES: HelpGuide[] = [
       {
         title: "Boleta y constancia",
         steps: [
-          "En la ficha del alumno, «Boleta» abre la boleta informativa lista para imprimir.",
+          "En la ficha del alumno, «Boleta» abre la boleta informativa lista para imprimir. Arriba se elige «Español» o «English».",
           "«Constancia de matrícula» abre la constancia para firmar y sellar.",
         ],
       },

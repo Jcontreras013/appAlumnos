@@ -13,6 +13,7 @@ import {
   setPassingGradeAction,
   updatePeriodsAction,
 } from "./actions";
+import { LANGUAGE_OPTIONS } from "./editors";
 
 type Option = { value: string; label: string };
 
@@ -86,6 +87,13 @@ export function SubjectForm() {
     <form action={action} className="space-y-3" noValidate>
       <FormAlert state={state} />
       <Field name="name" label="Materia" placeholder="Matemáticas" required state={state} />
+      <SelectField
+        name="language"
+        label="Se imparte en"
+        options={LANGUAGE_OPTIONS}
+        defaultValue="es"
+        state={state}
+      />
       <SubmitButton pendingText="Creando…">Agregar materia</SubmitButton>
     </form>
   );

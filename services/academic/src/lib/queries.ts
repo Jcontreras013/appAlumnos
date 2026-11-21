@@ -24,7 +24,7 @@ export const toSchoolYearDto = (y: SchoolYear): SchoolYearDto => ({
   isCurrent: y.isCurrent,
 });
 export const toGradeDto = (g: Grade): GradeDto => ({ id: g.id, name: g.name, sortOrder: g.sortOrder });
-export const toSubjectDto = (s: Subject): SubjectDto => ({ id: s.id, name: s.name });
+export const toSubjectDto = (s: Subject): SubjectDto => ({ id: s.id, name: s.name, language: s.language });
 
 export async function findCurrentYear(db: DbOrTx, schoolId: string): Promise<SchoolYear | null> {
   const [year] = await db
@@ -107,6 +107,7 @@ export async function listAssignments(
       sectionName: sections.name,
       gradeName: grades.name,
       subjectName: subjects.name,
+      subjectLanguage: subjects.language,
     })
     .from(teachingAssignments)
     .innerJoin(sections, eq(sections.id, teachingAssignments.sectionId))
@@ -127,6 +128,7 @@ export async function listAssignments(
     sectionLabel: sectionLabel(r.gradeName, r.sectionName),
     subjectId: r.assignment.subjectId,
     subjectName: r.subjectName,
+    subjectLanguage: r.subjectLanguage,
     teacherUserId: r.assignment.teacherUserId,
     teacherName: r.assignment.teacherName,
   }));

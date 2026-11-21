@@ -4,12 +4,14 @@ import {
   CONDUCT_CATEGORIES,
   CONDUCT_MEASURES,
   CONDUCT_SEVERITIES,
+  DAY_OFF_KINDS,
   DEFAULT_PASSING_GRADE,
   FOLLOW_UP_KINDS,
   LEAVE_TYPES,
   PLAN_STATUSES,
   type PlanContent,
   type PlanField,
+  type SubjectLanguage,
   type TransferSnapshot,
 } from "@escolar/shared";
 import { sql } from "drizzle-orm";
@@ -53,6 +55,7 @@ export const conductSeverityEnum = pgEnum("conduct_severity", CONDUCT_SEVERITIES
 export const conductCategoryEnum = pgEnum("conduct_category", CONDUCT_CATEGORIES);
 export const conductMeasureEnum = pgEnum("conduct_measure", CONDUCT_MEASURES);
 export const announcementAudienceEnum = pgEnum("announcement_audience", ANNOUNCEMENT_AUDIENCES);
+export const dayOffKindEnum = pgEnum("day_off_kind", DAY_OFF_KINDS);
 export const transferStatusEnum = pgEnum("transfer_status", ["pendiente", "recibido", "cancelado"]);
 export const planActionEnum = pgEnum("plan_action", [
   "creada",
@@ -133,11 +136,14 @@ export const subjects = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     schoolId: schoolId(),
     name: text("name").notNull(),
+    /** Idioma en que se imparte (colegios bilingües): el asistente planifica en ese idioma. */
+    language: text("language").$type<SubjectLanguage>().notNull().default("es"),
     createdAt: createdAt(),
   },
   (t) => [
     unique("subjects_tenant_key").on(t.schoolId, t.id),
     unique("subjects_name_unique").on(t.schoolId, t.name),
+    check("subjects_language", sql`${t.language} in ('es', 'en')`),
   ],
 );
 
@@ -291,6 +297,35 @@ export const enrollments = pgTable(
 );
 
 // ───────────────────────────── Licencias y sustituciones ─────────────────────────────
+
+/**
+ * Calendario escolar: días o períodos sin clases del centro (feriados, vacaciones). Los marca la
+ * secretaría o la dirección; en esos días no se espera asistencia ni planificación.
+ */
+export const schoolDaysOff = pgTable(
+  "school_days_off",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    schoolId: schoolId(),
+    schoolYearId: uuid("school_year_id").notNull(),
+    name: text("name").notNull(),
+    kind: dayOffKindEnum("kind").notNull(),
+    startsOn: date("starts_on", { mode: "string" }).notNull(),
+    endsOn: date("ends_on", { mode: "string" }).notNull(),
+    createdByUserId: uuid("created_by_user_id").notNull(),
+    createdByName: text("created_by_name").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    foreignKey({
+      name: "school_days_off_year_fk",
+      columns: [t.schoolId, t.schoolYearId],
+      foreignColumns: [schoolYears.schoolId, schoolYears.id],
+    }).onDelete("cascade"),
+    index("school_days_off_dates_idx").on(t.schoolId, t.startsOn),
+    check("school_days_off_dates", sql`${t.endsOn} >= ${t.startsOn}`),
+  ],
+);
 
 /** Ausencia de un maestro (vacaciones, enfermedad, etc.). Cancelar no borra: queda el historial. */
 export const teacherLeaves = pgTable(
@@ -809,3 +844,4 @@ export type Activity = typeof activities.$inferSelect;
 export type StudentFollowUp = typeof studentFollowUps.$inferSelect;
 export type Announcement = typeof announcements.$inferSelect;
 export type StudentTransfer = typeof studentTransfers.$inferSelect;
+export type SchoolDayOff = typeof schoolDaysOff.$inferSelect;

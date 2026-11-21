@@ -1,5 +1,6 @@
 export * from "./academic";
 export * from "./audit";
+export * from "./calendar";
 export * from "./conduct";
 export * from "./csv";
 export * from "./enrollment";

@@ -64,6 +64,7 @@ export default async function PanelLayout({ children }: { children: ReactNode })
   }
   if (is("admin", "coordinador", "secretaria", "docente")) {
     items.push({ href: "/panel/horario", label: "Horario" });
+    items.push({ href: "/panel/calendario", label: "Calendario escolar" });
     items.push({ href: "/panel/avisos", label: "Avisos" });
   }
   if (is("admin", "coordinador", "secretaria")) {

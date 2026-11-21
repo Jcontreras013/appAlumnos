@@ -1,4 +1,12 @@
-import { ATTENDANCE_LABELS, formatDay, formatWeekRange, mondayOf, todayInHonduras } from "@escolar/shared";
+import {
+  ATTENDANCE_LABELS,
+  DAY_OFF_LABELS,
+  formatDay,
+  formatDayOffRange,
+  formatWeekRange,
+  mondayOf,
+  todayInHonduras,
+} from "@escolar/shared";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -215,6 +223,21 @@ export default async function ChildPage({ params }: PageProps<"/panel/familia/[i
           </ul>
         )}
       </Card>
+
+      {child.upcomingDaysOff.length > 0 && (
+        <Card title="Próximos días sin clases">
+          <ul className="divide-y divide-slate-100">
+            {child.upcomingDaysOff.map((d) => (
+              <li key={d.id} className="flex flex-wrap items-baseline gap-x-2 px-4 py-2.5 text-sm">
+                <span className="font-medium text-slate-900">{d.name}</span>
+                <span className="text-slate-500">
+                  {DAY_OFF_LABELS[d.kind]} · {formatDayOffRange(d, formatDay)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       {schedule && schedule.slots.length > 0 && (
         <Card title="Horario de clases">

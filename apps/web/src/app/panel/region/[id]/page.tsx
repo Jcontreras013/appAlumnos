@@ -77,7 +77,7 @@ export default async function RegionSchoolPage({ params, searchParams }: PagePro
     if (r.substitute) l.covered += 1;
     leaves.set(r.leave.id, l);
   }
-  const uncovered = coverage.rows.filter((r) => r.status === "sin_cubrir");
+  const uncovered = coverage.dayOff ? [] : coverage.rows.filter((r) => r.status === "sin_cubrir");
   const grades = [...gradeProgress].sort((a, b) => Number(a.complete) - Number(b.complete));
   const weekPlans = [...plans].sort(
     (a, b) =>
@@ -185,7 +185,11 @@ export default async function RegionSchoolPage({ params, searchParams }: PagePro
           value={summary.uncoveredClasses}
           tone={summary.uncoveredClasses > 0 ? "alert" : "ok"}
           title="Clases sin maestro"
-          subtitle="El titular está de licencia y el centro no ha asignado quién lo cubre."
+          subtitle={
+            summary.dayOffToday
+              ? `Ese día el centro no tiene clases (${summary.dayOffToday}).`
+              : "El titular está de licencia y el centro no ha asignado quién lo cubre."
+          }
         >
           <PanelTable
             head={["Sección", "Materia", "Titular", "Licencia"]}

@@ -70,11 +70,15 @@ export default async function FollowUpPage({ searchParams }: PageProps<"/panel/s
           hint={pending > 0 ? `${pending} por completar` : "listas para el SACE"}
         />
         <Kpi label="Asistencia (7 días)" value={pct(attendance.rate7d)} hint="tarde cuenta como asistió" />
-        <Kpi
-          label="Asistencia tomada hoy"
-          value={`${attendance.sectionsRecordedToday} / ${attendance.sections}`}
-          hint="secciones"
-        />
+        {attendance.dayOff ? (
+          <Kpi label="Asistencia tomada hoy" value="Sin clases" hint={attendance.dayOff.name} />
+        ) : (
+          <Kpi
+            label="Asistencia tomada hoy"
+            value={`${attendance.sectionsRecordedToday} / ${attendance.sections}`}
+            hint="secciones"
+          />
+        )}
         <Kpi
           label="Alumnos en riesgo"
           value={studentsAtRisk.length}
@@ -98,16 +102,22 @@ export default async function FollowUpPage({ searchParams }: PageProps<"/panel/s
       <section className="card flex flex-wrap items-center justify-between gap-4 p-4">
         <div>
           <h2 className="text-sm font-semibold text-slate-700">Planificación de esta semana</h2>
-          <p className="mt-1 text-sm text-slate-600">
-            <strong className="text-slate-900">
-              {data.plans.delivered} de {data.plans.total}
-            </strong>{" "}
-            clases entregadas · {data.plans.approved} aprobadas
-            {data.plans.overdue > 0 && (
-              <span className="font-semibold text-red-700"> · {data.plans.overdue} atrasadas</span>
-            )}{" "}
-            <span className="text-slate-400">(vencía el {formatDay(data.plans.deadline)})</span>
-          </p>
+          {data.plans.dayOff ? (
+            <p className="mt-1 text-sm text-slate-600">
+              Semana sin clases ({data.plans.dayOff.name}): no se pide planificación.
+            </p>
+          ) : (
+            <p className="mt-1 text-sm text-slate-600">
+              <strong className="text-slate-900">
+                {data.plans.delivered} de {data.plans.total}
+              </strong>{" "}
+              clases entregadas · {data.plans.approved} aprobadas
+              {data.plans.overdue > 0 && (
+                <span className="font-semibold text-red-700"> · {data.plans.overdue} atrasadas</span>
+              )}{" "}
+              <span className="text-slate-400">(vencía el {formatDay(data.plans.deadline)})</span>
+            </p>
+          )}
         </div>
         <Link href="/panel/planificacion" className="btn-secondary px-3 py-1.5">
           Ver planificaciones

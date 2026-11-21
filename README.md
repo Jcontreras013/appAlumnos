@@ -427,6 +427,25 @@ Está en **Mensajes**, con un contador de conversaciones sin leer en el menú.
   `aws secretsmanager create-secret --name escolar/dev/push --secret-string file://push.json`, borra
   `push.json` y despliega con `-c pushSecretArn=arn:aws:secretsmanager:...`.
 
+## Calendario escolar y colegios bilingües
+
+- **Calendario escolar** («Calendario escolar» en el panel): la secretaría o la dirección marcan los
+  feriados (un día) y las vacaciones (desde y hasta) del año lectivo. Esos días:
+  - no se pide asistencia;
+  - ninguna clase queda «sin maestro», aunque haya licencias (en el centro y en el tablero departamental);
+  - una semana entera sin clases no pide planificación y nada queda atrasado;
+  - el asistente de planificación deja fuera los días feriados de la semana.
+
+  Las familias ven los próximos días sin clases en su portal. Todo el personal consulta el calendario.
+- **Año de septiembre a junio** (colegios bilingües, año escolar de Estados Unidos): el año lectivo y
+  sus parciales son rangos de fechas, así que funciona igual que el de febrero a noviembre. Los
+  parciales se pueden llamar como el colegio quiera («First Quarter», «Bimestre I»…).
+- **Materias en inglés:** en «Estructura académica» cada materia dice si «se imparte en» español o
+  inglés. Con inglés, el asistente escribe el borrador de la planificación en inglés (y no lo alinea al
+  CNB, que es para las materias en español). La pantalla sigue en español.
+- **Boleta en inglés:** la boleta tiene arriba «Español · English» para imprimirla en el idioma que
+  entregue el colegio.
+
 ## Licencia de las copias vendidas (Gumroad)
 
 Las copias de CONECTA que se venden por Gumroad piden una clave de licencia; la demo y el servidor

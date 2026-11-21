@@ -96,9 +96,17 @@ export function PlanEditor({
             </summary>
             <div className="space-y-3 border-t border-brand-100 px-4 py-4">
               <p className="text-sm text-slate-600">
-                Escribe el tema y el asistente llena la plantilla con un borrador según el Currículo Nacional
-                Básico. Revísalo y ajústalo antes de guardar: lo que se entrega lo decides tú. Al asistente
-                solo van la asignatura, el grado, el tema y tus indicaciones, nunca datos de tus alumnos.
+                {plan.assignment.subjectLanguage === "en" ? (
+                  <>
+                    {plan.assignment.subjectName} se imparte en inglés: el asistente escribe el borrador{" "}
+                    <strong>en inglés</strong>. Si el colegio sigue unos estándares (por ejemplo, Common
+                    Core), menciónalos en las indicaciones.
+                  </>
+                ) : (
+                  "Escribe el tema y el asistente llena la plantilla con un borrador según el Currículo Nacional Básico."
+                )}{" "}
+                Revísalo y ajústalo antes de guardar: lo que se entrega lo decides tú. Al asistente solo van
+                la asignatura, el grado, el tema y tus indicaciones, nunca datos de tus alumnos.
               </p>
               {!assistant.enabled ? (
                 <p className="text-sm font-medium text-slate-700">

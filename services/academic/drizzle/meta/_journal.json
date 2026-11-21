@@ -85,6 +85,13 @@
       "when": 1795106357663,
       "tag": "0011_conducta_aviso_familia",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1795230180189,
+      "tag": "0012_calendario_idioma",
+      "breakpoints": true
     }
   ]
 }

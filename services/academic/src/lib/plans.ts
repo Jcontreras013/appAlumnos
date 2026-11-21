@@ -9,6 +9,7 @@ import {
   type PlanHistoryDto,
   type PlanStatus,
   type PlanTemplateDto,
+  weekOff,
 } from "@escolar/shared";
 import { and, asc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
 import type { DbOrTx } from "../db/client";
@@ -21,6 +22,7 @@ import {
   teacherLeaves,
   teachingAssignments,
 } from "../db/schema";
+import { daysOffBetween } from "./calendar";
 import { listAssignments } from "./queries";
 
 type PlanRow = typeof lessonPlans.$inferSelect;
@@ -152,6 +154,8 @@ export async function weekBoard(
 ): Promise<PlanBoardDto> {
   const template = await templateOf(db, schoolId);
   const deadline = deadlineOf(weekStart, template.deadlineDaysBefore);
+  // Una semana entera de vacaciones o feriados no pide planificación: nada queda atrasado.
+  const dayOff = weekOff(weekStart, await daysOffBetween(db, schoolId, weekStart, addDays(weekStart, 4)));
   const plans = assignments.length
     ? await db
         .select({
@@ -183,7 +187,7 @@ export async function weekBoard(
   const rows: PlanBoardRowDto[] = assignments.map((assignment) => {
     const plan = plans.find((p) => p.assignmentId === assignment.id);
     const status: PlanStatus | "sin_iniciar" = plan?.status ?? "sin_iniciar";
-    const overdue = !plan?.submittedAt && today > deadline;
+    const overdue = !dayOff && !plan?.submittedAt && today > deadline;
     totals[status]++;
     if (overdue) totals.atrasadas++;
     return {
@@ -194,5 +198,5 @@ export async function weekBoard(
       overdue,
     };
   });
-  return { weekStart, deadline, rows, totals };
+  return { weekStart, deadline, dayOff, rows, totals };
 }
