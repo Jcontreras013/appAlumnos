@@ -14,6 +14,7 @@ import { announcementRoutes } from "./routes/announcements";
 import { auditLogRoutes } from "./routes/audit-log";
 import { calendarRoutes } from "./routes/calendar";
 import { conductRoutes } from "./routes/conduct";
+import { documentRoutes } from "./routes/documents";
 import { evaluationRoutes } from "./routes/evaluation";
 import { exportRoutes } from "./routes/exports";
 import { familyRoutes } from "./routes/family";
@@ -72,6 +73,7 @@ export async function buildApp(options: BuildAppOptions) {
     await announcementRoutes(scope, deps);
     await auditLogRoutes(scope, deps);
     await calendarRoutes(scope, deps);
+    await documentRoutes(scope, deps);
     await scheduleRoutes(scope, deps);
     await transferRoutes(scope, deps);
     await finalRoutes(scope, deps);

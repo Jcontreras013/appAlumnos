@@ -42,6 +42,18 @@ const CALENDAR: HelpSection = {
   tip: "Lo marcan la secretaría y la dirección; el resto del personal solo lo consulta.",
 };
 
+const DOCUMENTS: HelpSection = {
+  title: "Documentos: circulares, actas e informes",
+  steps: [
+    "En «Documentos», elige una plantilla: circular a padres, acta de reunión, informe, oficio, constancia, listado o documento en blanco. Ya trae el nombre del centro y la fecha.",
+    "Escribe como en Word: títulos, negrita, listas y tablas (botón «Tabla»; con el cursor dentro, «+ Fila», «+ Columna» o «Unir» celdas).",
+    "Toca «Guardar» (o Ctrl+S). En «Lo pueden ver» eliges si es solo tuyo o lo ve todo el personal.",
+    "«Descargar Word» baja el archivo .docx con el membrete del centro; «Imprimir o PDF» abre la hoja lista para imprimir o guardar en PDF.",
+    "De un documento que compartió otra persona puedes «Hacer una copia» para usarlo como formato.",
+  ],
+  tip: "Solo quien escribe un documento lo puede cambiar o borrar.",
+};
+
 const MESSAGES: HelpSection = {
   title: "Mensajes con el personal",
   steps: [
@@ -116,6 +128,7 @@ export const HELP_GUIDES: HelpGuide[] = [
         ],
       },
       MESSAGES,
+      DOCUMENTS,
       {
         title: "Reportar un incidente de conducta",
         steps: [
@@ -207,6 +220,7 @@ export const HELP_GUIDES: HelpGuide[] = [
         ],
       },
       MESSAGES,
+      DOCUMENTS,
       CALENDAR,
       {
         title: "Traslados entre centros",
@@ -263,6 +277,7 @@ export const HELP_GUIDES: HelpGuide[] = [
     roles: ["coordinador"],
     sections: [
       FIRST_LOGIN,
+      DOCUMENTS,
       {
         title: "Revisar planificaciones",
         steps: [
@@ -295,6 +310,7 @@ export const HELP_GUIDES: HelpGuide[] = [
     roles: ["secretaria", "admin"],
     sections: [
       FIRST_LOGIN,
+      DOCUMENTS,
       CALENDAR,
       {
         title: "Matrícula",

@@ -11,6 +11,12 @@
   },
   "dependencies": {
     "@escolar/shared": "workspace:*",
+    "@tiptap/extension-table": "3.33.0",
+    "@tiptap/extension-text-align": "3.33.0",
+    "@tiptap/pm": "3.33.0",
+    "@tiptap/react": "3.33.0",
+    "@tiptap/starter-kit": "3.33.0",
+    "docx": "9.15.3",
     "jose": "6.2.15",
     "next": "16.4.5",
     "qrcode-generator": "1.4.4",

@@ -3,6 +3,7 @@ export * from "./audit";
 export * from "./calendar";
 export * from "./conduct";
 export * from "./csv";
+export * from "./documents";
 export * from "./enrollment";
 export * from "./evaluation";
 export * from "./exports";

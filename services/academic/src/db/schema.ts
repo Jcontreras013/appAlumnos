@@ -6,6 +6,9 @@ import {
   CONDUCT_SEVERITIES,
   DAY_OFF_KINDS,
   DEFAULT_PASSING_GRADE,
+  type DocContent,
+  type DocumentTemplate,
+  type DocumentVisibility,
   FOLLOW_UP_KINDS,
   LEAVE_TYPES,
   PLAN_STATUSES,
@@ -297,6 +300,32 @@ export const enrollments = pgTable(
 );
 
 // ───────────────────────────── Licencias y sustituciones ─────────────────────────────
+
+/**
+ * Documentos del centro (circulares, actas, informes…) escritos en CONECTA. El contenido es el JSON
+ * del editor, validado al guardar. Solo quien lo escribe lo edita; «personal» lo ve todo el personal.
+ */
+export const documents = pgTable(
+  "documents",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    schoolId: schoolId(),
+    title: text("title").notNull(),
+    template: text("template").$type<DocumentTemplate>().notNull(),
+    content: jsonb("content").$type<DocContent>().notNull(),
+    visibility: text("visibility").$type<DocumentVisibility>().notNull().default("privado"),
+    authorUserId: uuid("author_user_id").notNull(),
+    authorName: text("author_name").notNull(),
+    version: integer("version").notNull().default(1),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index("documents_author_idx").on(t.schoolId, t.authorUserId),
+    index("documents_shared_idx").on(t.schoolId, t.visibility),
+    check("documents_visibility", sql`${t.visibility} in ('privado', 'personal')`),
+  ],
+);
 
 /**
  * Calendario escolar: días o períodos sin clases del centro (feriados, vacaciones). Los marca la
@@ -845,3 +874,4 @@ export type StudentFollowUp = typeof studentFollowUps.$inferSelect;
 export type Announcement = typeof announcements.$inferSelect;
 export type StudentTransfer = typeof studentTransfers.$inferSelect;
 export type SchoolDayOff = typeof schoolDaysOff.$inferSelect;
+export type SchoolDocument = typeof documents.$inferSelect;

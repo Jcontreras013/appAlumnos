@@ -13,10 +13,13 @@ import type {
   ConductOverviewDto,
   ConductStudentOptionDto,
   CoverageDto,
+  CreateDocumentInput,
   CreatePlanInput,
   CreateStudentInput,
   DayOffDto,
   DayOffInput,
+  DocumentDto,
+  DocumentSummaryDto,
   FamilyChildDto,
   FamilyChildSummaryDto,
   FollowUpDto,
@@ -52,6 +55,7 @@ import type {
   RegionalSchoolDetailDto,
   RegionalStudentDto,
   ReviewPlanInput,
+  SaveDocumentInput,
   SavePlanInput,
   ScheduleBlockDto,
   ScheduleBlocksInput,
@@ -251,6 +255,15 @@ export const academic = {
     call<AnnouncementDto>("/announcements", { method: "POST", token, body: input }),
   removeAnnouncement: (token: string, id: string) =>
     call<void>(`/announcements/${id}`, { method: "DELETE", token }),
+
+  // Documentos del centro
+  listDocuments: (token: string) => call<DocumentSummaryDto[]>("/documents", { token }),
+  createDocument: (token: string, input: CreateDocumentInput) =>
+    call<DocumentDto>("/documents", { method: "POST", token, body: input }),
+  getDocument: (token: string, id: string) => call<DocumentDto>(`/documents/${id}`, { token }),
+  saveDocument: (token: string, id: string, input: SaveDocumentInput) =>
+    call<DocumentDto>(`/documents/${id}`, { method: "PUT", token, body: input }),
+  deleteDocument: (token: string, id: string) => call<void>(`/documents/${id}`, { method: "DELETE", token }),
 
   // Calendario escolar
   calendar: (token: string) => call<SchoolCalendarDto>("/calendar", { token }),

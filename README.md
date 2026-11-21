@@ -427,6 +427,22 @@ Está en **Mensajes**, con un contador de conversaciones sin leer en el menú.
   `aws secretsmanager create-secret --name escolar/dev/push --secret-string file://push.json`, borra
   `push.json` y despliega con `-c pushSecretArn=arn:aws:secretsmanager:...`.
 
+## Documentos del centro
+
+«Documentos» en el panel (dirección, coordinación, secretaría y maestros): circulares, actas,
+informes, oficios, constancias y listados escritos en CONECTA, sin salir a otra aplicación.
+
+- **Plantillas** con el nombre del centro, la fecha y quien lo escribe ya puestos: circular a padres,
+  acta de reunión (agenda, tabla de acuerdos y firmas), informe, oficio, constancia, listado y en blanco.
+- **Editor** (TipTap, código abierto MIT): títulos, negrita, cursiva, subrayado, listas, alineación,
+  líneas y **tablas** (agregar o quitar filas y columnas, unir celdas). Ctrl+S guarda.
+- **Descargar en Word** (.docx, con la librería `docx`, MIT): tamaño carta, Arial y el membrete del
+  centro (logo y nombre) en cada página. **Imprimir o PDF**: la hoja con el mismo membrete.
+- **Compartir:** cada documento es «solo yo» o «todo el personal del centro». Solo quien lo escribe lo
+  cambia o lo borra; los demás pueden «Hacer una copia» para usarlo como formato.
+- El contenido se guarda como el JSON del editor y el servicio lo valida: solo los elementos que el
+  editor ofrece (nada de HTML, enlaces ni imágenes). Si otra ventana guardó antes, no se pisa.
+
 ## Calendario escolar y colegios bilingües
 
 - **Calendario escolar** («Calendario escolar» en el panel): la secretaría o la dirección marcan los

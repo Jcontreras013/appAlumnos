@@ -66,6 +66,7 @@ export default async function PanelLayout({ children }: { children: ReactNode })
     items.push({ href: "/panel/horario", label: "Horario" });
     items.push({ href: "/panel/calendario", label: "Calendario escolar" });
     items.push({ href: "/panel/avisos", label: "Avisos" });
+    items.push({ href: "/panel/documentos", label: "Documentos" });
   }
   if (is("admin", "coordinador", "secretaria")) {
     items.push({ href: "/panel/exportar", label: "Exportar datos" });
