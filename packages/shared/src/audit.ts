@@ -93,6 +93,7 @@ export const AUDIT_LABELS: Record<string, string> = {
   "calendar.day_off_added": "Marcó días sin clases en el calendario escolar",
   "calendar.day_off_removed": "Quitó días sin clases del calendario escolar",
   "document.deleted": "Borró un documento",
+  "library.removed": "Quitó un material de la biblioteca",
 };
 
 export const auditLabel = (action: string) => AUDIT_LABELS[action] ?? action;

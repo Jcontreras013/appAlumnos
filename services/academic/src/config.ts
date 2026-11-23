@@ -25,6 +25,11 @@ export interface AcademicConfig {
   planAssistantBackups: PlanAssistantConfig[];
   /** Por qué el asistente quedó apagado aunque se pidió (para avisarlo en los registros). */
   planAssistantWarning: string | null;
+  /**
+   * Libros y documentos de la biblioteca: FILES_BUCKET (S3, en AWS; se guardan bajo «biblioteca/») o
+   * FILES_DIR (una carpeta, en la demo). Sin ninguno, la carpeta .biblioteca del servicio.
+   */
+  files: { kind: "s3"; bucket: string } | { kind: "local"; dir: string | null };
 }
 
 /**
@@ -95,5 +100,8 @@ export function loadConfig(): AcademicConfig {
     planAssistant: assistant.config,
     planAssistantBackups: planAssistantBackupsFromEnv(process.env, assistant.config),
     planAssistantWarning: assistant.warning,
+    files: process.env.FILES_BUCKET?.trim()
+      ? { kind: "s3", bucket: process.env.FILES_BUCKET.trim() }
+      : { kind: "local", dir: process.env.FILES_DIR?.trim() || null },
   };
 }

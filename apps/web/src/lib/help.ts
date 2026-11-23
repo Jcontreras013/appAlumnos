@@ -54,6 +54,18 @@ const DOCUMENTS: HelpSection = {
   tip: "Solo quien escribe un documento lo puede cambiar o borrar.",
 };
 
+const LIBRARY: HelpSection = {
+  title: "Biblioteca: libros, guías y enlaces",
+  steps: [
+    "En «Biblioteca», toca «Agregar material». «Subir archivo» acepta PDF, Word, Excel y PowerPoint (hasta 80 MB, un libro escaneado entra); «Agregar enlace», una página como Educatrachos o un video.",
+    "Elige el grado y la materia (o «Todo el centro») y quién lo puede ver: «Solo el personal» o «Personal y familias». Hay que elegirlo siempre: una guía con respuestas no debe llegar a las familias por descuido.",
+    "Las familias ven solo lo de los grados de sus hijos y lo que es para todo el centro.",
+    "Los PDF se leen ahí mismo con «Leer» (también en el teléfono y en la app); Word, Excel y PowerPoint se descargan.",
+    "Con «Guardar para leer sin internet» el libro queda en el teléfono y se abre aunque no haya señal.",
+  ],
+  tip: "Solo quien lo subió, la dirección o la coordinación pueden quitar un material. Al cerrar sesión, los libros guardados se borran del teléfono.",
+};
+
 const MESSAGES: HelpSection = {
   title: "Mensajes con el personal",
   steps: [
@@ -129,6 +141,7 @@ export const HELP_GUIDES: HelpGuide[] = [
       },
       MESSAGES,
       DOCUMENTS,
+      LIBRARY,
       {
         title: "Reportar un incidente de conducta",
         steps: [
@@ -221,6 +234,7 @@ export const HELP_GUIDES: HelpGuide[] = [
       },
       MESSAGES,
       DOCUMENTS,
+      LIBRARY,
       CALENDAR,
       {
         title: "Traslados entre centros",
@@ -278,6 +292,7 @@ export const HELP_GUIDES: HelpGuide[] = [
     sections: [
       FIRST_LOGIN,
       DOCUMENTS,
+      LIBRARY,
       {
         title: "Revisar planificaciones",
         steps: [
@@ -379,6 +394,16 @@ export const HELP_GUIDES: HelpGuide[] = [
           "Si el centro registró un llamado de atención o una medida y te la avisó, aparece en «Llamados de atención y medidas».",
           "Arriba de «Mis hijos» aparecen los avisos del centro.",
         ],
+      },
+      {
+        title: "Biblioteca: libros y guías",
+        steps: [
+          "En «Biblioteca» están los libros de texto, guías y lecturas que el centro comparte para el grado de sus hijos.",
+          "Toca «Leer» para abrir un libro en el teléfono. Con «−» y «+» cambias el tamaño; escribe un número en «Página» para saltar a esa página. La próxima vez te ofrece seguir donde te quedaste.",
+          "Toca «Guardar para leer sin internet» y el libro queda en el teléfono: se abre aunque no haya señal ni saldo de datos.",
+          "Los enlaces (como Educatrachos) se abren con «Abrir enlace».",
+        ],
+        tip: "Al cerrar sesión se borran los libros guardados en el teléfono.",
       },
     ],
   },

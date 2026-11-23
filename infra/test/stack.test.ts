@@ -112,19 +112,19 @@ describe("seguridad de la infraestructura", () => {
     });
   });
 
-  it("el asistente de planificación tiene tiempo para responder (Service Connect y balanceador)", () => {
+  it("el asistente y los libros de la biblioteca tienen tiempo (Service Connect y balanceador)", () => {
     const academic = Object.entries(template.findResources("AWS::ECS::Service")).find(([id]) =>
       id.startsWith("AcademicService"),
     )?.[1] as { Properties: { ServiceConnectConfiguration: { Services: Array<Record<string, unknown>> } } };
     expect(academic.Properties.ServiceConnectConfiguration.Services[0]).toMatchObject({
-      Timeout: { PerRequestTimeoutSeconds: 180 },
+      Timeout: { PerRequestTimeoutSeconds: 600 },
     });
     template.hasResourceProperties("AWS::ElasticLoadBalancingV2::LoadBalancer", {
       LoadBalancerAttributes: Match.arrayWith([{ Key: "idle_timeout.timeout_seconds", Value: "180" }]),
     });
   });
 
-  it("fotos, videos y documentos de los mensajes: bucket privado, cifrado y solo para identity", () => {
+  it("bucket privado y cifrado: identity para los mensajes, academic solo en «biblioteca/»", () => {
     template.hasResourceProperties("AWS::S3::Bucket", {
       PublicAccessBlockConfiguration: {
         BlockPublicAcls: true,
@@ -152,13 +152,20 @@ describe("seguridad de la infraestructura", () => {
       return task?.Properties.ContainerDefinitions[0]?.Environment?.map((e) => e.Name) ?? [];
     };
     expect(env("IdentityTask")).toContain("FILES_BUCKET");
-    expect(env("AcademicTask")).not.toContain("FILES_BUCKET");
-    // Solo el rol de identity puede leer y escribir en el bucket.
+    expect(env("AcademicTask")).toContain("FILES_BUCKET");
+    // Solo identity y academic escriben en el bucket; academic, únicamente bajo «biblioteca/».
     const policies = Object.entries(template.findResources("AWS::IAM::Policy")).filter(([, p]) =>
       JSON.stringify(p).includes("s3:PutObject"),
     );
-    expect(policies.map(([id]) => id).every((id) => id.startsWith("IdentityTaskTaskRole"))).toBe(true);
-    expect(policies.length).toBeGreaterThan(0);
+    const roles = policies.map(([id]) => id);
+    expect(roles.some((id) => id.startsWith("IdentityTaskTaskRole"))).toBe(true);
+    expect(
+      roles.every((id) => id.startsWith("IdentityTaskTaskRole") || id.startsWith("AcademicTaskTaskRole")),
+    ).toBe(true);
+    const academicPolicy = JSON.stringify(
+      policies.find(([id]) => id.startsWith("AcademicTaskTaskRole"))?.[1],
+    );
+    expect(academicPolicy).toContain("/biblioteca/*");
     template.hasResourceProperties("AWS::EC2::VPCEndpoint", { VpcEndpointType: "Gateway" });
   });
 

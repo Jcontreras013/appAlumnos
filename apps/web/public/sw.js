@@ -1,8 +1,13 @@
 /*
- * Service worker de Plataforma Escolar: permite abrir el cuaderno del maestro sin internet.
+ * Service worker de Plataforma Escolar: permite abrir el cuaderno del maestro y los libros de la
+ * biblioteca sin internet.
  *
- * - Páginas del cuaderno (/panel/cuaderno…): primero la red; si no hay conexión, la última copia.
- * - Código y estilos (/_next/static/…): se guardan la primera vez (sus nombres cambian en cada versión).
+ * - Páginas del cuaderno (/panel/cuaderno…) y de la biblioteca: primero la red; sin conexión, la
+ *   última copia.
+ * - Libros que se guardaron para leer sin internet (/panel/biblioteca/archivo/…): siempre la copia
+ *   guardada (el archivo de un material no cambia nunca); se borran al cerrar sesión.
+ * - Código y estilos (/_next/static/…) y el lector de PDF (/pdfjs/<versión>/…): se guardan la primera
+ *   vez (sus nombres cambian en cada versión).
  * - Logo del centro: la copia guardada mientras llega la nueva.
  * Todo lo demás pasa directo a la red. Los cambios que el maestro hace sin internet no pasan por
  * aquí: se guardan en IndexedDB y la página los envía al volver la conexión.
@@ -12,7 +17,11 @@
 const VERSION = "v1";
 const PAGES = `escolar-paginas-${VERSION}`;
 const ASSETS = `escolar-recursos-${VERSION}`;
+/** Debe coincidir con BOOKS_CACHE en src/lib/library-offline.ts. */
+const BOOKS = "escolar-biblioteca-v1";
 const OFFLINE_PREFIX = "/panel/cuaderno";
+const LIBRARY_PREFIX = "/panel/biblioteca";
+const LIBRARY_FILES = "/panel/biblioteca/archivo/";
 
 self.addEventListener("install", () => self.skipWaiting());
 
@@ -22,7 +31,7 @@ self.addEventListener("activate", (event) => {
       const keys = await caches.keys();
       await Promise.all(
         keys
-          .filter((k) => k.startsWith("escolar-") && k !== PAGES && k !== ASSETS)
+          .filter((k) => k.startsWith("escolar-") && k !== PAGES && k !== ASSETS && k !== BOOKS)
           .map((k) => caches.delete(k)),
       );
       await self.clients.claim();
@@ -30,12 +39,17 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+const under = (url, prefix) => url.pathname === prefix || url.pathname.startsWith(`${prefix}/`);
+const isLibraryFile = (url) => url.origin === self.location.origin && url.pathname.startsWith(LIBRARY_FILES);
+
 const isOfflinePage = (url) =>
   url.origin === self.location.origin &&
-  (url.pathname === OFFLINE_PREFIX || url.pathname.startsWith(`${OFFLINE_PREFIX}/`)) &&
-  !url.pathname.endsWith("/sync");
+  ((under(url, OFFLINE_PREFIX) && !url.pathname.endsWith("/sync")) ||
+    (under(url, LIBRARY_PREFIX) && !isLibraryFile(url)));
 
-const isStatic = (url) => url.origin === self.location.origin && url.pathname.startsWith("/_next/static/");
+const isStatic = (url) =>
+  url.origin === self.location.origin &&
+  (url.pathname.startsWith("/_next/static/") || url.pathname.startsWith("/pdfjs/"));
 const isLogo = (url) => url.origin === self.location.origin && url.pathname.startsWith("/panel/logo");
 
 /** Clave de la página guardada: la dirección sin parámetros internos de Next. */
@@ -87,12 +101,31 @@ async function fetchPage(href) {
   return false;
 }
 
+/** Un tramo (`Range: bytes=a-b`) de un libro guardado, como lo entregaría el servidor. */
+async function withRange(saved, range) {
+  const match = range && /^bytes=(\d*)-(\d*)$/.exec(range.trim());
+  if (!match) return saved;
+  const blob = await saved.blob();
+  const size = blob.size;
+  let start = match[1] === "" ? Math.max(0, size - Number(match[2])) : Number(match[1]);
+  let end = match[1] === "" || match[2] === "" ? size - 1 : Math.min(Number(match[2]), size - 1);
+  if (Number.isNaN(start) || Number.isNaN(end) || start > end || start >= size) {
+    return new Response(null, { status: 416, headers: { "content-range": `bytes */${size}` } });
+  }
+  start = Math.max(0, start);
+  end = Math.max(start, end);
+  const headers = new Headers(saved.headers);
+  headers.set("content-range", `bytes ${start}-${end}/${size}`);
+  headers.set("content-length", String(end - start + 1));
+  return new Response(blob.slice(start, end + 1), { status: 206, headers });
+}
+
 function offlinePage() {
   const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sin conexión</title>
 <style>body{font-family:system-ui,sans-serif;background:#f8fafc;color:#0f172a;display:grid;place-items:center;min-height:100dvh;margin:0;padding:1rem}main{max-width:28rem;background:#fff;border:1px solid #e2e8f0;border-radius:.75rem;padding:1.5rem}a{color:#086f57;font-weight:600}</style></head>
 <body><main><h1 style="font-size:1.25rem;margin:0 0 .5rem">Sin conexión</h1>
-<p>Esta página no está guardada en el dispositivo. El cuaderno del maestro sí funciona sin internet si lo abriste antes con conexión.</p>
-<p><a href="${OFFLINE_PREFIX}">Ir a Mi cuaderno</a></p></main></body></html>`;
+<p>Esta página no está guardada en el dispositivo. El cuaderno del maestro y los libros que guardaste en la biblioteca sí funcionan sin internet si los abriste antes con conexión.</p>
+<p><a href="${OFFLINE_PREFIX}">Ir a Mi cuaderno</a> · <a href="${LIBRARY_PREFIX}">Ir a la biblioteca</a></p></main></body></html>`;
   return new Response(html, { status: 503, headers: { "content-type": "text/html; charset=utf-8" } });
 }
 
@@ -110,6 +143,18 @@ self.addEventListener("fetch", (event) => {
         const res = await fetch(request);
         if (res.ok) await cache.put(request.url, res.clone());
         return res;
+      })(),
+    );
+    return;
+  }
+
+  if (isLibraryFile(url)) {
+    event.respondWith(
+      (async () => {
+        const cache = await caches.open(BOOKS);
+        const saved = await cache.match(url.origin + url.pathname);
+        if (!saved) return fetch(request);
+        return withRange(saved, request.headers.get("range"));
       })(),
     );
     return;
@@ -166,7 +211,9 @@ self.addEventListener("message", (event) => {
   event.waitUntil(
     (async () => {
       if (data.type === "clear") {
+        // Al cerrar sesión: ni las páginas ni los libros guardados quedan en el dispositivo.
         await caches.delete(PAGES);
+        await caches.delete(BOOKS);
         return reply({ ok: true });
       }
       if (data.type === "assets") {

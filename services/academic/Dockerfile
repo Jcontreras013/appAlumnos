@@ -15,6 +15,8 @@ FROM node:22-slim AS runtime
 ENV NODE_ENV=production PORT=3002
 WORKDIR /app
 COPY --from=build --chown=node:node /out ./
+# Carpeta de la biblioteca en la demo (en AWS se usa el bucket de S3).
+RUN mkdir -p /data/biblioteca && chown node:node /data/biblioteca
 USER node
 EXPOSE 3002
 CMD ["node", "--enable-source-maps", "dist/index.js"]

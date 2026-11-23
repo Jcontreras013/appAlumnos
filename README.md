@@ -443,6 +443,32 @@ informes, oficios, constancias y listados escritos en CONECTA, sin salir a otra 
 - El contenido se guarda como el JSON del editor y el servicio lo valida: solo los elementos que el
   editor ofrece (nada de HTML, enlaces ni imágenes). Si otra ventana guardó antes, no se pisa.
 
+## Biblioteca virtual
+
+«Biblioteca» en el panel: libros de texto, guías, lecturas y enlaces (Educatrachos, videos) por grado
+y materia.
+
+- **Quién sube:** dirección, coordinación, secretaría y maestros. PDF, Word, Excel y PowerPoint hasta
+  80 MB (un libro escaneado entra) o un enlace `https://`. Cada material dice para qué grado y materia
+  es (o «todo el centro») y quién lo ve: **solo el personal** o **personal y familias** (se elige
+  siempre; no hay valor por defecto).
+- **Familias:** ven lo compartido con ellas para los grados en que sus hijos están matriculados este
+  año, más lo que es para todo el centro. Nada más (ni por la dirección del archivo).
+- **Archivos:** el servicio académico los revisa mientras llegan (el contenido tiene que ser lo que
+  dice ser: un PDF que empieza como PDF; un programa con nombre de libro se rechaza) y los guarda sin
+  pasar por la memoria: en AWS, en el mismo bucket privado de los adjuntos (`biblioteca/…`, con
+  permiso solo a esa carpeta); en la demo, en el volumen `biblioteca`. Se entregan solo a quien los
+  puede ver, por tramos (`Range`).
+- **Lector de PDF** (pdf.js, Apache 2.0) dentro de la página, porque el visor de Android no abre PDF.
+  Baja solo las páginas que se leen (pocos datos con un libro de 200 páginas), dibuja solo las
+  cercanas a la pantalla (no agota la memoria de un teléfono sencillo), acerca y aleja, salta a una
+  página y recuerda dónde se quedó. Sus archivos (worker, fuentes, decodificadores) se copian de
+  `pdfjs-dist` a `apps/web/public/pdfjs/<versión>/` al construir (`scripts/copy-pdfjs.mjs`).
+- **Leer sin internet:** «Guardar para leer sin internet» guarda el libro en el teléfono (Cache API); el
+  service worker guarda también la página del lector, así se abre sin señal. Al cerrar sesión se borra.
+- Solo quien lo subió, la dirección o la coordinación lo quitan (queda en la bitácora). Un grado o una
+  materia con materiales no se puede borrar.
+
 ## Calendario escolar y colegios bilingües
 
 - **Calendario escolar** («Calendario escolar» en el panel): la secretaría o la dirección marcan los

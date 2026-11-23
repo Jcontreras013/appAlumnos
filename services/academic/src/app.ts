@@ -3,6 +3,9 @@ import {
   authPlugin,
   createAccessTokenVerifier,
   createService,
+  defaultFilesDir,
+  type FileStore,
+  localFileStore,
 } from "@escolar/service-kit";
 import { todayInHonduras } from "@escolar/shared";
 import type { FastifyServerOptions } from "fastify";
@@ -21,6 +24,7 @@ import { familyRoutes } from "./routes/family";
 import { finalRoutes } from "./routes/finals";
 import { followUpRoutes } from "./routes/followups";
 import { importRoutes } from "./routes/import";
+import { libraryRoutes } from "./routes/library";
 import { planRoutes } from "./routes/plans";
 import { regionalRoutes } from "./routes/regional";
 import { scheduleRoutes } from "./routes/schedule";
@@ -39,6 +43,8 @@ export interface BuildAppOptions {
   logger?: FastifyServerOptions["logger"];
   /** Asistente de planificación (en producción, Claude). Sin él, el asistente aparece como no disponible. */
   planDrafter?: PlanDrafter | null;
+  /** Archivos de la biblioteca; por defecto, la carpeta .biblioteca (desarrollo). */
+  files?: FileStore;
 }
 
 export async function buildApp(options: BuildAppOptions) {
@@ -58,6 +64,7 @@ export async function buildApp(options: BuildAppOptions) {
     identity: options.identity,
     today: options.today ?? (() => todayInHonduras()),
     planDrafter: options.planDrafter ?? null,
+    files: options.files ?? localFileStore(defaultFilesDir(".biblioteca")),
   };
   await app.register(async (scope) => {
     await structureRoutes(scope, deps);
@@ -74,6 +81,7 @@ export async function buildApp(options: BuildAppOptions) {
     await auditLogRoutes(scope, deps);
     await calendarRoutes(scope, deps);
     await documentRoutes(scope, deps);
+    await libraryRoutes(scope, deps);
     await scheduleRoutes(scope, deps);
     await transferRoutes(scope, deps);
     await finalRoutes(scope, deps);

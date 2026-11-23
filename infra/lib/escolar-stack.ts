@@ -326,14 +326,24 @@ export class EscolarStack extends Stack {
     };
 
     // academic no tiene la llave privada: verifica tokens con el JWKS público de identity.
+    const assistant = assistantSettings();
     const academic = backendService("academic", {
       port: 3002,
       // Tableros y seguimiento recorren muchos datos: más CPU en prod.
       prodSize: { cpu: 512, memoryLimitMiB: 1024 },
-      // El asistente de planificación con IA puede tardar cerca de un minuto en responder.
-      requestTimeout: Duration.minutes(3),
-      ...assistantSettings(),
+      // El asistente de IA tarda cerca de un minuto, y un libro de la biblioteca puede tardar varios
+      // minutos en subir o bajar con una conexión lenta: Service Connect no lo corta.
+      requestTimeout: Duration.minutes(10),
+      // Libros y documentos de la biblioteca: el mismo bucket privado, bajo «biblioteca/».
+      environment: {
+        ...assistant.environment,
+        FILES_BUCKET: attachmentsBucket.bucketName,
+        AWS_REGION: this.region,
+      },
+      ...(assistant.secrets ? { secrets: assistant.secrets } : {}),
     });
+    // academic solo puede leer y escribir en la carpeta de la biblioteca, no en los adjuntos de los mensajes.
+    attachmentsBucket.grantReadWrite(academic.task.taskRole, "biblioteca/*");
     identityService.connections.allowFrom(academic.service, ec2.Port.tcp(3001), "academic -> identity");
 
     // ───────────────────────────── Frontend web ─────────────────────────────

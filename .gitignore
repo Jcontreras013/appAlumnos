@@ -16,6 +16,10 @@ next-env.d.ts
 
 # Adjuntos de los mensajes en desarrollo (FILES_DIR por defecto)
 .adjuntos/
+.biblioteca/
 
 # Demo en Windows sin Docker (scripts/demo-windows.ps1)
 demo-logs/
+
+# Lector de PDF de la biblioteca: se copia de pdfjs-dist al construir (scripts/copy-pdfjs.mjs).
+apps/web/public/pdfjs/

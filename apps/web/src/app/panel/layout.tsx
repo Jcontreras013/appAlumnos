@@ -37,6 +37,7 @@ export default async function PanelLayout({ children }: { children: ReactNode })
     items.push({ href: "/panel/region/indicadores", label: "Indicadores del piloto" });
   } else if (is("padre")) {
     items.push({ href: "/panel/familia", label: "Mis hijos" });
+    items.push({ href: "/panel/biblioteca", label: "Biblioteca" });
   } else {
     items.push({ href: "/panel", label: "Inicio" });
   }
@@ -67,6 +68,7 @@ export default async function PanelLayout({ children }: { children: ReactNode })
     items.push({ href: "/panel/calendario", label: "Calendario escolar" });
     items.push({ href: "/panel/avisos", label: "Avisos" });
     items.push({ href: "/panel/documentos", label: "Documentos" });
+    items.push({ href: "/panel/biblioteca", label: "Biblioteca" });
   }
   if (is("admin", "coordinador", "secretaria")) {
     items.push({ href: "/panel/exportar", label: "Exportar datos" });

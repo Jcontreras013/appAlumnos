@@ -11,6 +11,8 @@ import {
   type DocumentVisibility,
   FOLLOW_UP_KINDS,
   LEAVE_TYPES,
+  type LibraryAudience,
+  type LibraryKind,
   PLAN_STATUSES,
   type PlanContent,
   type PlanField,
@@ -300,6 +302,51 @@ export const enrollments = pgTable(
 );
 
 // ───────────────────────────── Licencias y sustituciones ─────────────────────────────
+
+/**
+ * Biblioteca virtual: libros, guías y lecturas (archivo guardado en S3 o la carpeta de la demo) o
+ * enlaces, por grado y materia (ambos opcionales: sin grado, es para todo el centro).
+ */
+export const libraryItems = pgTable(
+  "library_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    schoolId: schoolId(),
+    kind: text("kind").$type<LibraryKind>().notNull(),
+    title: text("title").notNull(),
+    description: text("description"),
+    url: text("url"),
+    fileName: text("file_name"),
+    contentType: text("content_type"),
+    sizeBytes: integer("size_bytes"),
+    storageKey: text("storage_key").unique(),
+    gradeId: uuid("grade_id"),
+    subjectId: uuid("subject_id"),
+    audience: text("audience").$type<LibraryAudience>().notNull(),
+    uploadedByUserId: uuid("uploaded_by_user_id").notNull(),
+    uploadedByName: text("uploaded_by_name").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    foreignKey({
+      name: "library_items_grade_fk",
+      columns: [t.schoolId, t.gradeId],
+      foreignColumns: [grades.schoolId, grades.id],
+    }),
+    foreignKey({
+      name: "library_items_subject_fk",
+      columns: [t.schoolId, t.subjectId],
+      foreignColumns: [subjects.schoolId, subjects.id],
+    }),
+    index("library_items_school_idx").on(t.schoolId, t.createdAt),
+    check("library_items_kind", sql`${t.kind} in ('archivo', 'enlace')`),
+    check("library_items_audience", sql`${t.audience} in ('personal', 'familias')`),
+    check(
+      "library_items_content",
+      sql`(${t.kind} = 'enlace' and ${t.url} is not null and ${t.storageKey} is null) or (${t.kind} = 'archivo' and ${t.storageKey} is not null and ${t.sizeBytes} > 0)`,
+    ),
+  ],
+);
 
 /**
  * Documentos del centro (circulares, actas, informes…) escritos en CONECTA. El contenido es el JSON
@@ -875,3 +922,4 @@ export type Announcement = typeof announcements.$inferSelect;
 export type StudentTransfer = typeof studentTransfers.$inferSelect;
 export type SchoolDayOff = typeof schoolDaysOff.$inferSelect;
 export type SchoolDocument = typeof documents.$inferSelect;
+export type LibraryItem = typeof libraryItems.$inferSelect;

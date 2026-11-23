@@ -30,6 +30,7 @@ import {
   enrollments,
   grades,
   lessonPlans,
+  libraryItems,
   schoolYears,
   sections,
   subjects,
@@ -205,6 +206,15 @@ export async function structureRoutes(app: FastifyInstance, { db, identity, toda
       if (used?.n) {
         throw conflict(
           `${grade.name} tiene ${plural(used.n, "sección", "secciones")} (de este u otro año lectivo). Elimina primero sus secciones.`,
+        );
+      }
+      const [books] = await tx
+        .select({ n: count() })
+        .from(libraryItems)
+        .where(and(eq(libraryItems.schoolId, schoolId), eq(libraryItems.gradeId, id)));
+      if (books?.n) {
+        throw conflict(
+          `${grade.name} tiene ${plural(books.n, "material", "materiales")} en la biblioteca. Quítalos o cámbialos primero.`,
         );
       }
       await tx.delete(grades).where(and(eq(grades.schoolId, schoolId), eq(grades.id, id)));
@@ -395,6 +405,15 @@ export async function structureRoutes(app: FastifyInstance, { db, identity, toda
       if (used?.n) {
         throw conflict(
           `${subject.name} se da en ${plural(used.n, "sección", "secciones")} (de este u otro año lectivo). Quita primero esas clases.`,
+        );
+      }
+      const [books] = await tx
+        .select({ n: count() })
+        .from(libraryItems)
+        .where(and(eq(libraryItems.schoolId, schoolId), eq(libraryItems.subjectId, id)));
+      if (books?.n) {
+        throw conflict(
+          `${subject.name} tiene ${plural(books.n, "material", "materiales")} en la biblioteca. Quítalos primero.`,
         );
       }
       await tx.delete(subjects).where(and(eq(subjects.schoolId, schoolId), eq(subjects.id, id)));

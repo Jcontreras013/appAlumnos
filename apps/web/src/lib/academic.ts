@@ -35,6 +35,8 @@ import type {
   LeaveDto,
   LeaveInput,
   LessonPlanDto,
+  LibraryItemDto,
+  LibraryLinkInput,
   MeasureInput,
   PeriodsInput,
   PilotIndicatorsDto,
@@ -264,6 +266,16 @@ export const academic = {
   saveDocument: (token: string, id: string, input: SaveDocumentInput) =>
     call<DocumentDto>(`/documents/${id}`, { method: "PUT", token, body: input }),
   deleteDocument: (token: string, id: string) => call<void>(`/documents/${id}`, { method: "DELETE", token }),
+
+  // Biblioteca virtual (los archivos se suben por /api/biblioteca y se bajan por /panel/biblioteca/archivo)
+  library: (token: string, filters: { grado?: string; materia?: string } = {}) => {
+    const query = new URLSearchParams(filters);
+    return call<LibraryItemDto[]>(`/library${query.size ? `?${query}` : ""}`, { token });
+  },
+  libraryItem: (token: string, id: string) => call<LibraryItemDto>(`/library/${id}`, { token }),
+  addLibraryLink: (token: string, input: LibraryLinkInput) =>
+    call<LibraryItemDto>("/library/links", { method: "POST", token, body: input }),
+  removeLibraryItem: (token: string, id: string) => call<void>(`/library/${id}`, { method: "DELETE", token }),
 
   // Calendario escolar
   calendar: (token: string) => call<SchoolCalendarDto>("/calendar", { token }),

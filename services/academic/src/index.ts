@@ -1,3 +1,4 @@
+import { defaultFilesDir, localFileStore, s3FileStore } from "@escolar/service-kit";
 import { buildApp } from "./app";
 import type { PlanAssistantConfig } from "./config";
 import { loadConfig } from "./config";
@@ -33,8 +34,13 @@ const planDrafter: PlanDrafter | null = !assistant
           ),
       },
     );
+const files =
+  config.files.kind === "s3"
+    ? s3FileStore(config.files.bucket)
+    : localFileStore(config.files.dir ?? defaultFilesDir(".biblioteca"));
 const app = await buildApp({
   db,
+  files,
   identity: httpIdentityClient(config.identityUrl),
   identityUrl: config.identityUrl,
   planDrafter,

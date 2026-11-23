@@ -109,6 +109,10 @@ services:
       GROQ_MODEL: ${GROQ_MODEL:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       PLAN_ASSISTANT_PROVIDER: ${PLAN_ASSISTANT_PROVIDER:-}
+      # Libros y documentos de la biblioteca (en AWS van al bucket de S3, bajo «biblioteca/»).
+      FILES_DIR: /data/biblioteca
+    volumes:
+      - biblioteca:/data/biblioteca
     healthcheck:
       <<: *healthcheck
       test:
@@ -183,3 +187,4 @@ volumes:
   pgdata:
   keys:
   adjuntos:
+  biblioteca:
