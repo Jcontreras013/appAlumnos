@@ -1,6 +1,7 @@
 "use client";
 
 import { toCsv } from "@escolar/shared";
+import { saveBlob } from "@/lib/native-app";
 
 export interface AccessEntry {
   name: string;
@@ -59,12 +60,7 @@ export function AccessSheet({ title, entries }: { title: string; entries: Access
         e.password ?? "(ya tenía cuenta: usa su contraseña)",
       ]),
     ]);
-    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "accesos.csv";
-    a.click();
-    URL.revokeObjectURL(url);
+    void saveBlob(new Blob([csv], { type: "text/csv;charset=utf-8" }), "accesos.csv");
   }
 
   return (

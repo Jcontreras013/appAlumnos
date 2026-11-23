@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">CONECTA</string>
+    <string name="title_activity_main">CONECTA</string>
+    <string name="package_name">com.jcsystem.conecta</string>
+    <string name="custom_url_scheme">com.jcsystem.conecta</string>
+</resources>

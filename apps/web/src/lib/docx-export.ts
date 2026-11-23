@@ -16,6 +16,7 @@ import {
   TextRun,
   WidthType,
 } from "docx";
+import { saveBlob } from "./native-app";
 
 /*
  * Documento de CONECTA → archivo de Word (.docx), en el navegador. Tamaño carta, letra Arial y el
@@ -236,12 +237,5 @@ export async function downloadDocx(options: {
     ],
   });
   const blob = await Packer.toBlob(doc);
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${options.title.replace(/[\\/:*?"<>|]+/g, " ").trim() || "documento"}.docx`;
-  document.body.append(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  await saveBlob(blob, `${options.title.replace(/[\\/:*?"<>|]+/g, " ").trim() || "documento"}.docx`);
 }

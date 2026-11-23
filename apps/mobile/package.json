@@ -1,0 +1,23 @@
+{
+  "name": "@escolar/mobile",
+  "version": "1.0.0",
+  "private": true,
+  "description": "App de CONECTA para Android (Play Store): abre la plataforma en una app propia, con descargas, cámara y avisos del teléfono.",
+  "type": "module",
+  "scripts": {
+    "sync": "cap sync android && node scripts/after-sync.mjs",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.6.0",
+    "@capacitor/app": "8.1.2",
+    "@capacitor/core": "8.6.0",
+    "@capacitor/splash-screen": "8.0.2",
+    "@capacitor/status-bar": "8.0.4"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.6.0",
+    "@types/node": "22.20.5",
+    "typescript": "5.9.3"
+  }
+}
