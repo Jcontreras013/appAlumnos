@@ -26,7 +26,7 @@ export default async function MessagesPage() {
         </div>
         <NewConversation contacts={contacts} />
       </div>
-      <PushToggle publicKey={push.publicKey} />
+      <PushToggle publicKey={push.publicKey} nativeAvailable={push.nativeAvailable} />
       <div className="grid gap-4 md:grid-cols-[20rem_1fr]">
         <ConversationList initial={conversations} />
         <div className="card hidden min-h-[20rem] place-items-center p-10 text-center text-sm text-slate-500 md:grid">

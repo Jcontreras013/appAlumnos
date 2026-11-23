@@ -1,5 +1,6 @@
 import type { TokenSettings } from "./config";
 import type { Db } from "./db/client";
+import type { NativePushSender } from "./lib/fcm";
 import type { FileStore } from "./lib/files";
 import type { SigningKeys } from "./lib/keys";
 import type { PushSender } from "./lib/push";
@@ -16,6 +17,8 @@ export interface IdentityDeps {
   };
   /** Avisos al celular; null si la instalación no tiene llaves VAPID. */
   push: PushSender | null;
+  /** Avisos a la app de Android (Firebase); null si la instalación no tiene la cuenta de Firebase. */
+  nativePush: NativePushSender | null;
   /** Dónde se guardan las fotos, videos y documentos de los mensajes. */
   files: FileStore;
   /** Reloj (las pruebas lo fijan para revisar el horario de atención). */

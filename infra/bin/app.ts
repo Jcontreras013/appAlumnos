@@ -19,6 +19,7 @@ new EscolarStack(app, `Escolar-${stage}`, {
   groqSecretArn: app.node.tryGetContext("groqSecretArn"),
   groqModel: app.node.tryGetContext("groqModel"),
   pushSecretArn: app.node.tryGetContext("pushSecretArn"),
+  fcmSecretArn: app.node.tryGetContext("fcmSecretArn"),
 });
 
 Tags.of(app).add("proyecto", "plataforma-escolar");

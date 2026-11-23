@@ -7,9 +7,16 @@ import {
 } from "@escolar/shared";
 import { and, asc, eq, inArray, isNotNull, ne, sql } from "drizzle-orm";
 import type { DbOrTx } from "../db/client";
-import { conversationMembers, conversations, memberships, pushSubscriptions, users } from "../db/schema";
+import {
+  conversationMembers,
+  conversations,
+  memberships,
+  pushDevices,
+  pushSubscriptions,
+  users,
+} from "../db/schema";
 import { noticeText } from "./attachments";
-import type { PushSender } from "./push";
+import type { Notifier } from "./push";
 
 /** Personas del centro que usan los mensajes: cuenta y acceso activos, con un cargo habilitado. */
 export async function messagingStaff(
@@ -43,22 +50,34 @@ export async function messagingStaff(
 
 export const pairKeyOf = (a: string, b: string) => [a, b].sort().join(":");
 
-/** Manda el aviso a todos los teléfonos de esas personas; borra las suscripciones que ya no sirven. */
+/**
+ * Manda el aviso a todos los teléfonos de esas personas (navegadores con Web Push y la app de Android
+ * por Firebase); borra los que ya no sirven. Devuelve cuántos avisos se entregaron.
+ */
 export async function pushToUsers(
   db: DbOrTx,
-  sender: PushSender,
+  notifier: Notifier,
   userIds: string[],
   payload: PushPayload,
 ): Promise<number> {
   if (userIds.length === 0) return 0;
-  const targets = await db.select().from(pushSubscriptions).where(inArray(pushSubscriptions.userId, userIds));
-  const results = await Promise.all(
-    targets.map(async (target) => {
-      const result = await sender.send(target, payload);
+  const { web, native } = notifier;
+  const [subscriptions, devices] = await Promise.all([
+    web ? db.select().from(pushSubscriptions).where(inArray(pushSubscriptions.userId, userIds)) : [],
+    native ? db.select().from(pushDevices).where(inArray(pushDevices.userId, userIds)) : [],
+  ]);
+  const results = await Promise.all([
+    ...subscriptions.map(async (target) => {
+      const result = (await web?.send(target, payload)) ?? "failed";
       if (result === "gone") await db.delete(pushSubscriptions).where(eq(pushSubscriptions.id, target.id));
       return result;
     }),
-  );
+    ...devices.map(async (device) => {
+      const result = (await native?.send(device.token, payload)) ?? "failed";
+      if (result === "gone") await db.delete(pushDevices).where(eq(pushDevices.id, device.id));
+      return result;
+    }),
+  ]);
   return results.filter((r) => r === "sent").length;
 }
 
@@ -79,7 +98,7 @@ export const messagePayload = (
  * avisar es una sola operación en la base de datos, así que con varias copias del servicio corriendo
  * nadie recibe el aviso dos veces.
  */
-export async function sendPendingNotices(db: DbOrTx, sender: PushSender, now: Date): Promise<number> {
+export async function sendPendingNotices(db: DbOrTx, notifier: Notifier, now: Date): Promise<number> {
   if (!withinNotifyHours(now)) return 0;
   const claimed = await db
     .update(conversationMembers)
@@ -99,7 +118,7 @@ export async function sendPendingNotices(db: DbOrTx, sender: PushSender, now: Da
   for (const { userId } of claimed) perUser.set(userId, (perUser.get(userId) ?? 0) + 1);
   let sent = 0;
   for (const [userId, count] of perUser) {
-    sent += await pushToUsers(db, sender, [userId], {
+    sent += await pushToUsers(db, notifier, [userId], {
       title: "Mensajes nuevos",
       body:
         count === 1

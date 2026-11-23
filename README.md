@@ -426,6 +426,12 @@ Está en **Mensajes**, con un contador de conversaciones sin leer en el menú.
   `| Out-File -Encoding ascii push.json`), luego
   `aws secretsmanager create-secret --name escolar/dev/push --secret-string file://push.json`, borra
   `push.json` y despliega con `-c pushSecretArn=arn:aws:secretsmanager:...`.
+- **Avisos en la app de Android** (opcional): el visor de la app no tiene Web Push, así que `identity`
+  le manda los avisos por Firebase Cloud Messaging (API HTTP v1), con el mismo horario y el mismo texto
+  (quién escribió, nunca el mensaje). Se activa con `FCM_SERVICE_ACCOUNT` (el JSON de la cuenta de
+  servicio de Firebase) en `identity`; en AWS, en un secreto con esa clave y
+  `-c fcmSecretArn=arn:aws:secretsmanager:...`. La app necesita además el `google-services.json` del
+  mismo proyecto de Firebase (ver `apps/mobile/README.md`).
 
 ## Documentos del centro
 
@@ -442,6 +448,16 @@ informes, oficios, constancias y listados escritos en CONECTA, sin salir a otra 
   cambia o lo borra; los demás pueden «Hacer una copia» para usarlo como formato.
 - El contenido se guarda como el JSON del editor y el servicio lo valida: solo los elementos que el
   editor ofrece (nada de HTML, enlaces ni imágenes). Si otra ventana guardó antes, no se pisa.
+
+## App para Android (Play Store)
+
+`apps/mobile`: la app de CONECTA para Android, con Capacitor. Abre la plataforma publicada (así cada
+mejora llega a la app sin publicar otra versión) y agrega ícono propio, descargas a «Descargas»,
+cámara al adjuntar, avisos del teléfono por Firebase, pantalla sin conexión y el botón «atrás».
+GitHub Actions la compila (`.github/workflows/android.yml`): un APK de prueba siempre y el AAB
+firmado para Play Store cuando están los secretos de la llave. Los pasos para publicarla están en
+[`apps/mobile/README.md`](apps/mobile/README.md). La política de privacidad que pide Play Store está
+en `/privacidad`.
 
 ## Biblioteca virtual
 

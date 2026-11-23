@@ -4,7 +4,8 @@ import type { CapacitorConfig } from "@capacitor/cli";
  * App de CONECTA para Android. No trae una copia de la plataforma: abre la plataforma publicada
  * (CONECTA_URL, la misma dirección que se usa en el navegador), así cada mejora llega a la app sin
  * publicar una versión nueva en Play Store. Lo que agrega la app: ícono propio, descargas de archivos,
- * cámara al adjuntar, el botón «atrás» de Android y una pantalla propia cuando no hay internet.
+ * cámara al adjuntar, avisos del teléfono (Firebase), el botón «atrás» de Android y una pantalla
+ * propia cuando no hay internet.
  *
  * Variables al preparar la app (`pnpm --filter @escolar/mobile sync`):
  *   CONECTA_URL     Dirección pública, con https (por ejemplo https://conecta.micentro.hn).
@@ -42,6 +43,10 @@ const config: CapacitorConfig = {
       backgroundColor: "#0b8a6b",
       showSpinner: false,
       androidScaleType: "CENTER_INSIDE",
+    },
+    // Avisos de los mensajes por Firebase. Con la app abierta también se muestran.
+    PushNotifications: {
+      presentationOptions: ["badge", "sound", "alert"],
     },
     StatusBar: {
       backgroundColor: "#086f57",

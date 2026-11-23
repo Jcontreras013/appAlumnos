@@ -24,6 +24,8 @@ import {
   type MessageDto,
   messageInputSchema,
   type PushKeyDto,
+  pushDeviceSchema,
+  pushDeviceTokenSchema,
   pushEndpointSchema,
   pushSubscriptionSchema,
   startConversationSchema,
@@ -41,6 +43,7 @@ import {
   type MessageAttachment,
   messageAttachments,
   messages,
+  pushDevices,
   pushSubscriptions,
   users,
 } from "../db/schema";
@@ -63,7 +66,12 @@ const MAX_DEVICES = 10;
  * centro de la sesión y por las conversaciones de quien pregunta: nadie lee conversaciones ajenas,
  * aunque conozca su id.
  */
-export async function messageRoutes(app: FastifyInstance, { db, push, files, now }: IdentityDeps) {
+export async function messageRoutes(
+  app: FastifyInstance,
+  { db, push, nativePush, files, now }: IdentityDeps,
+) {
+  const notifier = { web: push, native: nativePush };
+  const canNotify = push !== null || nativePush !== null;
   const guard = { preHandler: [app.authenticate, requireRole(...MESSAGING_ROLES)] };
   const other = alias(conversationMembers, "other");
 
@@ -311,7 +319,7 @@ export async function messageRoutes(app: FastifyInstance, { db, push, files, now
     body: string,
     attachment?: Omit<typeof messageAttachments.$inferInsert, "messageId" | "conversationId" | "schoolId">,
   ): Promise<MessageDto> {
-    const notifyNow = push !== null && withinNotifyHours(now());
+    const notifyNow = canNotify && withinNotifyHours(now());
     const { message, saved } = await db.transaction(async (tx) => {
       const [row] = await tx
         .insert(messages)
@@ -355,10 +363,10 @@ export async function messageRoutes(app: FastifyInstance, { db, push, files, now
       }
       return { message: row, saved };
     });
-    if (push && notifyNow) {
+    if (notifyNow) {
       // El aviso no frena el envío: si el servicio de avisos tarda o falla, el mensaje ya quedó.
       const payload = messagePayload(message.conversationId, c.senderName, saved?.kind ?? null);
-      void pushToUsers(db, push, [c.otherUserId], payload).catch((err) =>
+      void pushToUsers(db, notifier, [c.otherUserId], payload).catch((err) =>
         request.log.warn({ err }, "No se envió el aviso del mensaje"),
       );
     }
@@ -484,7 +492,14 @@ export async function messageRoutes(app: FastifyInstance, { db, push, files, now
 
   // ───────────────────────────── Avisos en el celular ─────────────────────────────
 
-  app.get("/push/key", guard, async (): Promise<PushKeyDto> => ({ publicKey: push?.publicKey ?? null }));
+  app.get(
+    "/push/key",
+    guard,
+    async (): Promise<PushKeyDto> => ({
+      publicKey: push?.publicKey ?? null,
+      nativeAvailable: nativePush !== null,
+    }),
+  );
 
   /** Este teléfono avisa de los mensajes de quien inició sesión (si era de otra persona, cambia de dueño). */
   app.post("/push/subscriptions", guard, async (request, reply) => {
@@ -526,6 +541,47 @@ export async function messageRoutes(app: FastifyInstance, { db, push, files, now
       .where(
         and(eq(pushSubscriptions.endpoint, endpoint), eq(pushSubscriptions.userId, request.auth.userId)),
       );
+    return reply.status(204).send();
+  });
+
+  /** La app de Android en este teléfono avisa a quien inició sesión (si era de otra persona, cambia de dueño). */
+  app.post("/push/devices", guard, async (request, reply) => {
+    if (!nativePush) throw conflict("Los avisos de la app no están configurados en esta instalación");
+    const input = parseOrThrow(pushDeviceSchema, request.body);
+    const me = request.auth.userId;
+    await db.transaction(async (tx) => {
+      await tx
+        .insert(pushDevices)
+        .values({ userId: me, token: input.token, platform: input.platform })
+        .onConflictDoUpdate({
+          target: pushDevices.token,
+          set: { userId: me, platform: input.platform, createdAt: sql`now()` },
+        });
+      const keep = await tx
+        .select({ id: pushDevices.id })
+        .from(pushDevices)
+        .where(eq(pushDevices.userId, me))
+        .orderBy(desc(pushDevices.createdAt))
+        .limit(MAX_DEVICES);
+      await tx.delete(pushDevices).where(
+        and(
+          eq(pushDevices.userId, me),
+          notInArray(
+            pushDevices.id,
+            keep.map((k) => k.id),
+          ),
+        ),
+      );
+    });
+    return reply.status(204).send();
+  });
+
+  /** Al desactivar los avisos o cerrar sesión en la app. */
+  app.post("/push/devices/remove", guard, async (request, reply) => {
+    const { token } = parseOrThrow(pushDeviceTokenSchema, request.body);
+    await db
+      .delete(pushDevices)
+      .where(and(eq(pushDevices.token, token), eq(pushDevices.userId, request.auth.userId)));
     return reply.status(204).send();
   });
 }

@@ -322,6 +322,24 @@ export const pushSubscriptions = pgTable(
   (t) => [index("push_subscriptions_user_idx").on(t.userId)],
 );
 
+/** Teléfonos con la app de Android: Firebase les entrega los avisos (como Web Push a los navegadores). */
+export const pushDevices = pgTable(
+  "push_devices",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    token: text("token").notNull().unique("push_devices_token_unique"),
+    platform: text("platform").notNull().default("android"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("push_devices_user_idx").on(t.userId),
+    check("push_devices_platform_check", sql`${t.platform} in ('android')`),
+  ],
+);
+
 export type Department = typeof departments.$inferSelect;
 export type District = typeof districts.$inferSelect;
 export type School = typeof schools.$inferSelect;
@@ -330,3 +348,4 @@ export type Membership = typeof memberships.$inferSelect;
 export type Conversation = typeof conversations.$inferSelect;
 export type Message = typeof messages.$inferSelect;
 export type PushSubscriptionRow = typeof pushSubscriptions.$inferSelect;
+export type PushDeviceRow = typeof pushDevices.$inferSelect;

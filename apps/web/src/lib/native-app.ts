@@ -33,9 +33,9 @@ export function callNative<T>(plugin: string, method: string, options?: unknown)
   return bridge.nativePromise<T>(plugin, method, options);
 }
 
-/** Escucha un evento de un plugin de la app (por ejemplo, el aviso que se tocó). */
-export function onNative(plugin: string, event: string, callback: (data: unknown) => void): void {
-  window.Capacitor?.addListener?.(plugin, event, callback);
+/** Escucha un evento de un plugin de la app (por ejemplo, el aviso que se tocó). Devuelve el permiso para dejar de escuchar. */
+export function onNative(plugin: string, event: string, callback: (data: unknown) => void): unknown {
+  return window.Capacitor?.addListener?.(plugin, event, callback);
 }
 
 /** El contenido de un archivo en base64 (sin el prefijo `data:`), para pasarlo a la app. */

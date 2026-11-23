@@ -6,6 +6,7 @@ import { buildApp } from "../src/app";
 import { DEFAULT_TOKEN_SETTINGS, type TokenSettings } from "../src/config";
 import { type Db, migrationsFolder } from "../src/db/client";
 import * as schema from "../src/db/schema";
+import type { NativePushSender } from "../src/lib/fcm";
 import { memoryFileStore } from "../src/lib/files";
 import { generateSigningKeys } from "../src/lib/keys";
 import type { PushSender } from "../src/lib/push";
@@ -20,7 +21,7 @@ export const PASSWORD = "contraseña-de-prueba-1";
  */
 export async function setupIdentity(
   settings: Partial<TokenSettings> & { requireMfa?: boolean } = {},
-  options: { push?: PushSender; now?: () => Date } = {},
+  options: { push?: PushSender; nativePush?: NativePushSender; now?: () => Date } = {},
 ) {
   const client = new PGlite();
   const db = drizzle(client, { schema }) as unknown as Db;
@@ -34,6 +35,7 @@ export async function setupIdentity(
     settings: { ...DEFAULT_TOKEN_SETTINGS, ...settings, loginRateLimitPerMinute: 1000 },
     logger: false,
     push: options.push ?? null,
+    nativePush: options.nativePush ?? null,
     files,
     now: options.now,
   });

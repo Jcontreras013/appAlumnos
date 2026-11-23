@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { ChangePasswordForm } from "@/components/change-password-form";
 import { LogoutButton } from "@/components/logout-button";
 import { MfaSetup } from "@/components/mfa-setup";
+import { NativeAppBridge } from "@/components/native-app-bridge";
 import { Nav, type NavItem } from "@/components/nav";
 import { OfflineAgent } from "@/components/offline";
 import { SchoolLogo } from "@/components/school-logo";
@@ -89,6 +90,7 @@ export default async function PanelLayout({ children }: { children: ReactNode })
   return (
     <div className="min-h-dvh md:grid md:grid-cols-[15rem_1fr] print:block">
       <OfflineAgent owner={current.id} />
+      <NativeAppBridge messaging={messaging} />
       <aside className="border-b border-slate-200 bg-white px-4 py-4 md:min-h-dvh md:border-b-0 md:border-r md:py-6 print:hidden">
         <div className="mb-4 flex items-center gap-2 px-1 font-semibold md:mb-8">
           <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-600 text-sm text-white">

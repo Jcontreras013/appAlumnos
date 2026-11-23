@@ -69,6 +69,9 @@ services:
       REQUIRE_MFA: "false"
       # Fotos, videos y documentos de los mensajes (en AWS van a un bucket de S3).
       FILES_DIR: /data/adjuntos
+      # Avisos a la app de Android (opcional): el JSON de la cuenta de servicio de Firebase, en la
+      # computadora o en un archivo .env junto a este. Ver apps/mobile/README.md.
+      FCM_SERVICE_ACCOUNT: ${FCM_SERVICE_ACCOUNT:-}
     volumes:
       - keys:/keys:ro
       - adjuntos:/data/adjuntos

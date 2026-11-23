@@ -24,6 +24,17 @@
 
         </activity>
 
+        <!-- Avisos de los mensajes (Firebase): ícono, color y canal «Mensajes». -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_conecta" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/colorPrimary" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="mensajes" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
@@ -37,4 +48,6 @@
 
     <!-- Permisos: internet. Las descargas van a «Descargas» sin pedir acceso al almacenamiento. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Android 13 o más nuevo: la app pide permiso para avisar solo cuando la persona activa los avisos. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>

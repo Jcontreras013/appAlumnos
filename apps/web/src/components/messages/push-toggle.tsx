@@ -1,9 +1,31 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { removePushAction, savePushAction } from "@/app/panel/mensajes/actions";
+import {
+  removeNativePushAction,
+  removePushAction,
+  saveNativePushAction,
+  savePushAction,
+} from "@/app/panel/mensajes/actions";
+import {
+  nativePermission,
+  nativePushAvailable,
+  registerNativePush,
+  requestNativePermission,
+  storedNativeToken,
+  storeNativeToken,
+  unregisterNativePush,
+} from "@/lib/native-push";
 
-type State = "cargando" | "no-disponible" | "iphone" | "bloqueados" | "apagados" | "activando" | "encendidos";
+type State =
+  | "cargando"
+  | "oculto"
+  | "no-disponible"
+  | "iphone"
+  | "bloqueados"
+  | "apagados"
+  | "activando"
+  | "encendidos";
 
 /** La llave pública llega en base64url; el navegador la pide en bytes. */
 function keyBytes(base64url: string): Uint8Array<ArrayBuffer> {
@@ -42,9 +64,25 @@ async function registration(): Promise<ServiceWorkerRegistration | null> {
   ]);
 }
 
+/** Activa los avisos de la app de Android: Firebase da el identificador y CONECTA lo guarda. */
+async function enableNative(): Promise<{ ok: boolean; error?: string }> {
+  const token = await registerNativePush();
+  const result = await saveNativePushAction(token);
+  if (result.ok) storeNativeToken(token);
+  return result;
+}
+
 /** Olvida los avisos de este teléfono (al desactivarlos o al cerrar sesión). Nunca falla. */
 export async function forgetPushOnThisDevice(): Promise<void> {
   try {
+    if (nativePushAvailable()) {
+      const token = storedNativeToken();
+      if (token) await removeNativePushAction(token);
+      storeNativeToken(null);
+      // Firebase olvida el identificador: si en este teléfono entra otra persona, recibe uno nuevo.
+      await unregisterNativePush();
+      return;
+    }
     if (!supported()) return;
     const reg = await navigator.serviceWorker.getRegistration();
     const sub = await reg?.pushManager.getSubscription();
@@ -56,12 +94,41 @@ export async function forgetPushOnThisDevice(): Promise<void> {
 }
 
 /** Tarjeta para activar los avisos de mensajes en este teléfono o computadora. */
-export function PushToggle({ publicKey }: { publicKey: string | null }) {
+export function PushToggle({
+  publicKey,
+  nativeAvailable,
+}: {
+  publicKey: string | null;
+  nativeAvailable: boolean;
+}) {
   const [state, setState] = useState<State>("cargando");
   const [error, setError] = useState<string | null>(null);
+  const native = nativePushAvailable();
 
   useEffect(() => {
-    if (!publicKey) return;
+    if (!native) return;
+    // Dentro de la app de Android: avisos por Firebase.
+    if (!nativeAvailable) return setState("oculto");
+    let alive = true;
+    (async () => {
+      const permission = await nativePermission();
+      if (!alive) return;
+      if (permission === "denied") return setState("bloqueados");
+      if (permission === "granted" && storedNativeToken()) {
+        // Firebase puede cambiar el identificador: se vuelve a guardar el de hoy.
+        const result = await enableNative().catch(() => ({ ok: false }));
+        if (alive) setState(result.ok ? "encendidos" : "apagados");
+        return;
+      }
+      setState("apagados");
+    })().catch(() => alive && setState("apagados"));
+    return () => {
+      alive = false;
+    };
+  }, [native, nativeAvailable]);
+
+  useEffect(() => {
+    if (native || !publicKey) return;
     let alive = true;
     (async () => {
       if (!supported()) return setState(iphoneOutsideApp() ? "iphone" : "no-disponible");
@@ -82,13 +149,30 @@ export function PushToggle({ publicKey }: { publicKey: string | null }) {
     return () => {
       alive = false;
     };
-  }, [publicKey]);
+  }, [native, publicKey]);
 
-  if (!publicKey || state === "cargando") return null;
+  if ((!native && !publicKey) || state === "cargando" || state === "oculto") return null;
 
   async function enable() {
-    if (!publicKey) return;
     setError(null);
+    if (native) {
+      setState("activando");
+      try {
+        const permission = await requestNativePermission();
+        if (permission !== "granted") {
+          setState(permission === "denied" ? "bloqueados" : "apagados");
+          return;
+        }
+        const result = await enableNative();
+        if (!result.ok) setError(result.error ?? "No se pudieron activar los avisos");
+        setState(result.ok ? "encendidos" : "apagados");
+      } catch {
+        setError("La app no pudo activar los avisos. Revisa la conexión e intenta de nuevo.");
+        setState("apagados");
+      }
+      return;
+    }
+    if (!publicKey) return;
     setState("activando");
     try {
       const permission = await Notification.requestPermission();
@@ -140,6 +224,11 @@ export function PushToggle({ publicKey }: { publicKey: string | null }) {
           <p className="mt-0.5 text-slate-500">
             En iPhone, primero toca <strong>Compartir</strong> y luego <strong>Agregar a inicio</strong>. Abre
             CONECTA desde ese ícono y activa los avisos ahí.
+          </p>
+        ) : state === "bloqueados" && native ? (
+          <p className="mt-0.5 text-slate-500">
+            Los avisos de CONECTA están apagados en el teléfono. Actívalos en Ajustes → Apps → CONECTA →
+            Notificaciones y vuelve a esta página.
           </p>
         ) : state === "bloqueados" ? (
           <p className="mt-0.5 text-slate-500">

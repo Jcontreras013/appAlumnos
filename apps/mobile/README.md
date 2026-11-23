@@ -14,6 +14,9 @@ Lo que agrega la app al navegador:
   de CONECTA funciona igual dentro de la app). Si la app se abre sin conexión por primera vez, muestra
   una pantalla propia con «Volver a intentar».
 - **Botón «atrás»** de Android: vuelve a la pantalla anterior; en la primera, cierra la app.
+- **Avisos del teléfono** de los mensajes, por Firebase (el visor de la app no tiene los avisos del
+  navegador). Mismo horario que en la web y nunca el texto del mensaje. Al tocar el aviso se abre la
+  conversación.
 
 ## Compilar
 
@@ -65,6 +68,21 @@ sync` y abrir la carpeta `apps/mobile/android`.
 Cada nueva compilación sube sola el número de versión (`versionCode` = número de la compilación en
 GitHub Actions). Solo hace falta publicar una versión nueva de la app cuando cambia algo de
 `apps/mobile` (ícono, permisos, avisos…); los cambios de CONECTA llegan solos.
+
+## Avisos del teléfono (Firebase)
+
+Sin esto la app funciona igual, pero no avisa de los mensajes. Se hace una sola vez:
+
+1. En <https://console.firebase.google.com>, crear un proyecto (sin Google Analytics) y agregarle una
+   **app de Android** con el identificador de la app (por defecto `com.jcsystem.conecta`).
+2. Descargar el **`google-services.json`** y guardarlo completo en GitHub como el secreto
+   `GOOGLE_SERVICES_JSON`. No es una llave secreta, pero no hace falta que esté en el repositorio.
+3. En Firebase → Configuración del proyecto → **Cuentas de servicio** → «Generar nueva clave privada».
+   Ese JSON **sí es secreto**: va solo al servidor de CONECTA, nunca al repositorio ni a la app.
+   - En AWS: crear un secreto con la clave `FCM_SERVICE_ACCOUNT` y el JSON como valor, y desplegar con
+     `-c fcmSecretArn=arn:aws:secretsmanager:...` (ver el README principal).
+   - En la demo con Docker: la variable `FCM_SERVICE_ACCOUNT` del servicio `identity`.
+4. Compilar la app otra vez. En la app, «Mensajes» → «Activar avisos».
 
 ## Seguridad
 

@@ -210,7 +210,22 @@ export const pushEndpointSchema = z.object({ endpoint: z.string().min(1).max(100
 export interface PushKeyDto {
   /** Llave pública para suscribirse; null si la instalación no tiene avisos configurados. */
   publicKey: string | null;
+  /** ¿La instalación manda avisos a la app de Android (Firebase)? */
+  nativeAvailable: boolean;
 }
+
+/** El teléfono con la app de Android, para avisarle por Firebase (el identificador que da Firebase). */
+export const pushDeviceSchema = z.object({
+  token: z
+    .string()
+    .min(20)
+    .max(4096)
+    .regex(/^[\w:.-]+$/, { error: "Identificador inválido" }),
+  platform: z.literal("android"),
+});
+export type PushDeviceInput = z.infer<typeof pushDeviceSchema>;
+
+export const pushDeviceTokenSchema = z.object({ token: z.string().min(1).max(4096) });
 
 /** Lo que recibe el service worker para mostrar el aviso. Nunca lleva el texto del mensaje. */
 export interface PushPayload {

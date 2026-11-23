@@ -17,6 +17,7 @@ import type {
   MfaEnabledDto,
   MfaSetupDto,
   PasswordResetDto,
+  PushDeviceInput,
   PushKeyDto,
   PushSubscriptionInput,
   RegionalUserInput,
@@ -151,4 +152,9 @@ export const identity = {
     call<void>("/push/subscriptions", { method: "POST", token, body: subscription }),
   removePushSubscription: (token: string, endpoint: string) =>
     call<void>("/push/subscriptions/remove", { method: "POST", token, body: { endpoint } }),
+  /** La app de Android (Firebase). */
+  savePushDevice: (token: string, device: PushDeviceInput) =>
+    call<void>("/push/devices", { method: "POST", token, body: device }),
+  removePushDevice: (token: string, deviceToken: string) =>
+    call<void>("/push/devices/remove", { method: "POST", token, body: { token: deviceToken } }),
 };

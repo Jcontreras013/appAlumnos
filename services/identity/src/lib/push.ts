@@ -1,5 +1,6 @@
 import type { PushPayload } from "@escolar/shared";
 import webpush from "web-push";
+import type { NativePushSender } from "./fcm";
 
 /*
  * Avisos al celular con Web Push: el navegador del teléfono se suscribe con la llave pública de la
@@ -61,4 +62,10 @@ export function webPushSender(vapid: VapidConfig, fetchImpl: typeof fetch = fetc
 /** Llaves nuevas para una instalación (ver scripts/generate-push-keys.ts). */
 export function generateVapidKeys(): { publicKey: string; privateKey: string } {
   return webpush.generateVAPIDKeys();
+}
+
+/** Los dos caminos de los avisos: Web Push (navegadores) y Firebase (la app de Android). */
+export interface Notifier {
+  web: PushSender | null;
+  native: NativePushSender | null;
 }

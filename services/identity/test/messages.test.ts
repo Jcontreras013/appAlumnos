@@ -10,7 +10,8 @@ import type {
 } from "@escolar/shared";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { messages, pushSubscriptions } from "../src/db/schema";
+import { messages, pushDevices, pushSubscriptions } from "../src/db/schema";
+import { fcmMessage, fcmSender, type NativePushSender, parseServiceAccount } from "../src/lib/fcm";
 import { sendPendingNotices } from "../src/lib/messages";
 import { type PushResult, type PushSender, type PushTarget, webPushSender } from "../src/lib/push";
 import { type IdentityTestContext, PASSWORD, setupIdentity } from "./helpers";
@@ -32,6 +33,15 @@ const fakePush: PushSender = {
   async send(target, payload) {
     sent.push({ target, payload });
     return nextResult;
+  },
+};
+/** La app de Android (Firebase). */
+const sentToApp: { token: string; payload: PushPayload }[] = [];
+let nextAppResult: PushResult = "sent";
+const fakeNative: NativePushSender = {
+  async send(token, payload) {
+    sentToApp.push({ token, payload });
+    return nextAppResult;
   },
 };
 
@@ -70,7 +80,7 @@ const unread = async (token: string) =>
   (await call<UnreadMessagesDto>(token, "GET", "/messages/unread")).body.conversations;
 
 beforeAll(async () => {
-  ctx = await setupIdentity({}, { push: fakePush, now: () => clock });
+  ctx = await setupIdentity({}, { push: fakePush, nativePush: fakeNative, now: () => clock });
   const school = await ctx.createSchool("escuela-mensajes");
   admin = school.adminToken;
   ana = await staff("escuela-mensajes", admin, "Ana Docente", "docente");
@@ -235,7 +245,7 @@ describe("avisos en el celular", () => {
       tag: `conversacion-${id}`,
     });
     // Ya se le avisó: la revisión de la mañana no repite el aviso.
-    expect(await sendPendingNotices(ctx.db, fakePush, MORNING)).toBe(0);
+    expect(await sendPendingNotices(ctx.db, { web: fakePush, native: null }, MORNING)).toBe(0);
   });
 
   it("de noche no avisa; al empezar la jornada manda un solo aviso con lo pendiente", async () => {
@@ -244,13 +254,13 @@ describe("avisos en el celular", () => {
     const id = await open(beto.token, ana.id);
     await send(beto.token, id, "Mañana llego tarde");
     await send(beto.token, id, "Por favor avise a la dirección");
-    expect(await sendPendingNotices(ctx.db, fakePush, NIGHT)).toBe(0);
+    expect(await sendPendingNotices(ctx.db, { web: fakePush, native: null }, NIGHT)).toBe(0);
     expect(sent).toHaveLength(0);
 
-    expect(await sendPendingNotices(ctx.db, fakePush, MORNING)).toBe(1);
+    expect(await sendPendingNotices(ctx.db, { web: fakePush, native: null }, MORNING)).toBe(1);
     expect(sent.map((s) => s.target.endpoint)).toEqual(["https://push.ejemplo.test/telefono-1"]);
     expect(sent[0]?.payload.body).toBe("Tienes un mensaje sin leer de un compañero.");
-    expect(await sendPendingNotices(ctx.db, fakePush, MORNING)).toBe(0);
+    expect(await sendPendingNotices(ctx.db, { web: fakePush, native: null }, MORNING)).toBe(0);
   });
 
   it("si ya lo leyó antes de la mañana, no se le avisa", async () => {
@@ -259,7 +269,7 @@ describe("avisos en el celular", () => {
     const id = await open(beto.token, ana.id);
     await send(beto.token, id, "Otra cosa");
     await view(ana.token, id, true);
-    expect(await sendPendingNotices(ctx.db, fakePush, MORNING)).toBe(0);
+    expect(await sendPendingNotices(ctx.db, { web: fakePush, native: null }, MORNING)).toBe(0);
   });
 
   it("olvida el teléfono que ya no acepta avisos", async () => {
@@ -288,7 +298,7 @@ describe("avisos en el celular", () => {
     const off = await setupIdentity();
     const school = await off.createSchool("sin-avisos");
     const res = await off.app.inject({ url: "/push/key", headers: off.auth(school.adminToken) });
-    expect(res.json()).toEqual({ publicKey: null });
+    expect(res.json()).toEqual({ publicKey: null, nativeAvailable: false });
     const sub = await off.app.inject({
       method: "POST",
       url: "/push/subscriptions",
@@ -297,6 +307,153 @@ describe("avisos en el celular", () => {
     });
     expect(sub.statusCode).toBe(409);
     await off.close();
+  });
+});
+
+describe("avisos en la app de Android", () => {
+  const TOKEN = (n: number) => `fcm-token-de-prueba-${n}:APA91b${"x".repeat(40)}`;
+
+  it("la app se registra con el identificador que le dio Firebase", async () => {
+    expect((await call<PushKeyDto>(carla.token, "GET", "/push/key")).body.nativeAvailable).toBe(true);
+    expect(
+      (await call(carla.token, "POST", "/push/devices", { token: TOKEN(1), platform: "android" })).status,
+    ).toBe(204);
+    expect(
+      (await call(carla.token, "POST", "/push/devices", { token: "corto", platform: "android" })).status,
+    ).toBe(400);
+    expect(
+      (await call(carla.token, "POST", "/push/devices", { token: TOKEN(2), platform: "ios" })).status,
+    ).toBe(400);
+  });
+
+  it("los mensajes avisan también a la app, sin el texto", async () => {
+    clock = WORKDAY;
+    sentToApp.length = 0;
+    const id = await open(beto.token, carla.id);
+    await send(beto.token, id, "Información confidencial del expediente");
+    await vi.waitFor(() => expect(sentToApp).toHaveLength(1));
+    expect(sentToApp[0]).toEqual({
+      token: TOKEN(1),
+      payload: {
+        title: "Beto Docente",
+        body: "Te envió un mensaje.",
+        url: `/panel/mensajes/${id}`,
+        tag: `conversacion-${id}`,
+      },
+    });
+  });
+
+  it("si en ese teléfono entra otra persona, los avisos pasan a ella", async () => {
+    expect(
+      (await call(beto.token, "POST", "/push/devices", { token: TOKEN(1), platform: "android" })).status,
+    ).toBe(204);
+    const rows = await ctx.db
+      .select()
+      .from(pushDevices)
+      .where(eq(pushDevices.token, TOKEN(1)));
+    expect(rows.map((r) => r.userId)).toEqual([beto.id]);
+    // Quitarlo solo lo puede su dueño actual.
+    expect((await call(carla.token, "POST", "/push/devices/remove", { token: TOKEN(1) })).status).toBe(204);
+    expect(
+      await ctx.db
+        .select()
+        .from(pushDevices)
+        .where(eq(pushDevices.token, TOKEN(1))),
+    ).toHaveLength(1);
+    expect((await call(beto.token, "POST", "/push/devices/remove", { token: TOKEN(1) })).status).toBe(204);
+    expect(
+      await ctx.db
+        .select()
+        .from(pushDevices)
+        .where(eq(pushDevices.token, TOKEN(1))),
+    ).toHaveLength(0);
+  });
+
+  it("olvida la app que Firebase ya no reconoce", async () => {
+    await call(carla.token, "POST", "/push/devices", { token: TOKEN(3), platform: "android" });
+    clock = WORKDAY;
+    nextAppResult = "gone";
+    const id = await open(beto.token, carla.id);
+    await send(beto.token, id, "¿Recibió?");
+    await vi.waitFor(async () => {
+      expect(await ctx.db.select().from(pushDevices).where(eq(pushDevices.userId, carla.id))).toEqual([]);
+    });
+    nextAppResult = "sent";
+  });
+});
+
+describe("Firebase Cloud Messaging", () => {
+  // Cuenta de servicio de prueba (una llave RSA generada aquí, como la que descarga Firebase).
+  async function account() {
+    const { generateKeyPairSync } = await import("node:crypto");
+    const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    return JSON.stringify({
+      type: "service_account",
+      project_id: "conecta-prueba",
+      client_email: "avisos@conecta-prueba.iam.gserviceaccount.com",
+      private_key: privateKey.export({ type: "pkcs8", format: "pem" }).toString(),
+    });
+  }
+  const payload = {
+    title: "Ana",
+    body: "Te envió un mensaje.",
+    url: "/panel/mensajes/1",
+    tag: "conversacion-1",
+  };
+
+  it("pide permiso a Google una vez por hora y manda el aviso a Firebase", async () => {
+    const calls: { url: string; init: RequestInit }[] = [];
+    const fakeFetch = (async (url: string, init: RequestInit) => {
+      calls.push({ url, init });
+      if (url.startsWith("https://oauth2.googleapis.com/")) {
+        return Response.json({ access_token: "permiso-de-prueba", expires_in: 3600 });
+      }
+      return Response.json({ name: "projects/conecta-prueba/messages/1" });
+    }) as unknown as typeof fetch;
+    const sender = fcmSender(parseServiceAccount(await account()), fakeFetch);
+    expect(await sender.send("token-1", payload)).toBe("sent");
+    expect(await sender.send("token-2", payload)).toBe("sent");
+    expect(calls.map((c) => c.url)).toEqual([
+      "https://oauth2.googleapis.com/token",
+      "https://fcm.googleapis.com/v1/projects/conecta-prueba/messages:send",
+      "https://fcm.googleapis.com/v1/projects/conecta-prueba/messages:send",
+    ]);
+    const grant = new URLSearchParams(String(calls[0]?.init.body));
+    expect(grant.get("grant_type")).toBe("urn:ietf:params:oauth:grant-type:jwt-bearer");
+    expect(grant.get("assertion")?.split(".")).toHaveLength(3);
+    const headers = (calls[1]?.init.headers ?? {}) as Record<string, string>;
+    expect(headers.authorization).toBe("Bearer permiso-de-prueba");
+    expect(JSON.parse(String(calls[1]?.init.body))).toEqual({ message: fcmMessage("token-1", payload) });
+  });
+
+  it("distingue el teléfono que ya no existe de una falla pasajera", async () => {
+    const reply = (status: number, body: unknown) =>
+      (async (url: string) =>
+        url.startsWith("https://oauth2")
+          ? Response.json({ access_token: "p", expires_in: 3600 })
+          : Response.json(body, { status })) as unknown as typeof fetch;
+    const json = await account();
+    const unregistered = {
+      error: { message: "Requested entity was not found.", details: [{ errorCode: "UNREGISTERED" }] },
+    };
+    expect(await fcmSender(parseServiceAccount(json), reply(404, unregistered)).send("t", payload)).toBe(
+      "gone",
+    );
+    const badToken = {
+      error: {
+        message: "The registration token is not a valid FCM registration token",
+        details: [{ errorCode: "INVALID_ARGUMENT" }],
+      },
+    };
+    expect(await fcmSender(parseServiceAccount(json), reply(400, badToken)).send("t", payload)).toBe("gone");
+    expect(await fcmSender(parseServiceAccount(json), reply(503, { error: {} })).send("t", payload)).toBe(
+      "failed",
+    );
+  });
+
+  it("explica si la cuenta de servicio está mal", () => {
+    expect(() => parseServiceAccount("no es json")).toThrow(/JSON/);
+    expect(() => parseServiceAccount(JSON.stringify({ project_id: "x" }))).toThrow(/private_key/);
   });
 });
 

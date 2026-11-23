@@ -1,4 +1,5 @@
 import { databaseUrlFromEnv, intEnv, optionalEnv, pemEnv } from "@escolar/service-kit";
+import { type FcmServiceAccount, parseServiceAccount } from "./lib/fcm";
 
 export interface TokenSettings {
   accessTokenTtlSeconds: number;
@@ -23,6 +24,8 @@ export interface IdentityConfig extends TokenSettings {
   jwtPublicKeyPem: string;
   /** Llaves de los avisos al celular (Web Push). Sin ellas los mensajes funcionan, sin avisos. */
   vapid: { publicKey: string; privateKey: string; subject: string } | null;
+  /** Cuenta de servicio de Firebase (avisos a la app de Android); null sin FCM_SERVICE_ACCOUNT. */
+  fcm: FcmServiceAccount | null;
   /**
    * Fotos, videos y documentos de los mensajes: FILES_BUCKET (S3, en AWS) o FILES_DIR (una carpeta,
    * en la demo). Sin ninguna, la carpeta `.adjuntos` junto al servicio.
@@ -56,6 +59,9 @@ export function loadConfig(): IdentityConfig {
     jwtPrivateKeyPem: pemEnv("JWT_PRIVATE_KEY"),
     jwtPublicKeyPem: pemEnv("JWT_PUBLIC_KEY"),
     vapid: vapidFromEnv(),
+    fcm: process.env.FCM_SERVICE_ACCOUNT?.trim()
+      ? parseServiceAccount(process.env.FCM_SERVICE_ACCOUNT)
+      : null,
     files: process.env.FILES_BUCKET?.trim()
       ? { kind: "s3", bucket: process.env.FILES_BUCKET.trim() }
       : { kind: "local", dir: process.env.FILES_DIR?.trim() || null },

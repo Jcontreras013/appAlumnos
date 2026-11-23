@@ -68,6 +68,12 @@ export interface EscolarStackProps extends StackProps {
    * mensajes funcionan, pero el teléfono no avisa.
    */
   pushSecretArn?: string;
+  /**
+   * ARN del secreto con la cuenta de servicio de Firebase (clave FCM_SERVICE_ACCOUNT: el JSON que
+   * descarga Firebase) para los avisos a la app de Android. Opcional: sin él la app funciona sin
+   * avisos.
+   */
+  fcmSecretArn?: string;
 }
 
 /**
@@ -250,6 +256,9 @@ export class EscolarStack extends Stack {
     const pushSecret = props.pushSecretArn
       ? secretsmanager.Secret.fromSecretCompleteArn(this, "PushSecret", props.pushSecretArn)
       : undefined;
+    const fcmSecret = props.fcmSecretArn
+      ? secretsmanager.Secret.fromSecretCompleteArn(this, "FcmSecret", props.fcmSecretArn)
+      : undefined;
     // Fotos, videos y documentos de los mensajes: bucket privado y cifrado, solo por HTTPS. No hay
     // enlaces públicos: identity entrega cada archivo después de revisar quién lo pide.
     const attachmentsBucket = new s3.Bucket(this, "Adjuntos", {
@@ -292,6 +301,10 @@ export class EscolarStack extends Stack {
               VAPID_PRIVATE_KEY: ecs.Secret.fromSecretsManager(pushSecret, "VAPID_PRIVATE_KEY"),
               VAPID_SUBJECT: ecs.Secret.fromSecretsManager(pushSecret, "VAPID_SUBJECT"),
             }
+          : {}),
+        // Avisos a la app de Android, por Firebase (también sale a internet por su IP pública).
+        ...(fcmSecret
+          ? { FCM_SERVICE_ACCOUNT: ecs.Secret.fromSecretsManager(fcmSecret, "FCM_SERVICE_ACCOUNT") }
           : {}),
       },
     });

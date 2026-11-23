@@ -4,6 +4,7 @@ import type { FastifyServerOptions } from "fastify";
 import type { TokenSettings } from "./config";
 import { type Db, ping } from "./db/client";
 import type { IdentityDeps } from "./deps";
+import type { NativePushSender } from "./lib/fcm";
 import { DEFAULT_FILES_DIR, type FileStore, localFileStore } from "./lib/files";
 import type { SigningKeys } from "./lib/keys";
 import type { PushSender } from "./lib/push";
@@ -31,12 +32,23 @@ export interface BuildAppOptions {
   logger?: FastifyServerOptions["logger"];
   /** Avisos al celular de los mensajes (sin llaves VAPID no hay avisos, pero los mensajes funcionan). */
   push?: PushSender | null;
+  /** Avisos a la app de Android por Firebase (sin la cuenta de Firebase, la app no avisa). */
+  nativePush?: NativePushSender | null;
   /** Fotos, videos y documentos de los mensajes (por defecto, una carpeta local). */
   files?: FileStore;
   now?: () => Date;
 }
 
-export async function buildApp({ db, keys, settings, logger, push = null, files, now }: BuildAppOptions) {
+export async function buildApp({
+  db,
+  keys,
+  settings,
+  logger,
+  push = null,
+  nativePush = null,
+  files,
+  now,
+}: BuildAppOptions) {
   const app = await createService({ name: "identity", logger, readiness: () => ping(db) });
 
   await app.register(rateLimit, { global: false });
@@ -50,6 +62,7 @@ export async function buildApp({ db, keys, settings, logger, push = null, files,
     settings,
     tokens: new TokenService(db, keys, settings),
     push,
+    nativePush,
     files: files ?? localFileStore(DEFAULT_FILES_DIR),
     now: now ?? (() => new Date()),
   };
