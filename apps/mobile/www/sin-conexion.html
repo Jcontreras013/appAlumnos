@@ -49,6 +49,7 @@
         font-weight: 600;
       }
       button:active { background: #086f57; }
+      .hint { margin: 1rem 0 0; font-size: 0.8rem; color: #94a3b8; word-break: break-all; }
     </style>
   </head>
   <body>
@@ -64,15 +65,23 @@
         cuanto la app cargue una vez con conexión.
       </p>
       <button type="button" id="retry">Volver a intentar</button>
+      <p class="hint" id="where"></p>
     </main>
     <!-- conecta-url.js lo escribe scripts/after-sync.mjs con la dirección que abre la app. -->
     <script src="conecta-url.js"></script>
     <script>
+      // La dirección que abre la app (la de prueba puede tener otra, elegida en el teléfono).
+      const serverUrl = () =>
+        window.ConectaNativo?.serverUrl() || window.CONECTA_URL || "";
       const retry = () => {
-        if (window.CONECTA_URL) window.location.href = window.CONECTA_URL;
+        const url = serverUrl();
+        if (url) window.location.href = url;
         else window.history.back();
       };
       document.getElementById("retry").addEventListener("click", retry);
+      // Para saber qué dirección se intentó abrir (en la app de prueba se cambia manteniendo
+      // presionado el ícono → «Cambiar servidor»).
+      document.getElementById("where").textContent = serverUrl() ? `Dirección: ${serverUrl()}` : "";
       // Al volver la señal, se reintenta solo.
       window.addEventListener("online", retry);
     </script>

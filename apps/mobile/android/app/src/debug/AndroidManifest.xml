@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Solo en la app de prueba: abre el CONECTA local (http://10.0.2.2:3000) desde el emulador. -->
+<!--
+  Solo en la app de prueba: abre CONECTA también por http (la demo en una computadora del wifi o en
+  el emulador, http://10.0.2.2:3000) y agrega «Cambiar servidor» al mantener presionado el ícono.
+-->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <application android:usesCleartextTraffic="true" />
+    <application android:usesCleartextTraffic="true">
+        <activity android:name=".MainActivity" android:exported="true">
+            <meta-data android:name="android.app.shortcuts" android:resource="@xml/shortcuts" />
+        </activity>
+    </application>
 </manifest>

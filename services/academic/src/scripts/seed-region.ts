@@ -70,6 +70,62 @@ async function login(email: string, password: string): Promise<string> {
   }
 }
 
+// ── Guía en PDF para la biblioteca de la demo, sin dependencias (texto con fuente Helvetica) ──
+function demoPdf(title: string, pages: Array<{ heading: string; lines: string[] }>): Buffer {
+  // WinAnsi: tildes y ñ en un byte. Se escapan los caracteres especiales del texto de PDF.
+  const text = (s: string) => `(${s.replace(/[\\()]/g, (c) => `\\${c}`)})`;
+  const objects: string[] = [];
+  const add = (body: string) => objects.push(body) + 1; // el 1 es el catálogo
+  const font = add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>");
+  const bold = add("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>");
+  const pageIds: number[] = [];
+  const pagesId = objects.length + 2 + pages.length * 2;
+  pages.forEach((page, i) => {
+    const body = [
+      "0.043 0.541 0.42 rg 0 732 612 60 re f",
+      `BT /F2 20 Tf 1 1 1 rg 40 755 Td ${text(title)} Tj ET`,
+      `BT /F2 16 Tf 0.02 0.24 0.19 rg 40 690 Td ${text(page.heading)} Tj ET`,
+      `BT /F1 12 Tf 0.1 0.1 0.1 rg 40 660 Td 20 TL ${page.lines.map((l) => `${text(l)} Tj T*`).join(" ")} ET`,
+      `BT /F1 10 Tf 0.4 0.4 0.4 rg 280 40 Td ${text(`Página ${i + 1} de ${pages.length}`)} Tj ET`,
+    ].join("\n");
+    const content = add(`<< /Length ${Buffer.byteLength(body, "latin1")} >>\nstream\n${body}\nendstream`);
+    pageIds.push(
+      add(
+        `<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 612 792] /Contents ${content} 0 R ` +
+          `/Resources << /Font << /F1 ${font} 0 R /F2 ${bold} 0 R >> >> >>`,
+      ),
+    );
+  });
+  add(`<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(" ")}] /Count ${pageIds.length} >>`);
+  let pdf = "%PDF-1.4\n";
+  const offsets: number[] = [];
+  const all = [`<< /Type /Catalog /Pages ${pagesId} 0 R >>`, ...objects];
+  all.forEach((body, i) => {
+    offsets.push(Buffer.byteLength(pdf, "latin1"));
+    pdf += `${i + 1} 0 obj\n${body}\nendobj\n`;
+  });
+  const xref = Buffer.byteLength(pdf, "latin1");
+  pdf += `xref\n0 ${all.length + 1}\n0000000000 65535 f \n`;
+  for (const offset of offsets) pdf += `${String(offset).padStart(10, "0")} 00000 n \n`;
+  pdf += `trailer\n<< /Size ${all.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(pdf, "latin1");
+}
+
+/** Sube un PDF a la biblioteca como lo hace el panel (el cuerpo es el archivo; los datos, en la dirección). */
+async function uploadToLibrary(token: string, file: Buffer, name: string, meta: Record<string, string>) {
+  const res = await fetch(`${academicUrl}/library/files?${new URLSearchParams(meta)}`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/pdf",
+      "content-length": String(file.length),
+      "x-file-name": encodeURIComponent(name),
+    },
+    body: new Uint8Array(file),
+  });
+  if (!res.ok) throw new Error(`biblioteca ${name} -> ${res.status}: ${await res.text()}`);
+}
+
 // ── Logo simple (círculos concéntricos) en PNG, sin dependencias ──
 function crc32(buf: Buffer) {
   let c = ~0;
@@ -792,6 +848,56 @@ for (const [index, school] of SCHOOLS.entries()) {
         description: "Contestó de mala manera a la maestra cuando se le pidió volver a su lugar.",
       });
     }
+
+    // ── Biblioteca: una guía de Cuarto grado y un enlace para las familias; una guía solo del personal ──
+    const grades = await acApi<Array<{ id: string; name: string }>>("/grades");
+    const cuartoGrado = grades.find((g) => g.name === "Cuarto grado")?.id ?? "";
+    const lessons = ["Fracciones", "Fracciones equivalentes", "Decimales", "Perímetro y área", "Problemas"];
+    const guide = demoPdf(
+      "Matemáticas · Cuarto grado",
+      lessons.map((topic, i) => ({
+        heading: `Lección ${i + 1}: ${topic}`,
+        lines: [
+          "Lee con atención y resuelve en tu cuaderno. Muestra tu procedimiento.",
+          "",
+          ...Array.from(
+            { length: 8 },
+            (_, k) => `${k + 1}.  Resuelve: ${i + k + 2}/${k + 3} + ${k + 1}/${k + 3} = ________`,
+          ),
+          "",
+          "Para la casa: repasa los ejercicios con tu familia y trae dudas a la clase.",
+        ],
+      })),
+    );
+    await uploadToLibrary(teacherToken, guide, "Guía de Matemáticas - Cuarto grado.pdf", {
+      titulo: "Guía de Matemáticas · Cuarto grado",
+      descripcion: "Ejercicios de repaso del IV parcial: fracciones, decimales, perímetro y área.",
+      grado: cuartoGrado,
+      materia: subjects["Matemáticas"] ?? "",
+      para: "familias",
+    });
+    await uploadToLibrary(
+      teacherToken,
+      demoPdf("Guía del docente · Matemáticas 4.º", [
+        {
+          heading: "Respuestas de la guía",
+          lines: lessons.map((t, i) => `Lección ${i + 1} (${t}): ver solucionario.`),
+        },
+      ]),
+      "Guía del docente - respuestas.pdf",
+      {
+        titulo: "Guía del docente con respuestas",
+        grado: cuartoGrado,
+        materia: subjects["Matemáticas"] ?? "",
+        para: "personal",
+      },
+    );
+    await asCuarto("/library/links", "POST", {
+      title: "Educatrachos: libros de texto oficiales",
+      description: "Libros de texto y cuadernos de trabajo de la Secretaría de Educación.",
+      url: "https://www.educatrachos.hn",
+      audience: "familias",
+    });
   }
 }
 
