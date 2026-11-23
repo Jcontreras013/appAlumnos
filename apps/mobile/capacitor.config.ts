@@ -13,14 +13,15 @@ import type { CapacitorConfig } from "@capacitor/cli";
  *   CONECTA_APP_ID  Identificador en Play Store. No se puede cambiar después de la primera
  *                   publicación (ver apps/mobile/README.md).
  */
-const base = (process.env.CONECTA_URL ?? "http://10.0.2.2:3000").replace(/\/+$/, "");
+// En GitHub Actions, una variable sin definir llega vacía: cuenta como no puesta.
+const base = (process.env.CONECTA_URL?.trim() || "http://10.0.2.2:3000").replace(/\/+$/, "");
 const url = new URL(base);
 if (url.protocol !== "https:" && url.hostname !== "10.0.2.2" && url.hostname !== "localhost") {
   throw new Error(`CONECTA_URL tiene que empezar con https:// (vino ${base})`);
 }
 
 const config: CapacitorConfig = {
-  appId: process.env.CONECTA_APP_ID ?? "com.jcsystem.conecta",
+  appId: process.env.CONECTA_APP_ID?.trim() || "com.jcsystem.conecta",
   appName: "CONECTA",
   // Solo la pantalla de «sin conexión»: la plataforma se abre desde CONECTA_URL.
   webDir: "www",
