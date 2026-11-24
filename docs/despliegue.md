@@ -45,9 +45,14 @@ registros; las llaves se crean y se guardan directo en AWS Secrets Manager.
 (hay que unir el pull request).
 
 1. **Cuenta de AWS** con tarjeta. Recomendado: una alerta de gastos en AWS Budgets (por ejemplo,
-   USD 250 al mes) para enterarse de cualquier sorpresa.
+   USD 250 al mes) para enterarse de cualquier sorpresa. Una cuenta nueva en el **plan gratuito** (con
+   créditos) sirve para el ambiente `dev`: la base de pruebas usa 1 día de respaldos y 20 GB fijos,
+   lo que ese plan permite. **Producción necesita el plan de pago** (Facturación → Planes; los créditos
+   que queden se conservan), porque guarda 30 días de respaldos en dos zonas.
 2. **Dominio:** por ejemplo `conecta.tuempresa.hn`, con acceso a su DNS (donde se compró el dominio).
-3. **Permiso para GitHub** (una vez): en la consola de AWS, región **us-east-1 (N. Virginia)** →
+3. **Permiso para GitHub** (una vez): en la consola de AWS, región **us-east-1 (N. Virginia)** (o la
+   que tenga habilitada la cuenta; si es otra, crear en GitHub la variable `AWS_REGION`, por ejemplo
+   `us-east-2`) →
    **CloudFormation → Crear pila → Cargar un archivo de plantilla** → el archivo
    [`infra/aws-github.yaml`](../infra/aws-github.yaml) (se baja de GitHub con «Download raw file») →
    nombre `conecta-github` → marcar que la pila crea recursos de IAM → **Crear**. Cuando termine, en
