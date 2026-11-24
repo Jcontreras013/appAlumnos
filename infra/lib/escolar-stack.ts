@@ -198,7 +198,9 @@ export class EscolarStack extends Stack {
           file: `services/${name}/Dockerfile`,
           exclude: ASSET_EXCLUDE,
         }),
-        portMappings: [{ name, containerPort: options.port }],
+        // HTTP (no TCP): Service Connect solo acepta el tiempo por petición (requestTimeout) en
+        // conexiones HTTP; con TCP, ECS rechaza el servicio.
+        portMappings: [{ name, containerPort: options.port, appProtocol: ecs.AppProtocol.http }],
         logging: ecs.LogDrivers.awsLogs({
           streamPrefix: name,
           logRetention: isProd ? logs.RetentionDays.SIX_MONTHS : logs.RetentionDays.ONE_MONTH,
