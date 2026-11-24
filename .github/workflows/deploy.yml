@@ -131,6 +131,50 @@ jobs:
             exit 1
           fi
 
+      - name: Revisar que el panel llegue a identity y academic
+        run: |
+          set -euo pipefail
+          URL=$(jq -r '.[] | .UrlPanel // empty' "$RUNNER_TEMP/salidas.json" | head -n1)
+          CLUSTER=$(jq -r '.[] | .NombreCluster // empty' "$RUNNER_TEMP/salidas.json" | head -n1)
+          # Con dominio se revisa por https con su certificado, aunque el DNS todavía no apunte aquí.
+          revisar() {
+            local destino=$URL extra=()
+            if [ -n "$DOMINIO" ] && [[ "$URL" == https://* ]]; then
+              extra=(--connect-to "$DOMINIO:443:${URL#https://}:443")
+              destino="https://$DOMINIO"
+            fi
+            curl -sS --max-time 20 -o "$RUNNER_TEMP/servicios.json" -w "%{http_code}" "${extra[@]}" \
+              "$destino/api/health/servicios" 2>/dev/null || true
+          }
+          esperar() {
+            for _ in 1 2 3 4 5 6; do
+              CODIGO=$(revisar)
+              [ "$CODIGO" = "200" ] && return 0
+              sleep 10
+            done
+            return 1
+          }
+          if esperar; then
+            echo "El panel llega a identity y academic."
+            exit 0
+          fi
+          # Service Connect: una tarea solo encuentra los servicios que ya existían cuando arrancó.
+          # Reiniciar academic y el panel lo resuelve (sin cortar: las tareas nuevas entran antes).
+          echo "::warning::El panel no llega a los servicios (código $CODIGO). Reiniciando academic y el panel..."
+          SERVICIOS=$(aws ecs list-services --cluster "$CLUSTER" --query serviceArns --output text \
+            | tr '\t' '\n' | grep -E 'AcademicService|WebService' || true)
+          for s in $SERVICIOS; do
+            aws ecs update-service --cluster "$CLUSTER" --service "$s" --force-new-deployment > /dev/null
+          done
+          # shellcheck disable=SC2086
+          aws ecs wait services-stable --cluster "$CLUSTER" --services $SERVICIOS
+          if esperar; then
+            echo "Después de reiniciar, el panel llega a identity y academic."
+          else
+            echo "::error::El panel sigue sin llegar a identity o academic: $(cat "$RUNNER_TEMP/servicios.json" 2>/dev/null || echo "sin respuesta"). Revisa los registros de los servicios en CloudWatch (AWS)."
+            exit 1
+          fi
+
       - name: Qué sigue
         run: |
           set -euo pipefail

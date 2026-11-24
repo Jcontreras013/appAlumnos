@@ -1,6 +1,6 @@
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CfnOutput, Duration, RemovalPolicy, Stack, type StackProps } from "aws-cdk-lib";
+import { CfnOutput, type CfnResource, Duration, RemovalPolicy, Stack, type StackProps } from "aws-cdk-lib";
 import * as acm from "aws-cdk-lib/aws-certificatemanager";
 import * as cloudwatch from "aws-cdk-lib/aws-cloudwatch";
 import * as cwActions from "aws-cdk-lib/aws-cloudwatch-actions";
@@ -158,6 +158,16 @@ export class EscolarStack extends Stack {
     if (!dbSecret) throw new Error("RDS no generó el secreto de credenciales");
 
     const jwtSecret = secretsmanager.Secret.fromSecretCompleteArn(this, "JwtSecret", props.jwtSecretArn);
+
+    /**
+     * Solo entre los recursos ECS::Service (no entre todo el árbol: los grupos de seguridad se
+     * referencian entre sí y CloudFormation vería un ciclo).
+     */
+    const dependeDe = (servicio: ecs.FargateService, ...antes: ecs.FargateService[]) => {
+      for (const otro of antes) {
+        (servicio.node.defaultChild as CfnResource).addDependency(otro.node.defaultChild as CfnResource);
+      }
+    };
 
     /** En prod: de 2 a 4 tareas según el uso de CPU (p. ej. a la hora de tomar asistencia). */
     const autoscale = (service: ecs.FargateService) => {
@@ -362,6 +372,9 @@ export class EscolarStack extends Stack {
     // academic solo puede leer y escribir en la carpeta de la biblioteca, no en los adjuntos de los mensajes.
     attachmentsBucket.grantReadWrite(academic.task.taskRole, "biblioteca/*");
     identityService.connections.allowFrom(academic.service, ec2.Port.tcp(3001), "academic to identity");
+    // Service Connect: una tarea solo encuentra por nombre los servicios que ya existían cuando
+    // arrancó. Si academic arrancara antes que identity, nunca encontraría «identity».
+    dependeDe(academic.service, identityService);
 
     // ───────────────────────────── Frontend web ─────────────────────────────
     const certificate = props.certificateArn
@@ -415,6 +428,8 @@ export class EscolarStack extends Stack {
     web.service.enableServiceConnect();
     identityService.connections.allowFrom(web.service, ec2.Port.tcp(3001), "web to identity");
     academic.service.connections.allowFrom(web.service, ec2.Port.tcp(3002), "web to academic");
+    // El panel arranca después de identity y academic (si no, no los encuentra por nombre).
+    dependeDe(web.service, identityService, academic.service);
     if (isProd) autoscale(web.service);
 
     // ───────────────────────────── Protección (WAF, prod) ─────────────────────────────

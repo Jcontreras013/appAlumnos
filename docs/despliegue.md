@@ -81,7 +81,12 @@ registros; las llaves se crean y se guardan directo en AWS Secrets Manager.
    `FCM_SERVICE_ACCOUNT` y el JSON de la cuenta de servicio de Firebase (ver
    [`apps/mobile/README.md`](../apps/mobile/README.md)). Volver a desplegar.
 
-Para actualizar CONECTA más adelante, solo se repite el paso 6.
+Para actualizar CONECTA más adelante, solo se repite el paso 6. Al terminar, el flujo revisa que el
+panel llegue a identity y academic (y los reinicia solo si hace falta).
+
+**Actions → «Reiniciar los servicios»** (unos 4 minutos, sin cortar el servicio): si al entrar dice
+«No se pudo conectar con el servidor», o después de cambiar el valor de una llave en Secrets
+Manager (las tareas leen las llaves al arrancar).
 
 ## Antes de empezar (forma manual)
 
