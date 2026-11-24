@@ -1,0 +1,89 @@
+name: Reiniciar los servicios
+
+# Reinicia el panel, identity y academic sin cortar el servicio: ECS arranca las tareas nuevas y
+# apaga las viejas cuando las nuevas están sanas. Sirve para:
+#   - «No se pudo conectar con el servidor» al entrar justo después del primer despliegue.
+#   - Después de cambiar el valor de una llave en Secrets Manager (las tareas la leen al arrancar).
+# No cambia la versión de CONECTA (para eso, «Desplegar en AWS»). El registro es público: no
+# muestra llaves ni correos.
+
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: Ambiente
+        type: choice
+        options: [prod, dev]
+        default: prod
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: aws-${{ inputs.stage }}
+  cancel-in-progress: false
+
+jobs:
+  reiniciar:
+    name: Reiniciar
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.stage }}
+    timeout-minutes: 30
+    env:
+      STAGE: ${{ inputs.stage }}
+      DOMINIO: ${{ vars.DOMINIO }}
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          mask-aws-account-id: true
+
+      - name: Reiniciar el panel, identity y academic
+        run: |
+          set -euo pipefail
+          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+          echo "::add-mask::$ACCOUNT"
+          salida() {
+            aws cloudformation describe-stacks --stack-name "Escolar-$STAGE" \
+              --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue | [0]" --output text
+          }
+          CLUSTER=$(salida NombreCluster)
+          URL=$(salida UrlPanel)
+          if [ -z "$CLUSTER" ] || [ "$CLUSTER" = "None" ]; then
+            echo "::error::No encontré la plataforma desplegada (Escolar-$STAGE): corre primero «Desplegar en AWS»."
+            exit 1
+          fi
+          SERVICIOS=$(aws ecs list-services --cluster "$CLUSTER" --query serviceArns --output text | tr '\t' '\n')
+          for s in $SERVICIOS; do
+            aws ecs update-service --cluster "$CLUSTER" --service "$s" --force-new-deployment > /dev/null
+            echo "Reiniciando ${s##*/}"
+          done
+          echo "Esperando que las tareas nuevas estén sanas (unos minutos)..."
+          # shellcheck disable=SC2086
+          aws ecs wait services-stable --cluster "$CLUSTER" --services $SERVICIOS
+
+          revisar() {
+            local destino=$URL extra=()
+            if [ -n "$DOMINIO" ] && [[ "$URL" == https://* ]]; then
+              extra=(--connect-to "$DOMINIO:443:${URL#https://}:443")
+              destino="https://$DOMINIO"
+            fi
+            curl -sS --max-time 20 -o "$RUNNER_TEMP/servicios.json" -w "%{http_code}" "${extra[@]}" \
+              "$destino/api/health/servicios" 2>/dev/null || true
+          }
+          for _ in 1 2 3 4 5 6; do
+            CODIGO=$(revisar)
+            [ "$CODIGO" = "200" ] || [ "$CODIGO" = "404" ] && break
+            sleep 10
+          done
+          case "$CODIGO" in
+            200) echo "Listo: el panel llega a identity y academic." ;;
+            404) echo "::notice::Servicios reiniciados. Esta versión del panel todavía no tiene la revisión de servicios (llega con el próximo «Desplegar en AWS»)." ;;
+            *)
+              echo "::error::El panel no llega a identity o academic: $(cat "$RUNNER_TEMP/servicios.json" 2>/dev/null || echo "sin respuesta"). Revisa los registros en CloudWatch (AWS)."
+              exit 1
+              ;;
+          esac
+          echo "## Servicios reiniciados ($STAGE)" >> "$GITHUB_STEP_SUMMARY"

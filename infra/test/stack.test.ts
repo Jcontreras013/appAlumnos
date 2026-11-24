@@ -26,6 +26,20 @@ describe("seguridad de la infraestructura", () => {
     });
   });
 
+  it("Service Connect: cada servicio arranca después de los que llama (si no, no los encuentra)", () => {
+    const servicios = template.findResources("AWS::ECS::Service");
+    const id = (prefijo: string) => {
+      const encontrado = Object.keys(servicios).find((k) => k.startsWith(prefijo));
+      expect(encontrado, prefijo).toBeDefined();
+      return encontrado as string;
+    };
+    const dependeDe = (servicio: string) => (servicios[id(servicio)]?.DependsOn ?? []) as string[];
+    expect(dependeDe("AcademicService")).toContain(id("IdentityService"));
+    expect(dependeDe("WebService")).toEqual(
+      expect.arrayContaining([id("IdentityService"), id("AcademicService")]),
+    );
+  });
+
   it("Service Connect: el tiempo por petición solo en servicios con puerto HTTP (ECS lo rechaza en TCP)", () => {
     const recursos = template.toJSON().Resources as Record<
       string,
