@@ -3,7 +3,7 @@ name: Preparar AWS (una vez)
 # Prepara la cuenta de AWS para CONECTA. Se corre una vez por ambiente; repetirlo no duplica nada.
 #   1. Crea las llaves de las sesiones (JWT) y las de los avisos (Web Push) directo en AWS Secrets
 #      Manager: nunca pasan por git ni por este registro (el repositorio es público).
-#   2. Prepara la cuenta para CDK (bootstrap).
+#   2. Prepara la cuenta para CDK (bootstrap) y crea el rol de AWS para los contenedores (ECS).
 #   3. Pide el certificado HTTPS del dominio (variable DOMINIO) y muestra el registro que hay que
 #      crear en el DNS para validarlo.
 # Necesita el secreto AWS_DEPLOY_ROLE_ARN (infra/aws-github.yaml). Ver docs/despliegue.md.
@@ -93,6 +93,20 @@ jobs:
           # Fuera de infra/ para que CDK no arme la app (producción la arma solo con certificado).
           cd "$RUNNER_TEMP"
           "$GITHUB_WORKSPACE/infra/node_modules/.bin/cdk" bootstrap "aws://$ACCOUNT/$REGION"
+
+      - name: Rol de AWS para los contenedores (ECS)
+        run: |
+          set -euo pipefail
+          # En una cuenta nueva, ECS crea su rol vinculado la primera vez que se usa y a veces no
+          # está listo a tiempo para el clúster («ECS Service Linked Role is not ready»). Se crea
+          # antes, una sola vez.
+          if aws iam get-role --role-name AWSServiceRoleForECS >/dev/null 2>&1; then
+            echo "El rol de ECS ya existe."
+          else
+            aws iam create-service-linked-role --aws-service-name ecs.amazonaws.com >/dev/null
+            echo "Rol de ECS creado; esperando que AWS lo active..."
+            sleep 30
+          fi
 
       - name: Certificado HTTPS del dominio
         run: |

@@ -50,6 +50,20 @@ jobs:
           aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
           mask-aws-account-id: true
 
+      - name: Rol de AWS para los contenedores (ECS)
+        run: |
+          set -euo pipefail
+          # En una cuenta nueva, ECS crea su rol vinculado la primera vez que se usa y a veces no
+          # está listo a tiempo para el clúster («ECS Service Linked Role is not ready»). Se crea
+          # antes, una sola vez.
+          if aws iam get-role --role-name AWSServiceRoleForECS >/dev/null 2>&1; then
+            echo "El rol de ECS ya existe."
+          else
+            aws iam create-service-linked-role --aws-service-name ecs.amazonaws.com >/dev/null
+            echo "Rol de ECS creado; esperando que AWS lo active..."
+            sleep 30
+          fi
+
       - name: Buscar las llaves y el certificado en AWS
         env:
           JWT_SECRET_ARN: ${{ vars.JWT_SECRET_ARN }}
