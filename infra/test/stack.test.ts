@@ -26,6 +26,29 @@ describe("seguridad de la infraestructura", () => {
     });
   });
 
+  it("las descripciones de las reglas de red usan solo los caracteres que acepta AWS", () => {
+    // EC2 rechaza el despliegue si una descripción lleva, por ejemplo, «>» o letras con tilde.
+    const permitido = /^[a-zA-Z0-9. _\-:/()#,@[\]+=&;{}!$*]*$/;
+    const descripciones: string[] = [];
+    for (const recurso of Object.values(template.toJSON().Resources) as {
+      Type: string;
+      Properties?: Record<string, unknown>;
+    }[]) {
+      if (!recurso.Type.startsWith("AWS::EC2::SecurityGroup")) continue;
+      const props = recurso.Properties ?? {};
+      for (const clave of ["Description", "GroupDescription"]) {
+        if (typeof props[clave] === "string") descripciones.push(props[clave] as string);
+      }
+      for (const lista of ["SecurityGroupIngress", "SecurityGroupEgress"]) {
+        for (const regla of (props[lista] as { Description?: string }[] | undefined) ?? []) {
+          if (regla.Description) descripciones.push(regla.Description);
+        }
+      }
+    }
+    expect(descripciones.length).toBeGreaterThan(5);
+    expect(descripciones.filter((d) => !permitido.test(d) || d.length >= 256)).toEqual([]);
+  });
+
   it("Postgres solo acepta conexiones de los microservicios (identity y academic)", () => {
     const [dbSgId] = Object.keys(template.findResources("AWS::EC2::SecurityGroup")).filter((id) =>
       id.startsWith("PostgresSecurityGroup"),
@@ -98,10 +121,10 @@ describe("seguridad de la infraestructura", () => {
       Properties: { FromPort: unknown; CidrIp?: string; Description?: string };
     }>;
     const academicRules = rules.filter((r) => r.Properties.FromPort === 3002);
-    expect(academicRules.map((r) => r.Properties.Description)).toEqual(["web -> academic"]);
+    expect(academicRules.map((r) => r.Properties.Description)).toEqual(["web to academic"]);
     expect(academicRules.every((r) => r.Properties.CidrIp === undefined)).toBe(true);
-    expect(rules.map((r) => r.Properties.Description)).toContain("academic -> identity");
-    expect(rules.map((r) => r.Properties.Description)).toContain("academic -> Postgres");
+    expect(rules.map((r) => r.Properties.Description)).toContain("academic to identity");
+    expect(rules.map((r) => r.Properties.Description)).toContain("academic to Postgres");
   });
 
   it("los despliegues fallidos se revierten solos", () => {

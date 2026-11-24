@@ -250,7 +250,7 @@ export class EscolarStack extends Stack {
           ],
         },
       });
-      database.connections.allowDefaultPortFrom(service, `${name} -> Postgres`);
+      database.connections.allowDefaultPortFrom(service, `${name} to Postgres`);
       if (isProd) autoscale(service);
       return { task, service };
     };
@@ -359,7 +359,7 @@ export class EscolarStack extends Stack {
     });
     // academic solo puede leer y escribir en la carpeta de la biblioteca, no en los adjuntos de los mensajes.
     attachmentsBucket.grantReadWrite(academic.task.taskRole, "biblioteca/*");
-    identityService.connections.allowFrom(academic.service, ec2.Port.tcp(3001), "academic -> identity");
+    identityService.connections.allowFrom(academic.service, ec2.Port.tcp(3001), "academic to identity");
 
     // ───────────────────────────── Frontend web ─────────────────────────────
     const certificate = props.certificateArn
@@ -411,8 +411,8 @@ export class EscolarStack extends Stack {
     web.targetGroup.configureHealthCheck({ path: "/api/health", healthyHttpCodes: "200" });
     // web es cliente de Service Connect (resuelve "identity") pero no publica ningún endpoint interno.
     web.service.enableServiceConnect();
-    identityService.connections.allowFrom(web.service, ec2.Port.tcp(3001), "web -> identity");
-    academic.service.connections.allowFrom(web.service, ec2.Port.tcp(3002), "web -> academic");
+    identityService.connections.allowFrom(web.service, ec2.Port.tcp(3001), "web to identity");
+    academic.service.connections.allowFrom(web.service, ec2.Port.tcp(3002), "web to academic");
     if (isProd) autoscale(web.service);
 
     // ───────────────────────────── Protección (WAF, prod) ─────────────────────────────
