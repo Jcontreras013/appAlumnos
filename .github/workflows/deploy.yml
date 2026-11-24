@@ -109,8 +109,13 @@ jobs:
           if [ -n "$GROQ_MODEL" ]; then ARGS+=(-c "groqModel=$GROQ_MODEL"); fi
           if [ -n "$PUSH_SECRET_ARN" ]; then ARGS+=(-c "pushSecretArn=$PUSH_SECRET_ARN"); fi
           if [ -n "$FCM_SECRET_ARN" ]; then ARGS+=(-c "fcmSecretArn=$FCM_SECRET_ARN"); fi
-          pnpm --filter @escolar/infra exec cdk deploy --all --require-approval never \
-            --outputs-file "$RUNNER_TEMP/salidas.json" "${ARGS[@]}"
+          if ! pnpm --filter @escolar/infra exec cdk deploy --all --require-approval never \
+            --outputs-file "$RUNNER_TEMP/salidas.json" "${ARGS[@]}" 2>&1 | tee "$RUNNER_TEMP/cdk.log"; then
+            if grep -q "free tier customers" "$RUNNER_TEMP/cdk.log"; then
+              echo "::error::El plan gratuito de AWS no permite este despliegue ($STAGE). dev cabe en el plan gratuito; prod necesita pasar la cuenta al plan de pago (AWS → Facturación y administración de costos → Planes; los créditos se conservan)."
+            fi
+            exit 1
+          fi
 
       - name: Qué sigue
         run: |

@@ -13,7 +13,6 @@ import * as rds from "aws-cdk-lib/aws-rds";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import * as sns from "aws-cdk-lib/aws-sns";
-import * as subscriptions from "aws-cdk-lib/aws-sns-subscriptions";
 import * as wafv2 from "aws-cdk-lib/aws-wafv2";
 import type { Construct } from "constructs";
 
@@ -131,12 +130,15 @@ export class EscolarStack extends Stack {
       credentials: rds.Credentials.fromGeneratedSecret("escolar"),
       databaseName: "escolar_identity",
       allocatedStorage: 20,
-      maxAllocatedStorage: isProd ? 200 : 100,
+      // Crece solo hasta 200 GB en prod. En dev queda fijo en 20 GB (lo que permite el plan gratuito).
+      maxAllocatedStorage: isProd ? 200 : undefined,
       storageEncrypted: true,
       publiclyAccessible: false,
       multiAz: isProd,
       // Respaldos automáticos con restauración a cualquier minuto de los últimos 30 días (prod).
-      backupRetention: Duration.days(isProd ? 30 : 3),
+      // En dev, 1 día: el plan gratuito de AWS no acepta más («exceeds the maximum available to
+      // free tier customers»). Producción necesita la cuenta en el plan de pago.
+      backupRetention: Duration.days(isProd ? 30 : 1),
       copyTagsToSnapshot: true,
       enablePerformanceInsights: isProd,
       deletionProtection: isProd,
@@ -472,7 +474,15 @@ export class EscolarStack extends Stack {
 
     // ───────────────────────────── Alarmas ─────────────────────────────
     const alerts = new sns.Topic(this, "Alertas", { displayName: "Plataforma Escolar: alertas" });
-    if (props.alertEmail) alerts.addSubscription(new subscriptions.EmailSubscription(props.alertEmail));
+    // Con un id fijo: EmailSubscription usa el correo como id y terminaría (sin el @) en el nombre del
+    // recurso, que el registro público de GitHub Actions muestra sin enmascarar.
+    if (props.alertEmail) {
+      new sns.Subscription(this, "AlertasCorreo", {
+        topic: alerts,
+        protocol: sns.SubscriptionProtocol.EMAIL,
+        endpoint: props.alertEmail,
+      });
+    }
     const alarm = (
       id: string,
       description: string,

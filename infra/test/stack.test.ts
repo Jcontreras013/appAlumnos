@@ -201,6 +201,16 @@ describe("seguridad de la infraestructura", () => {
     });
   });
 
+  it("la base de pruebas cabe en el plan gratuito de AWS (1 día de respaldos, 20 GB fijos, micro)", () => {
+    template.hasResourceProperties("AWS::RDS::DBInstance", {
+      DBInstanceClass: "db.t4g.micro",
+      BackupRetentionPeriod: 1,
+      AllocatedStorage: "20",
+      MaxAllocatedStorage: Match.absent(),
+      MultiAZ: false,
+    });
+  });
+
   it("respaldos y mantenimiento de la base de madrugada en Honduras, y registro de consultas lentas", () => {
     template.hasResourceProperties("AWS::RDS::DBInstance", {
       PreferredBackupWindow: "07:00-07:30",
@@ -340,6 +350,13 @@ describe("producción (100 centros)", () => {
     expect(
       () => new EscolarStack(new App(), "ProdSinCert", { stage: "prod", jwtSecretArn: JWT_ARN }),
     ).toThrow(/HTTPS/);
+  });
+
+  it("el correo de las alarmas no aparece en el nombre de ningún recurso (el registro de GitHub es público)", () => {
+    const ids = Object.keys(prod.toJSON().Resources).join(" ").toLowerCase();
+    expect(ids).not.toContain("alertas@");
+    expect(ids).not.toContain("ejemplohn");
+    expect(ids).not.toContain("alertasejemplo");
   });
 
   it("base de datos en dos zonas, protegida contra borrado y con 30 días de respaldos", () => {
