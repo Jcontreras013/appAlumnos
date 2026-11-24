@@ -36,7 +36,8 @@ sync` y abrir la carpeta `apps/mobile/android`.
    <https://play.google.com/console>. Para una organización, Google pide verificar la empresa (número
    D-U-N-S): conviene empezar este trámite primero porque tarda unos días.
 2. **CONECTA publicada con su dominio y https** (por ejemplo `https://conecta.tuempresa.hn`). Esa es la
-   dirección que abre la app.
+   dirección que abre la app. Se publica desde GitHub, sin instalar nada:
+   [docs/despliegue.md → La forma fácil](../../docs/despliegue.md).
 3. **Decidir el identificador de la app** (por defecto `com.jcsystem.conecta`). Es permanente: después
    de la primera publicación no se puede cambiar. Si se quiere otro, cambiarlo antes en
    `android/app/build.gradle` (`namespace` y `applicationId`), en
@@ -50,17 +51,17 @@ sync` y abrir la carpeta `apps/mobile/android`.
 
    Guardar el archivo y las contraseñas en un lugar seguro (si se pierden, no se puede actualizar la
    app). **Nunca** se suben al repositorio.
-5. **En GitHub** (Settings → Secrets and variables → Actions):
+5. **En GitHub** (Settings → Secrets and variables → Actions, a nivel del repositorio, no dentro de un
+   ambiente):
    - Variable `CONECTA_URL`: la dirección del paso 2.
    - Secretos: `ANDROID_KEYSTORE_BASE64` (el archivo en base64: `base64 -w0 conecta.keystore` en Linux o
      `[Convert]::ToBase64String([IO.File]::ReadAllBytes("conecta.keystore"))` en PowerShell),
      `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (`conecta`) y `ANDROID_KEY_PASSWORD`.
 6. **Compilar**: Actions → App Android → Run workflow. Bajar el artefacto `conecta-play-store-aab`.
-7. **En Play Console**: crear la app, completar la ficha (descripción, capturas del teléfono, el ícono
-   `store/icono-512.png` y el gráfico `store/grafico-destacado-1024x500.png`), la **política de
-   privacidad** (`https://<tu dominio>/privacidad`), el cuestionario de **seguridad de los datos** y el de
-   **clasificación del contenido**. Para la revisión de Google hay que dar un **usuario de prueba**
-   (por ejemplo, una cuenta de maestro de un centro de demostración).
+7. **En Play Console**: crear la app y completar la ficha y los cuestionarios con lo que está en
+   [`store/ficha-play-store.md`](store/ficha-play-store.md): textos, capturas (`store/capturas/`),
+   ícono, gráfico destacado, política de privacidad, seguridad de los datos, clasificación, público
+   objetivo y la cuenta de prueba para la revisión de Google.
 8. **Subir el AAB** primero a «Prueba interna» (hasta 100 personas, sin revisión larga), probarlo y
    después pasarlo a «Producción». Las cuentas personales nuevas deben hacer antes una prueba cerrada
    con al menos 12 personas durante 14 días; las de organización, no.

@@ -35,14 +35,57 @@ una vez la persona responsable técnica, con una cuenta de AWS a nombre de quien
 
 Si la carga sube y se escala a 4 tareas en horas pico, el costo sube solo durante esas horas.
 
-## Antes de empezar
+## La forma fácil: desde GitHub, sin instalar nada (recomendado)
+
+Todo se hace en la consola de AWS y en GitHub, con botones. No hace falta instalar AWS CLI, Node ni
+Docker. El repositorio es público: los flujos nunca muestran llaves, contraseñas ni correos en sus
+registros; las llaves se crean y se guardan directo en AWS Secrets Manager.
+
+**Antes:** los flujos manuales de GitHub solo aparecen en **Actions** cuando están en la rama `main`
+(hay que unir el pull request).
+
+1. **Cuenta de AWS** con tarjeta. Recomendado: una alerta de gastos en AWS Budgets (por ejemplo,
+   USD 250 al mes) para enterarse de cualquier sorpresa.
+2. **Dominio:** por ejemplo `conecta.tuempresa.hn`, con acceso a su DNS (donde se compró el dominio).
+3. **Permiso para GitHub** (una vez): en la consola de AWS, región **us-east-1 (N. Virginia)** →
+   **CloudFormation → Crear pila → Cargar un archivo de plantilla** → el archivo
+   [`infra/aws-github.yaml`](../infra/aws-github.yaml) (se baja de GitHub con «Download raw file») →
+   nombre `conecta-github` → marcar que la pila crea recursos de IAM → **Crear**. Cuando termine, en
+   **Salidas** copiar `RolArn`.
+4. **En GitHub:** Settings → **Environments → New environment** `prod`. En **Deployment branches**,
+   solo `main`. Dentro de ese ambiente:
+   - Secreto `AWS_DEPLOY_ROLE_ARN`: el `RolArn` del paso 3.
+   - Secreto `ALERT_EMAIL`: el correo que recibe las alarmas.
+   - Secretos `SUPERADMIN_EMAIL` y `SUPERADMIN_PASSWORD` (mínimo 12 caracteres): la cuenta del equipo
+     de la plataforma.
+   - Variable `DOMINIO`: el dominio del paso 2, sin `https://`.
+5. **Actions → «Preparar AWS (una vez)» → Run workflow** (`prod`). Crea las llaves, prepara la cuenta
+   y pide el certificado. El resumen del flujo muestra un registro **CNAME**: crearlo en el DNS del
+   dominio. AWS lo valida en minutos (a veces hasta una hora); correr el flujo otra vez dice si ya
+   está ✅.
+6. **Actions → «Desplegar en AWS» → Run workflow** (`prod`). La primera vez tarda unos 30 minutos.
+   El resumen muestra otro **CNAME**: el dominio hacia el balanceador. Crearlo en el DNS.
+   AWS manda un correo para confirmar las alarmas: aceptarlo.
+7. **Actions → «Crear la cuenta del equipo de la plataforma» → Run workflow** (`prod`). Entrar en
+   `https://<dominio>/login`, configurar la verificación en dos pasos y seguir con el paso 7 de abajo
+   (puesta en marcha).
+8. **Asistente de planificación (opcional):** en AWS **Secrets Manager → Guardar un secreto nuevo →
+   Otro tipo de secreto → Texto sin formato**, con la llave de Groq, Gemini o Claude como valor y el
+   nombre `escolar/prod/groq` (o `/gemini`, `/anthropic`). Volver a correr «Desplegar en AWS».
+9. **Avisos en la app de Android (opcional):** un secreto `escolar/prod/fcm` con la clave
+   `FCM_SERVICE_ACCOUNT` y el JSON de la cuenta de servicio de Firebase (ver
+   [`apps/mobile/README.md`](../apps/mobile/README.md)). Volver a desplegar.
+
+Para actualizar CONECTA más adelante, solo se repite el paso 6.
+
+## Antes de empezar (forma manual)
 
 1. Cuenta de AWS con facturación activa y un usuario con permisos de administrador.
 2. AWS CLI configurado (`aws configure`) y Node 22 + pnpm en la computadora que despliega.
 3. Un **dominio**, por ejemplo `escolar.ejemplo.hn` (puede ser un subdominio del dominio de quien
    contrata). Hay que poder crear registros DNS en él.
 
-## Pasos
+## Pasos (forma manual, con AWS CLI)
 
 1. Crear las llaves con que se firman las sesiones (nunca se guardan en git):
 

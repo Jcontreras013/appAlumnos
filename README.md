@@ -526,7 +526,10 @@ servidor web necesita salida a `api.gumroad.com`.
 ## Despliegue en AWS
 
 Para **producción con 100 centros** (dominio con HTTPS, dos zonas, autoescalado, WAF, alarmas por
-correo, 30 días de respaldos y cómo restaurarlos) sigue [docs/despliegue.md](docs/despliegue.md);
+correo, 30 días de respaldos y cómo restaurarlos) sigue [docs/despliegue.md](docs/despliegue.md). La
+forma recomendada no necesita instalar nada: un permiso de GitHub en AWS (`infra/aws-github.yaml`) y
+los flujos **Preparar AWS (una vez)**, **Desplegar en AWS** y **Crear la cuenta del equipo de la
+plataforma**;
 cuesta del orden de US$210 al mes. La revisión de seguridad está en [docs/seguridad.md](docs/seguridad.md).
 Lo de abajo es el ambiente `dev` (de pruebas).
 

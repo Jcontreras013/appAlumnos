@@ -1,0 +1,143 @@
+name: Preparar AWS (una vez)
+
+# Prepara la cuenta de AWS para CONECTA. Se corre una vez por ambiente; repetirlo no duplica nada.
+#   1. Crea las llaves de las sesiones (JWT) y las de los avisos (Web Push) directo en AWS Secrets
+#      Manager: nunca pasan por git ni por este registro (el repositorio es público).
+#   2. Prepara la cuenta para CDK (bootstrap).
+#   3. Pide el certificado HTTPS del dominio (variable DOMINIO) y muestra el registro que hay que
+#      crear en el DNS para validarlo.
+# Necesita el secreto AWS_DEPLOY_ROLE_ARN (infra/aws-github.yaml). Ver docs/despliegue.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: Ambiente
+        type: choice
+        options: [prod, dev]
+        default: prod
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: aws-${{ inputs.stage }}
+  cancel-in-progress: false
+
+jobs:
+  preparar:
+    name: Preparar la cuenta
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.stage }}
+    timeout-minutes: 20
+    env:
+      STAGE: ${{ inputs.stage }}
+      DOMINIO: ${{ vars.DOMINIO }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          mask-aws-account-id: true
+
+      - name: Llaves de las sesiones (JWT)
+        run: |
+          set -euo pipefail
+          NAME="escolar/$STAGE/identity-jwt"
+          if aws secretsmanager describe-secret --secret-id "$NAME" >/dev/null 2>&1; then
+            echo "Las llaves de las sesiones ya existían ($NAME)."
+          else
+            umask 077
+            FILE="$RUNNER_TEMP/jwt.json"
+            pnpm --silent --filter @escolar/identity exec tsx src/scripts/generate-keys.ts --json > "$FILE"
+            aws secretsmanager create-secret --name "$NAME" --description "Llaves de las sesiones de CONECTA ($STAGE)" \
+              --secret-string "file://$FILE" > /dev/null
+            rm -f "$FILE"
+            echo "Llaves de las sesiones creadas en Secrets Manager ($NAME)."
+          fi
+
+      - name: Llaves de los avisos al celular (Web Push)
+        env:
+          CONTACTO: ${{ secrets.ALERT_EMAIL }}
+        run: |
+          set -euo pipefail
+          NAME="escolar/$STAGE/push"
+          if aws secretsmanager describe-secret --secret-id "$NAME" >/dev/null 2>&1; then
+            echo "Las llaves de los avisos ya existían ($NAME)."
+          elif [ -z "$CONTACTO" ]; then
+            echo "::warning::Sin el secreto ALERT_EMAIL no se crean las llaves de los avisos (los mensajes funcionan sin avisos)."
+          else
+            umask 077
+            FILE="$RUNNER_TEMP/push.json"
+            pnpm --silent --filter @escolar/identity exec tsx src/scripts/generate-push-keys.ts "$CONTACTO" --json > "$FILE"
+            aws secretsmanager create-secret --name "$NAME" --description "Llaves de los avisos de CONECTA ($STAGE)" \
+              --secret-string "file://$FILE" > /dev/null
+            rm -f "$FILE"
+            echo "Llaves de los avisos creadas en Secrets Manager ($NAME)."
+          fi
+
+      - name: Preparar la cuenta para CDK (bootstrap)
+        run: |
+          set -euo pipefail
+          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+          echo "::add-mask::$ACCOUNT"
+          REGION=$(aws configure get region || echo "$AWS_REGION")
+          # Fuera de infra/ para que CDK no arme la app (producción la arma solo con certificado).
+          cd "$RUNNER_TEMP"
+          "$GITHUB_WORKSPACE/infra/node_modules/.bin/cdk" bootstrap "aws://$ACCOUNT/$REGION"
+
+      - name: Certificado HTTPS del dominio
+        run: |
+          set -euo pipefail
+          {
+            echo "## Preparación de AWS ($STAGE)"
+            echo
+            echo "- Llaves de las sesiones y de los avisos: guardadas en AWS Secrets Manager."
+            echo "- Cuenta lista para CDK."
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ -z "$DOMINIO" ]; then
+            echo "- **Falta la variable DOMINIO** (por ejemplo \`conecta.tuempresa.hn\`): sin ella no hay HTTPS." >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning::Falta la variable DOMINIO: crea la variable y vuelve a correr este flujo."
+            exit 0
+          fi
+          ARN=$(aws acm list-certificates --certificate-statuses PENDING_VALIDATION ISSUED \
+            --query "CertificateSummaryList[?DomainName=='$DOMINIO'].CertificateArn | [0]" --output text)
+          if [ -z "$ARN" ] || [ "$ARN" = "None" ]; then
+            ARN=$(aws acm request-certificate --domain-name "$DOMINIO" --validation-method DNS \
+              --query CertificateArn --output text)
+            echo "Certificado pedido para $DOMINIO."
+          fi
+          # AWS tarda unos segundos en preparar el registro de validación.
+          for _ in $(seq 1 24); do
+            NAME=$(aws acm describe-certificate --certificate-arn "$ARN" \
+              --query "Certificate.DomainValidationOptions[0].ResourceRecord.Name" --output text)
+            [ "$NAME" != "None" ] && break
+            sleep 5
+          done
+          VALUE=$(aws acm describe-certificate --certificate-arn "$ARN" \
+            --query "Certificate.DomainValidationOptions[0].ResourceRecord.Value" --output text)
+          STATUS=$(aws acm describe-certificate --certificate-arn "$ARN" --query "Certificate.Status" --output text)
+          if [ "$STATUS" = "ISSUED" ]; then
+            echo "- Certificado de **$DOMINIO**: ✅ validado. Ya se puede desplegar." >> "$GITHUB_STEP_SUMMARY"
+          else
+            {
+              echo "- Certificado de **$DOMINIO**: esperando validación. Crea este registro en el DNS del dominio"
+              echo "  (donde compraste el dominio) y espera unos minutos:"
+              echo
+              echo "| Tipo | Nombre | Valor |"
+              echo "|---|---|---|"
+              echo "| CNAME | \`$NAME\` | \`$VALUE\` |"
+              echo
+              echo "Algunos proveedores agregan el dominio solo: si es así, escribe en «Nombre» solo la parte de"
+              echo "antes del dominio. Cuando esté validado, corre «Desplegar en AWS»."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "Estado del certificado: $STATUS"

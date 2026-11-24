@@ -1,11 +1,13 @@
 # Despliegue manual a AWS (Actions → "Desplegar en AWS" → Run workflow).
-# Requiere, una sola vez: `cdk bootstrap`, un rol IAM para GitHub (OIDC) guardado en el secreto
-# AWS_DEPLOY_ROLE_ARN y la variable JWT_SECRET_ARN. En el ambiente "prod" además CERTIFICATE_ARN
-# (obligatoria) y ALERT_EMAIL. Opcionales en cualquier ambiente: GEMINI_SECRET_ARN (llave de Gemini),
-# GROQ_SECRET_ARN (llave de Groq) o ANTHROPIC_SECRET_ARN (llave de Claude) para activar el asistente de
-# planificación, GEMINI_MODEL o GROQ_MODEL para elegir el modelo, y PUSH_SECRET_ARN (llaves de los
-# avisos de mensajes al celular). Ver
-# README → Despliegue en AWS y docs/despliegue.md.
+# Antes, una vez: la plantilla infra/aws-github.yaml en CloudFormation (secreto AWS_DEPLOY_ROLE_ARN) y
+# el flujo «Preparar AWS (una vez)». Este flujo encuentra solo, por su nombre en AWS, las llaves que
+# creó «Preparar AWS» y el certificado del dominio (variable DOMINIO); producción no se despliega sin
+# certificado validado.
+# Opcionales, también por su nombre en Secrets Manager (o con su ARN en una variable):
+#   escolar/<ambiente>/anthropic, /gemini o /groq  llave del asistente de planificación (el valor es la llave)
+#   escolar/<ambiente>/fcm                         cuenta de servicio de Firebase (clave FCM_SERVICE_ACCOUNT)
+# Variables: AWS_REGION, DOMINIO, GEMINI_MODEL, GROQ_MODEL. Secreto ALERT_EMAIL: correo de las alarmas.
+# Ver docs/despliegue.md. El registro es público: aquí no se imprime ninguna llave ni correo.
 name: Desplegar en AWS
 
 on:
@@ -14,22 +16,25 @@ on:
       stage:
         description: Ambiente
         type: choice
-        options: [dev, prod]
-        default: dev
+        options: [prod, dev]
+        default: prod
 
 permissions:
   id-token: write
   contents: read
 
 concurrency:
-  group: deploy-${{ inputs.stage }}
+  group: aws-${{ inputs.stage }}
   cancel-in-progress: false
 
 jobs:
   desplegar:
     runs-on: ubuntu-latest
     environment: ${{ inputs.stage }}
-    timeout-minutes: 45
+    timeout-minutes: 60
+    env:
+      STAGE: ${{ inputs.stage }}
+      DOMINIO: ${{ vars.DOMINIO }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -43,19 +48,57 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
-      - name: cdk deploy
+          mask-aws-account-id: true
+
+      - name: Buscar las llaves y el certificado en AWS
         env:
-          STAGE: ${{ inputs.stage }}
           JWT_SECRET_ARN: ${{ vars.JWT_SECRET_ARN }}
           CERTIFICATE_ARN: ${{ vars.CERTIFICATE_ARN }}
-          ALERT_EMAIL: ${{ vars.ALERT_EMAIL }}
           ANTHROPIC_SECRET_ARN: ${{ vars.ANTHROPIC_SECRET_ARN }}
           GEMINI_SECRET_ARN: ${{ vars.GEMINI_SECRET_ARN }}
-          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
           GROQ_SECRET_ARN: ${{ vars.GROQ_SECRET_ARN }}
-          GROQ_MODEL: ${{ vars.GROQ_MODEL }}
           PUSH_SECRET_ARN: ${{ vars.PUSH_SECRET_ARN }}
+          FCM_SECRET_ARN: ${{ vars.FCM_SECRET_ARN }}
         run: |
+          set -euo pipefail
+          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+          echo "::add-mask::$ACCOUNT"
+          secret() {
+            aws secretsmanager describe-secret --secret-id "escolar/$STAGE/$1" --query ARN --output text 2>/dev/null || true
+          }
+          {
+            echo "JWT_SECRET_ARN=${JWT_SECRET_ARN:-$(secret identity-jwt)}"
+            echo "PUSH_SECRET_ARN=${PUSH_SECRET_ARN:-$(secret push)}"
+            echo "FCM_SECRET_ARN=${FCM_SECRET_ARN:-$(secret fcm)}"
+            echo "ANTHROPIC_SECRET_ARN=${ANTHROPIC_SECRET_ARN:-$(secret anthropic)}"
+            echo "GEMINI_SECRET_ARN=${GEMINI_SECRET_ARN:-$(secret gemini)}"
+            echo "GROQ_SECRET_ARN=${GROQ_SECRET_ARN:-$(secret groq)}"
+          } >> "$GITHUB_ENV"
+          if [ -z "$(secret identity-jwt)" ] && [ -z "$JWT_SECRET_ARN" ]; then
+            echo "::error::No están las llaves de las sesiones: corre primero «Preparar AWS (una vez)»."
+            exit 1
+          fi
+          if [ -z "$CERTIFICATE_ARN" ] && [ -n "$DOMINIO" ]; then
+            CERTIFICATE_ARN=$(aws acm list-certificates --certificate-statuses ISSUED \
+              --query "CertificateSummaryList[?DomainName=='$DOMINIO'].CertificateArn | [0]" --output text)
+            [ "$CERTIFICATE_ARN" = "None" ] && CERTIFICATE_ARN=""
+          fi
+          if [ "$STAGE" = "prod" ] && [ -z "$CERTIFICATE_ARN" ]; then
+            echo "::error::El certificado HTTPS de ${DOMINIO:-(falta la variable DOMINIO)} no está validado todavía. Corre «Preparar AWS (una vez)» y crea en el DNS el registro que muestra."
+            exit 1
+          fi
+          echo "CERTIFICATE_ARN=$CERTIFICATE_ARN" >> "$GITHUB_ENV"
+          for name in anthropic gemini groq fcm push; do
+            [ -n "$(secret "$name")" ] && echo "Con escolar/$STAGE/$name." || true
+          done
+
+      - name: cdk deploy
+        env:
+          ALERT_EMAIL: ${{ secrets.ALERT_EMAIL || vars.ALERT_EMAIL }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
+          GROQ_MODEL: ${{ vars.GROQ_MODEL }}
+        run: |
+          set -euo pipefail
           ARGS=(-c "stage=$STAGE" -c "jwtSecretArn=$JWT_SECRET_ARN")
           if [ -n "$CERTIFICATE_ARN" ]; then ARGS+=(-c "certificateArn=$CERTIFICATE_ARN"); fi
           if [ -n "$ALERT_EMAIL" ]; then ARGS+=(-c "alertEmail=$ALERT_EMAIL"); fi
@@ -65,4 +108,28 @@ jobs:
           if [ -n "$GROQ_SECRET_ARN" ]; then ARGS+=(-c "groqSecretArn=$GROQ_SECRET_ARN"); fi
           if [ -n "$GROQ_MODEL" ]; then ARGS+=(-c "groqModel=$GROQ_MODEL"); fi
           if [ -n "$PUSH_SECRET_ARN" ]; then ARGS+=(-c "pushSecretArn=$PUSH_SECRET_ARN"); fi
-          pnpm --filter @escolar/infra exec cdk deploy --all --require-approval never "${ARGS[@]}"
+          if [ -n "$FCM_SECRET_ARN" ]; then ARGS+=(-c "fcmSecretArn=$FCM_SECRET_ARN"); fi
+          pnpm --filter @escolar/infra exec cdk deploy --all --require-approval never \
+            --outputs-file "$RUNNER_TEMP/salidas.json" "${ARGS[@]}"
+
+      - name: Qué sigue
+        run: |
+          set -euo pipefail
+          URL=$(jq -r '.[] | .UrlPanel // empty' "$RUNNER_TEMP/salidas.json" | head -n1)
+          BALANCEADOR=${URL#*://}
+          {
+            echo "## CONECTA desplegada ($STAGE)"
+            echo
+            if [ -n "$DOMINIO" ]; then
+              echo "1. En el DNS del dominio, un registro que lleve **$DOMINIO** al balanceador:"
+              echo
+              echo "   | Tipo | Nombre | Valor |"
+              echo "   |---|---|---|"
+              echo "   | CNAME | \`$DOMINIO\` | \`$BALANCEADOR\` |"
+              echo
+              echo "   (Si ya existe de un despliegue anterior, no hay que cambiarlo.)"
+              echo "2. Abre https://$DOMINIO/login. Si es la primera vez, corre «Crear la cuenta del equipo de la plataforma»."
+            else
+              echo "Panel (sin dominio, solo para probar): $URL"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

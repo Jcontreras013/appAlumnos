@@ -1,0 +1,96 @@
+name: Crear la cuenta del equipo de la plataforma
+
+# Crea (o reactiva) la cuenta con la que el equipo de la plataforma entra a CONECTA por primera vez
+# y da de alta los centros. Corre el seed de identity como una tarea de ECS en la cuenta de AWS.
+# El correo y la contraseña salen de los secretos SUPERADMIN_EMAIL y SUPERADMIN_PASSWORD (mínimo 12
+# caracteres): este registro es público y no los muestra. Al entrar, CONECTA pide configurar la
+# verificación en dos pasos (Google Authenticator o similar).
+
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: Ambiente
+        type: choice
+        options: [prod, dev]
+        default: prod
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: aws-${{ inputs.stage }}
+  cancel-in-progress: false
+
+jobs:
+  crear:
+    name: Crear la cuenta
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.stage }}
+    timeout-minutes: 15
+    env:
+      STAGE: ${{ inputs.stage }}
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          mask-aws-account-id: true
+
+      - name: Crear la cuenta
+        env:
+          CORREO: ${{ secrets.SUPERADMIN_EMAIL }}
+          CLAVE: ${{ secrets.SUPERADMIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "$CORREO" ] || [ -z "$CLAVE" ]; then
+            echo "::error::Faltan los secretos SUPERADMIN_EMAIL y SUPERADMIN_PASSWORD (Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
+          if [ "${#CLAVE}" -lt 12 ]; then
+            echo "::error::SUPERADMIN_PASSWORD tiene que tener al menos 12 caracteres."
+            exit 1
+          fi
+          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+          echo "::add-mask::$ACCOUNT"
+          salida() {
+            aws cloudformation describe-stacks --stack-name "Escolar-$STAGE" \
+              --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue | [0]" --output text
+          }
+          CLUSTER=$(salida NombreCluster)
+          TAREA=$(salida IdentityTaskDefinition)
+          SUBREDES=$(salida SubredesPublicas)
+          GRUPO=$(salida IdentitySecurityGroup)
+          if [ -z "$CLUSTER" ] || [ "$CLUSTER" = "None" ]; then
+            echo "::error::No encontré la plataforma desplegada (Escolar-$STAGE): corre primero «Desplegar en AWS»."
+            exit 1
+          fi
+          # El correo y la clave van solo dentro de este JSON, que no se imprime.
+          CAMBIOS=$(jq -cn --arg correo "$CORREO" --arg clave "$CLAVE" '{
+            containerOverrides: [{
+              name: "identity",
+              command: ["node", "dist/scripts/seed.js"],
+              environment: [
+                {name: "SEED_SUPERADMIN_EMAIL", value: $correo},
+                {name: "SEED_SUPERADMIN_PASSWORD", value: $clave}
+              ]
+            }]
+          }')
+          ARN=$(aws ecs run-task --cluster "$CLUSTER" --task-definition "$TAREA" --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[$SUBREDES],securityGroups=[$GRUPO],assignPublicIp=ENABLED}" \
+            --overrides "$CAMBIOS" --query "tasks[0].taskArn" --output text)
+          echo "Creando la cuenta… (tarda uno o dos minutos)"
+          aws ecs wait tasks-stopped --cluster "$CLUSTER" --tasks "$ARN"
+          CODIGO=$(aws ecs describe-tasks --cluster "$CLUSTER" --tasks "$ARN" \
+            --query "tasks[0].containers[?name=='identity'].exitCode | [0]" --output text)
+          if [ "$CODIGO" != "0" ]; then
+            echo "::error::La tarea terminó con el código $CODIGO. Revisa los registros de identity en CloudWatch (AWS)."
+            exit 1
+          fi
+          {
+            echo "## Cuenta del equipo de la plataforma lista ($STAGE)"
+            echo
+            echo "Entra con el correo y la contraseña de los secretos SUPERADMIN_EMAIL y SUPERADMIN_PASSWORD."
+            echo "CONECTA pedirá configurar la verificación en dos pasos. Después, crea el centro en «Centros educativos»."
+          } >> "$GITHUB_STEP_SUMMARY"

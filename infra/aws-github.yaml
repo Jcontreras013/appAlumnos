@@ -1,0 +1,70 @@
+# Permiso para que GitHub Actions despliegue CONECTA en esta cuenta de AWS, sin llaves guardadas.
+#
+# Se sube UNA vez en la consola de AWS: CloudFormation → Crear pila → «Cargar un archivo de plantilla»
+# → este archivo. Al terminar, la pestaña «Salidas» muestra RolArn: va en GitHub como el secreto
+# AWS_DEPLOY_ROLE_ARN (ver docs/despliegue.md).
+#
+# Solo los flujos de este repositorio que corren en los ambientes «prod» o «dev» de GitHub pueden usar
+# el rol (los de despliegue y preparación). En GitHub conviene limitar el ambiente «prod» a la rama
+# main (Settings → Environments → prod → Deployment branches).
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Permiso de GitHub Actions para desplegar CONECTA (Jc-System).
+
+Parameters:
+  Repositorio:
+    Type: String
+    Default: Jcontreras013/appAlumnos
+    Description: Repositorio de GitHub (dueño/nombre) que puede desplegar.
+  CrearProveedor:
+    Type: String
+    AllowedValues: ["si", "no"]
+    Default: "si"
+    Description: «no» solo si esta cuenta ya tiene el proveedor token.actions.githubusercontent.com (IAM → Proveedores de identidad).
+
+Conditions:
+  Crear: !Equals [!Ref CrearProveedor, "si"]
+
+Resources:
+  ProveedorGitHub:
+    Type: AWS::IAM::OIDCProvider
+    Condition: Crear
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+      ThumbprintList:
+        - 6938fd4d98bab03faadb97b34396831e3780aea1
+        - 1c58a3a8518e8759bf075b76b750d4f2df264fcd
+
+  RolDespliegue:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: conecta-github-despliegue
+      Description: GitHub Actions despliega CONECTA (solo los ambientes prod y dev del repositorio).
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !If
+                - Crear
+                - !Ref ProveedorGitHub
+                - !Sub "arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com"
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              StringLike:
+                token.actions.githubusercontent.com:sub:
+                  - !Sub "repo:${Repositorio}:environment:prod"
+                  - !Sub "repo:${Repositorio}:environment:dev"
+      # CDK crea la red, la base, los servicios y sus permisos: necesita permisos de administrador.
+      # Solo los usan los flujos de GitHub de arriba, y nadie más puede asumir el rol.
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AdministratorAccess
+
+Outputs:
+  RolArn:
+    Description: Va en GitHub como el secreto AWS_DEPLOY_ROLE_ARN.
+    Value: !GetAtt RolDespliegue.Arn
