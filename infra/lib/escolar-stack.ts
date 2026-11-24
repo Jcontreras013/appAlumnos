@@ -423,7 +423,14 @@ export class EscolarStack extends Stack {
         }),
       },
     });
-    web.targetGroup.configureHealthCheck({ path: "/api/health", healthyHttpCodes: "200" });
+    // Dos respuestas buenas seguidas cada 15 s (no 5 cada 30 s): una tarea nueva del panel recibe
+    // tráfico en 30 s en vez de 2,5 min al desplegar o reiniciar.
+    web.targetGroup.configureHealthCheck({
+      path: "/api/health",
+      healthyHttpCodes: "200",
+      interval: Duration.seconds(15),
+      healthyThresholdCount: 2,
+    });
     // web es cliente de Service Connect (resuelve "identity") pero no publica ningún endpoint interno.
     web.service.enableServiceConnect();
     identityService.connections.allowFrom(web.service, ec2.Port.tcp(3001), "web to identity");

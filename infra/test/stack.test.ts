@@ -253,6 +253,14 @@ describe("seguridad de la infraestructura", () => {
     }
   });
 
+  it("una tarea nueva del panel recibe tráfico en 30 s (2 revisiones buenas cada 15 s)", () => {
+    template.hasResourceProperties("AWS::ElasticLoadBalancingV2::TargetGroup", {
+      HealthCheckPath: "/api/health",
+      HealthCheckIntervalSeconds: 15,
+      HealthyThresholdCount: 2,
+    });
+  });
+
   it("el panel mantiene las conexiones más tiempo que el balanceador (sin 502 sueltos)", () => {
     template.hasResourceProperties("AWS::ECS::TaskDefinition", {
       ContainerDefinitions: Match.arrayWith([
