@@ -98,7 +98,7 @@ export async function getSection(db: DbOrTx, schoolId: string, sectionId: string
 export async function listAssignments(
   db: DbOrTx,
   schoolId: string,
-  filter: { schoolYearId: string; teacherUserId?: string },
+  filter: { schoolYearId: string; teacherUserId?: string; sectionId?: string },
 ): Promise<AssignmentDto[]> {
   const rows = await db
     .select({
@@ -118,6 +118,7 @@ export async function listAssignments(
         eq(teachingAssignments.schoolId, schoolId),
         eq(sections.schoolYearId, filter.schoolYearId),
         filter.teacherUserId ? eq(teachingAssignments.teacherUserId, filter.teacherUserId) : undefined,
+        filter.sectionId ? eq(teachingAssignments.sectionId, filter.sectionId) : undefined,
       ),
     )
     .orderBy(asc(grades.sortOrder), asc(grades.name), asc(sections.name), asc(subjects.name));

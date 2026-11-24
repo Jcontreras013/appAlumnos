@@ -1,6 +1,7 @@
 /**
- * Política de contenido: solo código, estilos e imágenes del propio panel; nada de iframes ajenos ni
- * formularios que envíen datos a otro sitio. Con `nonce`, solo corren los scripts que Next.js marca
+ * Política de contenido: solo código, estilos e imágenes del propio panel; ningún iframe ajeno salvo
+ * los videos de YouTube del aula virtual (su versión sin cookies), y ningún formulario que envíe datos
+ * a otro sitio. Con `nonce`, solo corren los scripts que Next.js marca
  * en cada respuesta (un valor nuevo por petición); sin él (rutas sin proxy) se permiten en línea.
  */
 export function contentSecurityPolicy(nonce?: string, { wasm = false }: { wasm?: boolean } = {}): string {
@@ -17,6 +18,8 @@ export function contentSecurityPolicy(nonce?: string, { wasm = false }: { wasm?:
     "font-src 'self' data:",
     "connect-src 'self'",
     "worker-src 'self'",
+    // Videos de los temas del aula virtual.
+    "frame-src https://www.youtube-nocookie.com",
     "frame-ancestors 'none'",
     "form-action 'self'",
     "base-uri 'self'",

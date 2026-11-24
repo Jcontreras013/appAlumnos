@@ -38,8 +38,10 @@ export default async function PanelLayout({ children }: { children: ReactNode })
     items.push({ href: "/panel/region/indicadores", label: "Indicadores del piloto" });
   } else if (is("padre")) {
     items.push({ href: "/panel/familia", label: "Mis hijos" });
+    items.push({ href: "/panel/aula", label: "Clases" });
     items.push({ href: "/panel/biblioteca", label: "Biblioteca" });
   } else if (is("estudiante")) {
+    items.push({ href: "/panel/aula", label: "Mis clases" });
     items.push({ href: "/panel/mis-notas", label: "Mis notas" });
     items.push({ href: "/panel/biblioteca", label: "Biblioteca" });
   } else {
@@ -52,6 +54,9 @@ export default async function PanelLayout({ children }: { children: ReactNode })
   }
   // En escuelas pequeñas la directora también da clases: también tiene su cuaderno.
   if (is("docente", "admin", "coordinador")) items.push({ href: "/panel/cuaderno", label: "Mi cuaderno" });
+  if (is("docente", "admin", "coordinador", "secretaria")) {
+    items.push({ href: "/panel/aula", label: "Aula virtual" });
+  }
   if (is("docente", "admin", "coordinador", "secretaria")) {
     items.push({ href: "/panel/planificacion", label: "Planificación" });
   }

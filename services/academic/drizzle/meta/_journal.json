@@ -113,6 +113,13 @@
       "when": 1795562421788,
       "tag": "0015_cuentas_alumnos",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1795562848621,
+      "tag": "0016_aula_clases",
+      "breakpoints": true
     }
   ]
 }

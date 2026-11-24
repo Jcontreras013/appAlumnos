@@ -1,6 +1,8 @@
 import {
   ANNOUNCEMENT_AUDIENCES,
   ATTENDANCE_STATUSES,
+  type ClassMaterialKind,
+  type ClassPostKind,
   CONDUCT_CATEGORIES,
   CONDUCT_MEASURES,
   CONDUCT_SEVERITIES,
@@ -909,6 +911,91 @@ export const auditEvents = pgTable(
   (t) => [index("audit_events_school_created_idx").on(t.schoolId, t.createdAt)],
 );
 
+// ───────────────────────────── Aula virtual ─────────────────────────────
+
+/** Ajustes del aula de una clase (asignación docente): el enlace de la clase en línea. */
+export const virtualClasses = pgTable(
+  "virtual_classes",
+  {
+    schoolId: schoolId(),
+    assignmentId: uuid("assignment_id").notNull(),
+    meetingUrl: text("meeting_url"),
+    /** «Martes y jueves, 3:00 p. m.» */
+    meetingNote: text("meeting_note"),
+    updatedByUserId: uuid("updated_by_user_id").notNull(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    primaryKey({ name: "virtual_classes_pk", columns: [t.assignmentId] }),
+    foreignKey({
+      name: "virtual_classes_assignment_fk",
+      columns: [t.schoolId, t.assignmentId],
+      foreignColumns: [teachingAssignments.schoolId, teachingAssignments.id],
+    }).onDelete("cascade"),
+  ],
+);
+
+/** Temas (con su explicación, en el orden del maestro) y avisos de una clase. */
+export const classPosts = pgTable(
+  "class_posts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    schoolId: schoolId(),
+    assignmentId: uuid("assignment_id").notNull(),
+    kind: text("kind").$type<ClassPostKind>().notNull(),
+    title: text("title").notNull(),
+    body: text("body").notNull().default(""),
+    position: integer("position").notNull().default(0),
+    authorUserId: uuid("author_user_id").notNull(),
+    authorName: text("author_name").notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique("class_posts_tenant_key").on(t.schoolId, t.id),
+    index("class_posts_assignment_idx").on(t.assignmentId, t.kind, t.position),
+    check("class_posts_kind", sql`${t.kind} in ('tema', 'aviso')`),
+    foreignKey({
+      name: "class_posts_assignment_fk",
+      columns: [t.schoolId, t.assignmentId],
+      foreignColumns: [teachingAssignments.schoolId, teachingAssignments.id],
+    }).onDelete("cascade"),
+  ],
+);
+
+/** Materiales de un tema: archivos (en S3 o la carpeta de la demo), enlaces y videos de YouTube. */
+export const classMaterials = pgTable(
+  "class_materials",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    schoolId: schoolId(),
+    assignmentId: uuid("assignment_id").notNull(),
+    postId: uuid("post_id").notNull(),
+    kind: text("kind").$type<ClassMaterialKind>().notNull(),
+    title: text("title").notNull(),
+    url: text("url"),
+    fileName: text("file_name"),
+    contentType: text("content_type"),
+    sizeBytes: integer("size_bytes"),
+    storageKey: text("storage_key").unique(),
+    createdByUserId: uuid("created_by_user_id").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("class_materials_post_idx").on(t.postId, t.createdAt),
+    check("class_materials_kind", sql`${t.kind} in ('archivo', 'enlace', 'video')`),
+    check(
+      "class_materials_content",
+      sql`(${t.kind} in ('enlace', 'video') and ${t.url} is not null and ${t.storageKey} is null) or (${t.kind} = 'archivo' and ${t.storageKey} is not null and ${t.sizeBytes} > 0)`,
+    ),
+    foreignKey({
+      name: "class_materials_post_fk",
+      columns: [t.schoolId, t.postId],
+      foreignColumns: [classPosts.schoolId, classPosts.id],
+    }).onDelete("cascade"),
+  ],
+);
+
 export type SchoolYear = typeof schoolYears.$inferSelect;
 export type Grade = typeof grades.$inferSelect;
 export type Section = typeof sections.$inferSelect;
@@ -928,3 +1015,5 @@ export type StudentTransfer = typeof studentTransfers.$inferSelect;
 export type SchoolDayOff = typeof schoolDaysOff.$inferSelect;
 export type SchoolDocument = typeof documents.$inferSelect;
 export type LibraryItem = typeof libraryItems.$inferSelect;
+export type ClassPost = typeof classPosts.$inferSelect;
+export type ClassMaterial = typeof classMaterials.$inferSelect;

@@ -8,6 +8,13 @@ import type {
   AttendanceInput,
   AttendanceSheetDto,
   AuditEventDto,
+  ClassLinkInput,
+  ClassMaterialDto,
+  ClassPostDto,
+  ClassPostInput,
+  ClassroomDto,
+  ClassSettingsInput,
+  ClassSummaryDto,
   ConductActaDto,
   ConductIncidentDto,
   ConductOverviewDto,
@@ -337,6 +344,31 @@ export const academic = {
     call<PortalAccessDto>(`/guardians/${guardianId}/portal-access/reset`, { method: "POST", token }),
   revokePortalAccess: (token: string, guardianId: string) =>
     call<void>(`/guardians/${guardianId}/portal-access`, { method: "DELETE", token }),
+  // Aula virtual: la página de cada clase
+  classes: (token: string, options: { alumno?: string; todas?: boolean } = {}) => {
+    const query = new URLSearchParams();
+    if (options.alumno) query.set("alumno", options.alumno);
+    if (options.todas) query.set("todas", "1");
+    const qs = query.toString();
+    return call<ClassSummaryDto[]>(`/classes${qs ? `?${qs}` : ""}`, { token });
+  },
+  classroom: (token: string, assignmentId: string) =>
+    call<ClassroomDto>(`/classes/${assignmentId}`, { token }),
+  saveClassSettings: (token: string, assignmentId: string, input: ClassSettingsInput) =>
+    call<unknown>(`/classes/${assignmentId}/settings`, { method: "PUT", token, body: input }),
+  createClassPost: (token: string, assignmentId: string, input: ClassPostInput) =>
+    call<ClassPostDto>(`/classes/${assignmentId}/posts`, { method: "POST", token, body: input }),
+  updateClassPost: (token: string, postId: string, input: ClassPostInput) =>
+    call<ClassPostDto>(`/class-posts/${postId}`, { method: "PUT", token, body: input }),
+  deleteClassPost: (token: string, postId: string) =>
+    call<void>(`/class-posts/${postId}`, { method: "DELETE", token }),
+  orderClassTopics: (token: string, assignmentId: string, ids: string[]) =>
+    call<unknown>(`/classes/${assignmentId}/topics/order`, { method: "PUT", token, body: { ids } }),
+  addClassLink: (token: string, postId: string, input: ClassLinkInput) =>
+    call<ClassMaterialDto>(`/class-posts/${postId}/links`, { method: "POST", token, body: input }),
+  deleteClassMaterial: (token: string, materialId: string) =>
+    call<void>(`/class-materials/${materialId}`, { method: "DELETE", token }),
+
   // Cuentas de los alumnos (aula virtual)
   grantStudentAccess: (token: string, studentId: string, input: PortalAccessInput) =>
     call<StudentAccessDto>(`/students/${studentId}/student-access`, { method: "POST", token, body: input }),
