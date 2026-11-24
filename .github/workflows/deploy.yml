@@ -166,8 +166,14 @@ jobs:
           for s in $SERVICIOS; do
             aws ecs update-service --cluster "$CLUSTER" --service "$s" --force-new-deployment > /dev/null
           done
-          # shellcheck disable=SC2086
-          aws ecs wait services-stable --cluster "$CLUSTER" --services $SERVICIOS
+          # Cada espera de AWS dura hasta 10 min; el panel tarda más porque el balanceador deja 5 min a
+          # la tarea vieja para terminar lo que estaba enviando (descargas largas).
+          for intento in 1 2 3; do
+            # shellcheck disable=SC2086
+            aws ecs wait services-stable --cluster "$CLUSTER" --services $SERVICIOS && break
+            [ "$intento" = 3 ] && { echo "::error::Los servicios no quedaron estables en 30 minutos."; exit 1; }
+            echo "Todavía terminando (la tarea vieja del panel se retira despacio)..."
+          done
           if esperar; then
             echo "Después de reiniciar, el panel llega a identity y academic."
           else
