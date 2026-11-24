@@ -26,6 +26,32 @@ describe("seguridad de la infraestructura", () => {
     });
   });
 
+  it("Service Connect: el tiempo por petición solo en servicios con puerto HTTP (ECS lo rechaza en TCP)", () => {
+    const recursos = template.toJSON().Resources as Record<
+      string,
+      { Type: string; Properties: Record<string, unknown> }
+    >;
+    let conTiempo = 0;
+    for (const recurso of Object.values(recursos)) {
+      if (recurso.Type !== "AWS::ECS::Service") continue;
+      const sc = recurso.Properties.ServiceConnectConfiguration as
+        | { Services?: { PortName: string; Timeout?: { PerRequestTimeoutSeconds?: number } }[] }
+        | undefined;
+      for (const servicio of sc?.Services ?? []) {
+        if (!servicio.Timeout?.PerRequestTimeoutSeconds) continue;
+        conTiempo++;
+        const tarea = recursos[(recurso.Properties.TaskDefinition as { Ref: string }).Ref];
+        const contenedores = (tarea?.Properties.ContainerDefinitions ?? []) as {
+          PortMappings?: { Name?: string; AppProtocol?: string }[];
+        }[];
+        const puertos = contenedores.flatMap((c) => c.PortMappings ?? []);
+        const puerto = puertos.find((p) => p.Name === servicio.PortName);
+        expect(puerto?.AppProtocol, servicio.PortName).toMatch(/^(http|http2|grpc)$/);
+      }
+    }
+    expect(conTiempo).toBe(2);
+  });
+
   it("las descripciones de las reglas de red usan solo los caracteres que acepta AWS", () => {
     // EC2 rechaza el despliegue si una descripción lleva, por ejemplo, «>» o letras con tilde.
     const permitido = /^[a-zA-Z0-9. _\-:/()#,@[\]+=&;{}!$*]*$/;
