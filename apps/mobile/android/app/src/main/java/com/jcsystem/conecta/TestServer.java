@@ -41,15 +41,33 @@ final class TestServer {
         return prefs(context).getString(KEY, null);
     }
 
-    /** La configuración de Capacitor con la dirección elegida; null si todavía no se eligió. */
-    static CapConfig config(Context context) {
-        String url = saved(context);
-        if (url == null) return null;
+    /** La configuración con la que se compiló la app (capacitor.config.json de los assets). */
+    private static JSONObject builtConfig(Context context) throws Exception {
         try (InputStream in = context.getAssets().open("capacitor.config.json")) {
             ByteArrayOutputStream bytes = new ByteArrayOutputStream();
             byte[] buffer = new byte[8192];
             for (int n; (n = in.read(buffer)) > 0; ) bytes.write(buffer, 0, n);
-            JSONObject json = new JSONObject(bytes.toString(StandardCharsets.UTF_8.name()));
+            return new JSONObject(bytes.toString(StandardCharsets.UTF_8.name()));
+        }
+    }
+
+    /** La dirección https con la que se compiló (CONECTA_URL); null si es la de prueba local. */
+    private static String builtUrl(Context context) {
+        try {
+            JSONObject server = builtConfig(context).optJSONObject("server");
+            String url = server == null ? null : server.optString("url", null);
+            return url != null && url.startsWith("https://") ? url : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** La configuración de Capacitor con la dirección elegida; null si todavía no se eligió. */
+    static CapConfig config(Context context) {
+        String url = saved(context);
+        if (url == null) return null;
+        try {
+            JSONObject json = builtConfig(context);
             JSONObject server = json.optJSONObject("server");
             if (server == null) server = new JSONObject();
             server.put("url", url);
@@ -81,11 +99,13 @@ final class TestServer {
     /** Pide la dirección y vuelve a abrir la app con ella. */
     static void ask(Activity activity) {
         String current = saved(activity);
+        // La primera vez trae escrita la dirección publicada (CONECTA_URL): basta con «Abrir».
+        String suggested = current != null ? current : builtUrl(activity);
         EditText input = new EditText(activity);
         input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
         input.setSingleLine(true);
         input.setHint("https://….trycloudflare.com");
-        if (current != null) input.setText(current.replaceAll("/panel$", ""));
+        if (suggested != null) input.setText(suggested.replaceAll("/panel$", ""));
         FrameLayout frame = new FrameLayout(activity);
         int padding = (int) (20 * activity.getResources().getDisplayMetrics().density);
         frame.setPadding(padding, 0, padding, 0);
@@ -93,8 +113,9 @@ final class TestServer {
         new AlertDialog.Builder(activity)
             .setTitle("¿Dónde está CONECTA?")
             .setMessage(
-                "App de prueba. Escribe la dirección del túnel (https://….trycloudflare.com) o la de tu " +
-                "computadora en el mismo wifi (por ejemplo 192.168.1.10:3000)."
+                "App de prueba. Toca «Abrir» para usar la dirección escrita, o cambia por la de un túnel " +
+                "(https://….trycloudflare.com) o la de tu computadora en el mismo wifi (por ejemplo " +
+                "192.168.1.10:3000)."
             )
             .setView(frame)
             .setCancelable(current != null)
