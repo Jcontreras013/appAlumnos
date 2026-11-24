@@ -996,6 +996,103 @@ export const classMaterials = pgTable(
   ],
 );
 
+/**
+ * Tareas del aula virtual. Si llevan nota, tienen su actividad en la libreta (si el maestro la borra
+ * desde el cuaderno, la tarea queda sin nota).
+ */
+export const classTasks = pgTable(
+  "class_tasks",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    schoolId: schoolId(),
+    assignmentId: uuid("assignment_id").notNull(),
+    activityId: uuid("activity_id").references(() => activities.id, { onDelete: "set null" }),
+    title: text("title").notNull(),
+    instructions: text("instructions").notNull().default(""),
+    dueAt: timestamp("due_at", { withTimezone: true }).notNull(),
+    allowLate: boolean("allow_late").notNull().default(true),
+    createdByUserId: uuid("created_by_user_id").notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique("class_tasks_tenant_key").on(t.schoolId, t.id),
+    index("class_tasks_assignment_idx").on(t.assignmentId, t.dueAt),
+    foreignKey({
+      name: "class_tasks_assignment_fk",
+      columns: [t.schoolId, t.assignmentId],
+      foreignColumns: [teachingAssignments.schoolId, teachingAssignments.id],
+    }).onDelete("cascade"),
+  ],
+);
+
+/** La entrega de un alumno (o la nota que le puso el maestro aunque no haya entregado en línea). */
+export const taskSubmissions = pgTable(
+  "task_submissions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    schoolId: schoolId(),
+    taskId: uuid("task_id").notNull(),
+    studentId: uuid("student_id").notNull(),
+    text: text("text").notNull().default(""),
+    /** null: todavía no la entrega (puede tener archivos guardados). */
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+    submittedByUserId: uuid("submitted_by_user_id"),
+    submittedByName: text("submitted_by_name"),
+    late: boolean("late").notNull().default(false),
+    points: numeric("points", { precision: 5, scale: 2, mode: "number" }),
+    feedback: text("feedback"),
+    gradedAt: timestamp("graded_at", { withTimezone: true }),
+    gradedByUserId: uuid("graded_by_user_id"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique("task_submissions_tenant_key").on(t.schoolId, t.id),
+    unique("task_submissions_one_per_student").on(t.taskId, t.studentId),
+    foreignKey({
+      name: "task_submissions_task_fk",
+      columns: [t.schoolId, t.taskId],
+      foreignColumns: [classTasks.schoolId, classTasks.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "task_submissions_student_fk",
+      columns: [t.schoolId, t.studentId],
+      foreignColumns: [students.schoolId, students.id],
+    }).onDelete("cascade"),
+  ],
+);
+
+/** Archivos de una tarea: los que adjunta el maestro (sin entrega) y los que entrega cada alumno. */
+export const taskFiles = pgTable(
+  "task_files",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    schoolId: schoolId(),
+    taskId: uuid("task_id").notNull(),
+    submissionId: uuid("submission_id"),
+    fileName: text("file_name").notNull(),
+    contentType: text("content_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    storageKey: text("storage_key").notNull().unique(),
+    uploadedByUserId: uuid("uploaded_by_user_id").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("task_files_task_idx").on(t.taskId, t.submissionId),
+    foreignKey({
+      name: "task_files_task_fk",
+      columns: [t.schoolId, t.taskId],
+      foreignColumns: [classTasks.schoolId, classTasks.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "task_files_submission_fk",
+      columns: [t.schoolId, t.submissionId],
+      foreignColumns: [taskSubmissions.schoolId, taskSubmissions.id],
+    }).onDelete("cascade"),
+  ],
+);
+
 export type SchoolYear = typeof schoolYears.$inferSelect;
 export type Grade = typeof grades.$inferSelect;
 export type Section = typeof sections.$inferSelect;
@@ -1017,3 +1114,6 @@ export type SchoolDocument = typeof documents.$inferSelect;
 export type LibraryItem = typeof libraryItems.$inferSelect;
 export type ClassPost = typeof classPosts.$inferSelect;
 export type ClassMaterial = typeof classMaterials.$inferSelect;
+export type ClassTask = typeof classTasks.$inferSelect;
+export type TaskSubmission = typeof taskSubmissions.$inferSelect;
+export type TaskFile = typeof taskFiles.$inferSelect;

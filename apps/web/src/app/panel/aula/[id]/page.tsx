@@ -1,4 +1,4 @@
-import type { ClassPostDto, ClassroomDto } from "@escolar/shared";
+import { type ClassPostDto, type ClassroomDto, currentPeriod, todayInHonduras } from "@escolar/shared";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -8,8 +8,10 @@ import { academic } from "@/lib/academic";
 import { ServiceError } from "@/lib/api";
 import { requireRole } from "@/lib/dal";
 import { deleteClassMaterialAction, deleteClassPostAction, moveTopicAction } from "../actions";
+import { StatusBadge } from "../status-badge";
 import { AddMaterial, ConfirmButton, EditPost, MeetingForm, NewPost } from "./class-editor";
 import { MaterialView } from "./material-view";
+import { NewTask } from "./tareas/task-forms";
 
 export const metadata: Metadata = { title: "Clase" };
 
@@ -35,6 +37,9 @@ export default async function ClassPage({ params }: PageProps<"/panel/aula/[id]"
     throw err;
   });
   const edit = room.canEdit;
+  const periods = edit ? (await academic.periods(session.accessToken)).periods : [];
+  const current = currentPeriod(periods, todayInHonduras());
+  const now = new Date();
 
   return (
     <div className="space-y-6">
@@ -49,6 +54,62 @@ export default async function ClassPage({ params }: PageProps<"/panel/aula/[id]"
       </div>
 
       <OnlineClass room={room} />
+
+      <Card
+        title="Tareas"
+        action={
+          edit ? (
+            <NewTask
+              assignmentId={room.assignmentId}
+              periods={periods}
+              currentPeriodId={current?.id ?? null}
+            />
+          ) : null
+        }
+      >
+        {room.tasks.length === 0 ? (
+          <Empty>{edit ? "Publica una tarea: los alumnos la entregan aquí." : "Sin tareas por ahora."}</Empty>
+        ) : (
+          <ul className="divide-y divide-slate-100">
+            {room.tasks.map((t) => {
+              const overdue = new Date(t.dueAt) < now;
+              return (
+                <li key={t.id}>
+                  <Link
+                    href={`/panel/aula/${room.assignmentId}/tareas/${t.id}`}
+                    className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 hover:bg-slate-50"
+                  >
+                    <span className="min-w-0">
+                      <span className="block font-medium text-slate-900">{t.title}</span>
+                      <span className={`block text-xs ${overdue ? "text-slate-500" : "text-brand-700"}`}>
+                        {overdue ? "Venció" : "Entrega"} {when(t.dueAt)}
+                        {t.points !== null && ` · ${t.points} pts`}
+                      </span>
+                    </span>
+                    {t.stats ? (
+                      <span className="text-xs text-slate-500">
+                        {t.stats.submitted} de {t.stats.total} entregaron · {t.stats.graded} con nota
+                      </span>
+                    ) : t.status ? (
+                      <span className="flex items-center gap-2">
+                        {t.myPoints !== null && (
+                          <span className="text-sm font-semibold text-slate-900">
+                            {t.myPoints}
+                            {t.points !== null && (
+                              <span className="font-normal text-slate-500"> / {t.points}</span>
+                            )}
+                          </span>
+                        )}
+                        <StatusBadge status={t.status} />
+                      </span>
+                    ) : null}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </Card>
 
       <Card
         title="Avisos de la clase"

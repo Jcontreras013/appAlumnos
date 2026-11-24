@@ -46,6 +46,7 @@ import {
   listPeriods,
   passingGradeOf,
   rosterOf,
+  saveActivity,
   teacherClasses,
 } from "../lib/evaluation";
 import { findCurrentYear, getSection, listAssignments, requireCurrentYear } from "../lib/queries";
@@ -201,54 +202,18 @@ export async function evaluationRoutes(app: FastifyInstance, { db, today }: Acad
       );
     if (!period) throw notFound("Parcial no encontrado");
 
-    await db.transaction(async (tx) => {
-      const [existing] = await tx
-        .select()
-        .from(activities)
-        .where(and(eq(activities.schoolId, schoolId), eq(activities.id, id)));
-      if (existing && existing.assignmentId !== assignment.id)
-        throw conflict("Esa actividad es de otra clase");
-      // Cada parcial vale 100 puntos: las actividades no pueden repartir más.
-      const others = await tx
-        .select({ id: activities.id, maxPoints: activities.maxPoints })
-        .from(activities)
-        .where(and(eq(activities.assignmentId, assignment.id), eq(activities.periodId, period.id)));
-      const used = others.filter((a) => a.id !== id).reduce((acc, a) => acc + a.maxPoints, 0);
-      if (used + input.maxPoints > 100) {
-        throw conflict(
-          `El parcial ya tiene ${used} puntos repartidos; a esta actividad le puedes dar hasta ${100 - used}`,
-        );
-      }
-      if (existing) {
-        const tooHigh = await tx
-          .select({ points: scores.points })
-          .from(scores)
-          .where(and(eq(scores.activityId, id), gt(scores.points, input.maxPoints)))
-          .limit(1);
-        if (tooHigh.length) throw conflict("Hay notas mayores a ese valor; corrígelas antes de bajarlo");
-        await tx
-          .update(activities)
-          .set({
-            name: input.name,
-            maxPoints: input.maxPoints,
-            date: input.date,
-            periodId: period.id,
-            updatedAt: new Date(),
-          })
-          .where(eq(activities.id, id));
-      } else {
-        await tx.insert(activities).values({
-          id,
-          schoolId,
-          assignmentId: assignment.id,
-          periodId: period.id,
-          name: input.name,
-          maxPoints: input.maxPoints,
-          date: input.date,
-          createdByUserId: request.auth.userId,
-        });
-      }
-    });
+    await db.transaction((tx) =>
+      saveActivity(tx, {
+        id,
+        schoolId,
+        assignmentId: assignment.id,
+        periodId: period.id,
+        name: input.name,
+        maxPoints: input.maxPoints,
+        date: input.date,
+        userId: request.auth.userId,
+      }),
+    );
     return { id };
   });
 

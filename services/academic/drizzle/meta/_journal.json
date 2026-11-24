@@ -120,6 +120,13 @@
       "when": 1795562848621,
       "tag": "0016_aula_clases",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1795563477355,
+      "tag": "0017_aula_tareas",
+      "breakpoints": true
     }
   ]
 }

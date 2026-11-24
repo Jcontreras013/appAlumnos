@@ -39,6 +39,7 @@ import { classAccess, classesOfStudent } from "../lib/classroom";
 import { teacherClasses } from "../lib/evaluation";
 import { childrenOf, studentOf } from "../lib/family";
 import { findCurrentYear, listAssignments } from "../lib/queries";
+import { classTasksFor } from "./tasks";
 
 const idParams = z.object({ id: z.uuid() });
 const listQuery = z.object({
@@ -178,7 +179,8 @@ export async function classroomRoutes(app: FastifyInstance, { db, files, today }
 
   app.get("/classes/:id", readers, async (request): Promise<ClassroomDto> => {
     const { id } = parseOrThrow(idParams, request.params);
-    const { assignment, viewer, canEdit } = await classAccess(db, request.auth, id, today());
+    const access = await classAccess(db, request.auth, id, today());
+    const { assignment, viewer, canEdit } = access;
     const [settings] = await db.select().from(virtualClasses).where(eq(virtualClasses.assignmentId, id));
     const [topics, announcements] = await Promise.all([
       db
@@ -205,6 +207,7 @@ export async function classroomRoutes(app: FastifyInstance, { db, files, today }
       canEdit,
       topics: await postDtos(db, topics),
       announcements: await postDtos(db, announcements),
+      tasks: await classTasksFor(db, tenantOf(request), access),
     };
   });
 

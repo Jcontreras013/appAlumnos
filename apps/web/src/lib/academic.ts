@@ -15,6 +15,9 @@ import type {
   ClassroomDto,
   ClassSettingsInput,
   ClassSummaryDto,
+  ClassTaskDetailDto,
+  ClassTaskDto,
+  ClassTaskInput,
   ConductActaDto,
   ConductIncidentDto,
   ConductOverviewDto,
@@ -88,6 +91,9 @@ import type {
   SubjectDto,
   SubjectInput,
   SubstitutionInput,
+  TaskGradeInput,
+  TaskSubmissionDto,
+  TaskSubmissionInput,
   TeacherClassDto,
   TransferDto,
   TransferInput,
@@ -368,6 +374,30 @@ export const academic = {
     call<ClassMaterialDto>(`/class-posts/${postId}/links`, { method: "POST", token, body: input }),
   deleteClassMaterial: (token: string, materialId: string) =>
     call<void>(`/class-materials/${materialId}`, { method: "DELETE", token }),
+
+  // Aula virtual: tareas
+  createClassTask: (token: string, assignmentId: string, input: ClassTaskInput) =>
+    call<ClassTaskDto>(`/classes/${assignmentId}/tasks`, { method: "POST", token, body: input }),
+  updateClassTask: (token: string, taskId: string, input: ClassTaskInput) =>
+    call<ClassTaskDto>(`/class-tasks/${taskId}`, { method: "PUT", token, body: input }),
+  deleteClassTask: (token: string, taskId: string) =>
+    call<void>(`/class-tasks/${taskId}`, { method: "DELETE", token }),
+  classTask: (token: string, taskId: string, alumno?: string) =>
+    call<ClassTaskDetailDto>(`/class-tasks/${taskId}${alumno ? `?alumno=${alumno}` : ""}`, { token }),
+  gradeTask: (token: string, taskId: string, studentId: string, input: TaskGradeInput) =>
+    call<TaskSubmissionDto>(`/class-tasks/${taskId}/grades/${studentId}`, {
+      method: "PUT",
+      token,
+      body: input,
+    }),
+  saveSubmission: (token: string, taskId: string, input: TaskSubmissionInput, alumno?: string) =>
+    call<TaskSubmissionDto>(`/class-tasks/${taskId}/submission${alumno ? `?alumno=${alumno}` : ""}`, {
+      method: "PUT",
+      token,
+      body: input,
+    }),
+  deleteTaskFile: (token: string, fileId: string) =>
+    call<void>(`/task-files/${fileId}`, { method: "DELETE", token }),
 
   // Cuentas de los alumnos (aula virtual)
   grantStudentAccess: (token: string, studentId: string, input: PortalAccessInput) =>

@@ -194,8 +194,19 @@ export function LinkForm({ assignmentId, postId }: { assignmentId: string; postI
 const ACCEPT =
   ".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.webp,application/pdf,image/jpeg,image/png,image/webp";
 
-/** Subir un archivo a un tema (PDF, Office o imagen), con barra de avance. */
-export function FileUpload({ postId }: { postId: string }) {
+/** Subir un archivo (PDF, Office o imagen) a una ruta del panel, con barra de avance. */
+export function UploadBox({
+  url,
+  max = CLASS_FILE_MAX_BYTES,
+  label,
+  capture = false,
+}: {
+  url: string;
+  max?: number;
+  label: string;
+  /** En el teléfono, ofrecer la cámara (para la foto del cuaderno). */
+  capture?: boolean;
+}) {
   const id = useId();
   const router = useRouter();
   const [progress, setProgress] = useState<number | null>(null);
@@ -206,17 +217,15 @@ export function FileUpload({ postId }: { postId: string }) {
     if (!file) return;
     const type = classFileTypeOf(file.name, file.type);
     if (!type) {
-      setError(`«${file.name}» no se puede subir: PDF, Word, Excel, PowerPoint o imágenes.`);
+      setError(`«${file.name}» no se puede subir: fotos, PDF, Word, Excel o PowerPoint.`);
       return;
     }
-    if (file.size > CLASS_FILE_MAX_BYTES) {
-      setError(
-        `«${file.name}» pesa ${formatFileSize(file.size)}: el máximo es ${formatFileSize(CLASS_FILE_MAX_BYTES)}.`,
-      );
+    if (file.size > max) {
+      setError(`«${file.name}» pesa ${formatFileSize(file.size)}: el máximo es ${formatFileSize(max)}.`);
       return;
     }
     setProgress(0);
-    const res = await uploadFile(`/api/aula/temas/${postId}/archivos`, file, type, setProgress);
+    const res = await uploadFile(url, file, type, setProgress);
     setProgress(null);
     input.value = "";
     if (res.status === 201) return router.refresh();
@@ -227,12 +236,12 @@ export function FileUpload({ postId }: { postId: string }) {
   return (
     <div className="space-y-1">
       <label htmlFor={`${id}-archivo`} className="label">
-        Subir archivo (PDF, Office o imagen, hasta {formatFileSize(CLASS_FILE_MAX_BYTES)})
+        {label} (hasta {formatFileSize(max)})
       </label>
       <input
         id={`${id}-archivo`}
         type="file"
-        accept={ACCEPT}
+        accept={capture ? `image/*,${ACCEPT}` : ACCEPT}
         disabled={progress !== null}
         className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-brand-50 file:px-3 file:py-2 file:font-medium file:text-brand-700"
         onChange={(e) => void pick(e.target.files?.[0] ?? null, e.target)}
@@ -251,6 +260,13 @@ export function FileUpload({ postId }: { postId: string }) {
         </p>
       )}
     </div>
+  );
+}
+
+/** Subir un archivo a un tema. */
+export function FileUpload({ postId }: { postId: string }) {
+  return (
+    <UploadBox url={`/api/aula/temas/${postId}/archivos`} label="Subir archivo (PDF, Office o imagen)" />
   );
 }
 

@@ -33,6 +33,7 @@ import { staffRoutes } from "./routes/staff";
 import { structureRoutes } from "./routes/structure";
 import { studentAccessRoutes } from "./routes/student-access";
 import { studentRoutes } from "./routes/students";
+import { taskRoutes } from "./routes/tasks";
 import { transferRoutes } from "./routes/transfers";
 
 export interface BuildAppOptions {
@@ -79,6 +80,7 @@ export async function buildApp(options: BuildAppOptions) {
     await familyRoutes(scope, deps);
     await studentAccessRoutes(scope, deps);
     await classroomRoutes(scope, deps);
+    await taskRoutes(scope, deps);
     await exportRoutes(scope, deps);
     await followUpRoutes(scope, deps);
     await announcementRoutes(scope, deps);
