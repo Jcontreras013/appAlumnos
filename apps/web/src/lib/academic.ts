@@ -72,7 +72,9 @@ import type {
   SectionFinalsDto,
   SectionInput,
   SectionScheduleInput,
+  SectionStudentAccessDto,
   SectionUpdate,
+  StudentAccessDto,
   StudentDetailDto,
   StudentFields,
   StudentListItemDto,
@@ -335,6 +337,17 @@ export const academic = {
     call<PortalAccessDto>(`/guardians/${guardianId}/portal-access/reset`, { method: "POST", token }),
   revokePortalAccess: (token: string, guardianId: string) =>
     call<void>(`/guardians/${guardianId}/portal-access`, { method: "DELETE", token }),
+  // Cuentas de los alumnos (aula virtual)
+  grantStudentAccess: (token: string, studentId: string, input: PortalAccessInput) =>
+    call<StudentAccessDto>(`/students/${studentId}/student-access`, { method: "POST", token, body: input }),
+  resetStudentAccess: (token: string, studentId: string) =>
+    call<StudentAccessDto>(`/students/${studentId}/student-access/reset`, { method: "POST", token }),
+  revokeStudentAccess: (token: string, studentId: string) =>
+    call<void>(`/students/${studentId}/student-access`, { method: "DELETE", token }),
+  sectionStudentAccess: (token: string, sectionId: string) =>
+    call<SectionStudentAccessDto>(`/sections/${sectionId}/student-access`, { method: "POST", token }),
+  studentMe: (token: string) => call<FamilyChildDto>("/student/me", { token }),
+  studentSchedule: (token: string) => call<ScheduleDto>("/student/me/schedule", { token }),
   reportCard: (token: string, studentId: string) =>
     call<FamilyChildDto>(`/students/${studentId}/report-card`, { token }),
   familyChildren: (token: string) => call<FamilyChildSummaryDto[]>("/family/children", { token }),

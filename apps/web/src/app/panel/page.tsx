@@ -16,6 +16,8 @@ export default async function PanelHome() {
   if (isRegionalRole(user.role) && !mfa.setupRequired) redirect("/panel/region");
   // Las familias van directo a ver a sus hijos.
   if (user.role === "padre" && !user.mustChangePassword) redirect("/panel/familia");
+  // Los alumnos, a su aula virtual.
+  if (user.role === "estudiante" && !user.mustChangePassword) redirect("/panel/mis-notas");
   const firstName = user.name.split(" ")[0];
 
   if (user.role === "superadmin") {

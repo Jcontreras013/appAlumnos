@@ -221,9 +221,9 @@ export type AccountUpdate = z.infer<typeof accountUpdateSchema>;
 export const STAFF_ROLES = ["admin", "coordinador", "secretaria", "docente"] as const;
 
 /** Cualquier acceso de personal (incluido "finanzas") se puede cambiar a uno de STAFF_ROLES. */
-const ANY_STAFF_ROLE = SCHOOL_ROLES.filter((r) => r !== "padre") as Exclude<
+const ANY_STAFF_ROLE = SCHOOL_ROLES.filter((r) => r !== "padre" && r !== "estudiante") as Exclude<
   (typeof SCHOOL_ROLES)[number],
-  "padre"
+  "padre" | "estudiante"
 >[];
 
 export const roleChangeSchema = z.object({

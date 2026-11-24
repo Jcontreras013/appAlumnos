@@ -29,7 +29,7 @@ import type { DbOrTx } from "../db/client";
 import { enrollments, grades, type LibraryItem, libraryItems, sections, subjects } from "../db/schema";
 import type { AcademicDeps } from "../deps";
 import { audit } from "../lib/audit";
-import { childrenOf } from "../lib/family";
+import { childrenOf, studentOf } from "../lib/family";
 import { findCurrentYear } from "../lib/queries";
 
 const idParams = z.object({ id: z.uuid() });
@@ -47,12 +47,15 @@ const uploadQuery = z.object({
 });
 
 const STAFF = ["admin", "coordinador", "secretaria", "docente"] as const;
+/** Familias y alumnos: solo ven lo compartido con las familias, de sus grados. */
+const PORTAL: string[] = ["padre", "estudiante"];
 /** Además de quien lo subió, la dirección y la coordinación pueden quitar cualquier material. */
 const MANAGERS = ["admin", "coordinador"];
 
-/** Grados en los que están matriculados los hijos de la familia este año. */
-async function familyGrades(db: DbOrTx, schoolId: string, userId: string): Promise<string[]> {
-  const kids = await childrenOf(db, schoolId, userId);
+/** Grados en los que están matriculados este año los hijos de la familia (o el propio alumno). */
+async function familyGrades(db: DbOrTx, schoolId: string, userId: string, role: string): Promise<string[]> {
+  const own = role === "estudiante" ? await studentOf(db, schoolId, userId) : null;
+  const kids = role === "estudiante" ? (own ? [own] : []) : await childrenOf(db, schoolId, userId);
   const year = await findCurrentYear(db, schoolId);
   if (!kids.length || !year) return [];
   const rows = await db
@@ -77,7 +80,7 @@ async function familyGrades(db: DbOrTx, schoolId: string, userId: string): Promi
  * un libro grande sin bajarlo completo).
  */
 export async function libraryRoutes(app: FastifyInstance, { db, files }: AcademicDeps) {
-  const readers = { preHandler: [app.authenticate, requireRole(...STAFF, "padre")] };
+  const readers = { preHandler: [app.authenticate, requireRole(...STAFF, "padre", "estudiante")] };
   const staff = { preHandler: [app.authenticate, requireRole(...STAFF)] };
 
   async function toDtos(rows: LibraryItem[], request: FastifyRequest): Promise<LibraryItemDto[]> {
@@ -116,15 +119,16 @@ export async function libraryRoutes(app: FastifyInstance, { db, files }: Academi
       audience: r.audience,
       uploadedByName: r.uploadedByName,
       createdAt: r.createdAt.toISOString(),
-      canDelete: request.auth.role !== "padre" && (manager || r.uploadedByUserId === request.auth.userId),
+      canDelete:
+        !PORTAL.includes(request.auth.role) && (manager || r.uploadedByUserId === request.auth.userId),
     }));
   }
 
   /** Lo que esta persona puede ver de la biblioteca (el personal, todo; las familias, lo suyo). */
   async function visibleFilter(request: FastifyRequest) {
     const schoolId = tenantOf(request);
-    if (request.auth.role !== "padre") return eq(libraryItems.schoolId, schoolId);
-    const gradeIds = await familyGrades(db, schoolId, request.auth.userId);
+    if (!PORTAL.includes(request.auth.role)) return eq(libraryItems.schoolId, schoolId);
+    const gradeIds = await familyGrades(db, schoolId, request.auth.userId, request.auth.role);
     return and(
       eq(libraryItems.schoolId, schoolId),
       eq(libraryItems.audience, "familias"),

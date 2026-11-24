@@ -30,6 +30,7 @@ import { regionalRoutes } from "./routes/regional";
 import { scheduleRoutes } from "./routes/schedule";
 import { staffRoutes } from "./routes/staff";
 import { structureRoutes } from "./routes/structure";
+import { studentAccessRoutes } from "./routes/student-access";
 import { studentRoutes } from "./routes/students";
 import { transferRoutes } from "./routes/transfers";
 
@@ -75,6 +76,7 @@ export async function buildApp(options: BuildAppOptions) {
     await evaluationRoutes(scope, deps);
     await planRoutes(scope, deps);
     await familyRoutes(scope, deps);
+    await studentAccessRoutes(scope, deps);
     await exportRoutes(scope, deps);
     await followUpRoutes(scope, deps);
     await announcementRoutes(scope, deps);

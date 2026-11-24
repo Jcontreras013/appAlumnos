@@ -359,11 +359,45 @@ export const HELP_GUIDES: HelpGuide[] = [
         ],
       },
       {
+        title: "Cuentas de los alumnos (aula virtual)",
+        steps: [
+          "Con su cuenta, el alumno ve sus clases, entrega tareas y presenta exámenes. Recomendado desde 7.º grado; en primaria la familia entrega por ellos.",
+          "Uno por uno: en la ficha del alumno, «Cuenta del aula virtual» → «Darle su cuenta». Entra con su identidad (o su correo, si no la tiene).",
+          "Toda una sección: en «Alumnos», filtra por la sección y toca «Dar cuentas a la sección». Imprime la hoja de accesos y recorta una tira para cada alumno.",
+          "Las contraseñas temporales solo se muestran una vez. Si un alumno la olvida, en su ficha: «Nueva contraseña temporal».",
+        ],
+      },
+      {
         title: "Traslados y avisos",
         steps: [
           "Si un alumno se va a otro centro del departamento: en su ficha, «Trasladar a otro centro».",
           "Los alumnos que llegan aparecen en «Traslados»: elige la sección y «Recibir».",
           "En «Avisos» puedes publicar avisos para las familias o el personal.",
+        ],
+      },
+    ],
+  },
+  {
+    key: "alumnos",
+    title: "Alumnos",
+    intro:
+      "Tu aula virtual: tus notas, tus clases, las tareas y los exámenes, desde el teléfono o la computadora.",
+    roles: ["estudiante"],
+    sections: [
+      {
+        title: "Entrar",
+        steps: [
+          "El centro te entrega una tira con tu usuario (tu número de identidad o tu correo) y una contraseña temporal.",
+          "Al entrar por primera vez eliges tu propia contraseña. No se la compartas a nadie.",
+          "Si la olvidas, pídele una nueva a la secretaría del centro.",
+        ],
+      },
+      {
+        title: "Tus notas",
+        steps: [
+          "En «Mis notas» ves tus notas por materia y parcial, tu asistencia, las tareas de la semana y tu horario.",
+          "Si aparece «Pide apoyo a tus maestros», todavía hay tiempo de mejorar: habla con ellos.",
+          "En «Biblioteca» están los libros y guías de tu grado; los puedes guardar para leer sin internet.",
         ],
       },
     ],

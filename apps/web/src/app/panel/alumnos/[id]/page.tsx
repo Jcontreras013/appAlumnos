@@ -25,6 +25,7 @@ import { identity } from "@/lib/identity";
 import { removeGuardianAction, setPrimaryGuardianAction } from "../actions";
 import { GuardianEditor } from "./guardian-editor";
 import { PortalAccess } from "./portal-access";
+import { StudentAccess } from "./student-access";
 import { AddGuardianForm, EnrollForm, StudentDataForm, TransferForm, WithdrawForm } from "./student-forms";
 
 export const metadata: Metadata = { title: "Ficha del alumno" };
@@ -296,6 +297,12 @@ export default async function StudentPage({ params, searchParams }: PageProps<"/
           )}
         </Card>
       </div>
+
+      {canEdit && (
+        <Card title="Cuenta del aula virtual">
+          <StudentAccess student={student} />
+        </Card>
+      )}
 
       {cameFrom && (
         <Card title="Traslado">

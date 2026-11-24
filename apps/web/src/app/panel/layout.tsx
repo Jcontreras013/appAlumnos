@@ -39,6 +39,9 @@ export default async function PanelLayout({ children }: { children: ReactNode })
   } else if (is("padre")) {
     items.push({ href: "/panel/familia", label: "Mis hijos" });
     items.push({ href: "/panel/biblioteca", label: "Biblioteca" });
+  } else if (is("estudiante")) {
+    items.push({ href: "/panel/mis-notas", label: "Mis notas" });
+    items.push({ href: "/panel/biblioteca", label: "Biblioteca" });
   } else {
     items.push({ href: "/panel", label: "Inicio" });
   }

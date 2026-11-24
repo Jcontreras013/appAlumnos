@@ -13,7 +13,7 @@ import { SaveOffline } from "./save-offline";
 export const metadata: Metadata = { title: "Biblioteca" };
 
 export default async function LibraryItemPage({ params }: { params: Promise<{ id: string }> }) {
-  const session = await requireRole("admin", "coordinador", "secretaria", "docente", "padre");
+  const session = await requireRole("admin", "coordinador", "secretaria", "docente", "padre", "estudiante");
   const { id } = await params;
   if (!z.uuid().safeParse(id).success) notFound();
   const item = await academic.libraryItem(session.accessToken, id).catch((err) => {

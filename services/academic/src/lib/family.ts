@@ -46,6 +46,15 @@ export async function childrenOf(db: DbOrTx, schoolId: string, userId: string): 
   return [...new Set(rows.map((r) => r.studentId))];
 }
 
+/** El alumno de una cuenta del aula virtual en este centro (null si la cuenta no es de un alumno). */
+export async function studentOf(db: DbOrTx, schoolId: string, userId: string): Promise<string | null> {
+  const [row] = await db
+    .select({ id: students.id })
+    .from(students)
+    .where(and(eq(students.schoolId, schoolId), eq(students.userId, userId)));
+  return row?.id ?? null;
+}
+
 /** Texto de un campo de la planificación (por clave, o el primero cuyo nombre lo mencione). */
 function planText(fields: PlanField[], content: Record<string, unknown>, key: string, label: RegExp) {
   const field =

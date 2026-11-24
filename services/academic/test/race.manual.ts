@@ -27,6 +27,13 @@ const app = await buildApp({
       throw new Error("no se usa en esta prueba");
     },
     revokeFamilyAccount: async () => {},
+    createStudentAccount: async () => {
+      throw new Error("no se usa en esta prueba");
+    },
+    resetStudentPassword: async () => {
+      throw new Error("no se usa en esta prueba");
+    },
+    revokeStudentAccount: async () => {},
   },
   verifier: await createAccessTokenVerifier({ publicKey: keys.publicKey }),
   today: () => "2026-11-09",

@@ -10,12 +10,13 @@ import {
 import {
   type CreatedUserDto,
   createUserInputSchema,
+  PORTAL_ROLES,
   ROLE_LABELS,
   roleChangeSchema,
   SCHOOL_ROLES,
   type UserDto,
 } from "@escolar/shared";
-import { and, asc, eq, ne } from "drizzle-orm";
+import { and, asc, eq, notInArray } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { memberships, users } from "../db/schema";
@@ -44,11 +45,11 @@ export async function userRoutes(app: FastifyInstance, { db, tokens }: IdentityD
       .select({ user: users, membership: memberships })
       .from(memberships)
       .innerJoin(users, eq(users.id, memberships.userId))
-      // Las familias no son personal: solo aparecen si se piden (?role=padre).
+      // Las familias y los alumnos no son personal: solo aparecen si se piden (?role=padre).
       .where(
         and(
           eq(memberships.schoolId, schoolId),
-          role ? eq(memberships.role, role) : ne(memberships.role, "padre"),
+          role ? eq(memberships.role, role) : notInArray(memberships.role, [...PORTAL_ROLES]),
         ),
       )
       .orderBy(asc(users.name), asc(memberships.role));

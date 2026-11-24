@@ -197,6 +197,10 @@ export const students = pgTable(
     /** Alergias o condiciones de salud: se mostrarán también en la cafetería (fase 4). */
     medicalNotes: text("medical_notes"),
     notes: text("notes"),
+    /** Correo del alumno: con él entra al aula virtual si no tiene identidad a mano. */
+    email: text("email"),
+    /** Cuenta del alumno en el aula virtual (identity), cuando se le cree una. */
+    userId: uuid("user_id"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -205,6 +209,7 @@ export const students = pgTable(
     uniqueIndex("students_national_id_unique")
       .on(t.schoolId, t.nationalId)
       .where(sql`${t.nationalId} is not null`),
+    uniqueIndex("students_user_unique").on(t.schoolId, t.userId).where(sql`${t.userId} is not null`),
     index("students_name_idx").on(t.schoolId, t.lastNames, t.firstNames),
   ],
 );
