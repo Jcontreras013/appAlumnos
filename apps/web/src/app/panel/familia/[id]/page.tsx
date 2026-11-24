@@ -1,9 +1,17 @@
-import { ATTENDANCE_LABELS, formatDay, formatWeekRange, mondayOf, todayInHonduras } from "@escolar/shared";
+import {
+  ATTENDANCE_LABELS,
+  DAY_OFF_LABELS,
+  formatDay,
+  formatDayOffRange,
+  formatWeekRange,
+  mondayOf,
+  todayInHonduras,
+} from "@escolar/shared";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
-import { DisciplineList } from "@/components/discipline-list";
+import { ConductRecordList } from "@/components/conduct-incident";
 import { Kpi } from "@/components/kpi";
 import { ScheduleGrid } from "@/components/schedule-grid";
 import { academic } from "@/lib/academic";
@@ -25,13 +33,12 @@ export default async function ChildPage({ params }: PageProps<"/panel/familia/[i
   const session = await requireRole("padre");
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
-  const [child, schedule, discipline] = await Promise.all([
+  const [child, schedule] = await Promise.all([
     academic.familyChild(session.accessToken, id).catch((err) => {
       if (err instanceof ServiceError && (err.status === 404 || err.status === 400)) notFound();
       throw err;
     }),
     academic.childSchedule(session.accessToken, id).catch(() => null),
-    academic.familyDiscipline(session.accessToken, id).catch(() => []),
   ]);
   const { student, period, subjects, attendance, homework, passingGrade } = child;
   const week = mondayOf(todayInHonduras());
@@ -187,6 +194,15 @@ export default async function ChildPage({ params }: PageProps<"/panel/familia/[i
         )}
       </Card>
 
+      {child.conduct.length > 0 && (
+        <Card title="Conducta">
+          <p className="px-4 pt-3 text-xs text-slate-500">
+            Medidas que decidió el centro este año. Si tiene dudas, acérquese a la dirección.
+          </p>
+          <ConductRecordList records={child.conduct} />
+        </Card>
+      )}
+
       <Card title="Asistencia del último mes">
         {attendance.recent.length === 0 ? (
           <Empty>
@@ -208,11 +224,18 @@ export default async function ChildPage({ params }: PageProps<"/panel/familia/[i
         )}
       </Card>
 
-      {discipline.length > 0 && (
-        <Card title="Llamados de atención y medidas">
-          <div className="p-4">
-            <DisciplineList items={discipline} />
-          </div>
+      {child.upcomingDaysOff.length > 0 && (
+        <Card title="Próximos días sin clases">
+          <ul className="divide-y divide-slate-100">
+            {child.upcomingDaysOff.map((d) => (
+              <li key={d.id} className="flex flex-wrap items-baseline gap-x-2 px-4 py-2.5 text-sm">
+                <span className="font-medium text-slate-900">{d.name}</span>
+                <span className="text-slate-500">
+                  {DAY_OFF_LABELS[d.kind]} · {formatDayOffRange(d, formatDay)}
+                </span>
+              </li>
+            ))}
+          </ul>
         </Card>
       )}
 

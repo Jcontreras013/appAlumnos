@@ -1,14 +1,22 @@
 import {
   ANNOUNCEMENT_AUDIENCES,
   ATTENDANCE_STATUSES,
+  CONDUCT_CATEGORIES,
+  CONDUCT_MEASURES,
+  CONDUCT_SEVERITIES,
+  DAY_OFF_KINDS,
   DEFAULT_PASSING_GRADE,
-  DISCIPLINE_KINDS,
-  DISCIPLINE_SEVERITIES,
+  type DocContent,
+  type DocumentTemplate,
+  type DocumentVisibility,
   FOLLOW_UP_KINDS,
   LEAVE_TYPES,
+  type LibraryAudience,
+  type LibraryKind,
   PLAN_STATUSES,
   type PlanContent,
   type PlanField,
+  type SubjectLanguage,
   type TransferSnapshot,
 } from "@escolar/shared";
 import { sql } from "drizzle-orm";
@@ -48,9 +56,11 @@ export const leaveTypeEnum = pgEnum("leave_type", LEAVE_TYPES);
 export const attendanceStatusEnum = pgEnum("attendance_status", ATTENDANCE_STATUSES);
 export const planStatusEnum = pgEnum("plan_status", PLAN_STATUSES);
 export const followUpKindEnum = pgEnum("follow_up_kind", FOLLOW_UP_KINDS);
-export const disciplineKindEnum = pgEnum("discipline_kind", DISCIPLINE_KINDS);
-export const disciplineSeverityEnum = pgEnum("discipline_severity", DISCIPLINE_SEVERITIES);
+export const conductSeverityEnum = pgEnum("conduct_severity", CONDUCT_SEVERITIES);
+export const conductCategoryEnum = pgEnum("conduct_category", CONDUCT_CATEGORIES);
+export const conductMeasureEnum = pgEnum("conduct_measure", CONDUCT_MEASURES);
 export const announcementAudienceEnum = pgEnum("announcement_audience", ANNOUNCEMENT_AUDIENCES);
+export const dayOffKindEnum = pgEnum("day_off_kind", DAY_OFF_KINDS);
 export const transferStatusEnum = pgEnum("transfer_status", ["pendiente", "recibido", "cancelado"]);
 export const planActionEnum = pgEnum("plan_action", [
   "creada",
@@ -131,11 +141,14 @@ export const subjects = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     schoolId: schoolId(),
     name: text("name").notNull(),
+    /** Idioma en que se imparte (colegios bilingües): el asistente planifica en ese idioma. */
+    language: text("language").$type<SubjectLanguage>().notNull().default("es"),
     createdAt: createdAt(),
   },
   (t) => [
     unique("subjects_tenant_key").on(t.schoolId, t.id),
     unique("subjects_name_unique").on(t.schoolId, t.name),
+    check("subjects_language", sql`${t.language} in ('es', 'en')`),
   ],
 );
 
@@ -289,6 +302,106 @@ export const enrollments = pgTable(
 );
 
 // ───────────────────────────── Licencias y sustituciones ─────────────────────────────
+
+/**
+ * Biblioteca virtual: libros, guías y lecturas (archivo guardado en S3 o la carpeta de la demo) o
+ * enlaces, por grado y materia (ambos opcionales: sin grado, es para todo el centro).
+ */
+export const libraryItems = pgTable(
+  "library_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    schoolId: schoolId(),
+    kind: text("kind").$type<LibraryKind>().notNull(),
+    title: text("title").notNull(),
+    description: text("description"),
+    url: text("url"),
+    fileName: text("file_name"),
+    contentType: text("content_type"),
+    sizeBytes: integer("size_bytes"),
+    storageKey: text("storage_key").unique(),
+    gradeId: uuid("grade_id"),
+    subjectId: uuid("subject_id"),
+    audience: text("audience").$type<LibraryAudience>().notNull(),
+    uploadedByUserId: uuid("uploaded_by_user_id").notNull(),
+    uploadedByName: text("uploaded_by_name").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    foreignKey({
+      name: "library_items_grade_fk",
+      columns: [t.schoolId, t.gradeId],
+      foreignColumns: [grades.schoolId, grades.id],
+    }),
+    foreignKey({
+      name: "library_items_subject_fk",
+      columns: [t.schoolId, t.subjectId],
+      foreignColumns: [subjects.schoolId, subjects.id],
+    }),
+    index("library_items_school_idx").on(t.schoolId, t.createdAt),
+    check("library_items_kind", sql`${t.kind} in ('archivo', 'enlace')`),
+    check("library_items_audience", sql`${t.audience} in ('personal', 'familias')`),
+    check(
+      "library_items_content",
+      sql`(${t.kind} = 'enlace' and ${t.url} is not null and ${t.storageKey} is null) or (${t.kind} = 'archivo' and ${t.storageKey} is not null and ${t.sizeBytes} > 0)`,
+    ),
+  ],
+);
+
+/**
+ * Documentos del centro (circulares, actas, informes…) escritos en CONECTA. El contenido es el JSON
+ * del editor, validado al guardar. Solo quien lo escribe lo edita; «personal» lo ve todo el personal.
+ */
+export const documents = pgTable(
+  "documents",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    schoolId: schoolId(),
+    title: text("title").notNull(),
+    template: text("template").$type<DocumentTemplate>().notNull(),
+    content: jsonb("content").$type<DocContent>().notNull(),
+    visibility: text("visibility").$type<DocumentVisibility>().notNull().default("privado"),
+    authorUserId: uuid("author_user_id").notNull(),
+    authorName: text("author_name").notNull(),
+    version: integer("version").notNull().default(1),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index("documents_author_idx").on(t.schoolId, t.authorUserId),
+    index("documents_shared_idx").on(t.schoolId, t.visibility),
+    check("documents_visibility", sql`${t.visibility} in ('privado', 'personal')`),
+  ],
+);
+
+/**
+ * Calendario escolar: días o períodos sin clases del centro (feriados, vacaciones). Los marca la
+ * secretaría o la dirección; en esos días no se espera asistencia ni planificación.
+ */
+export const schoolDaysOff = pgTable(
+  "school_days_off",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    schoolId: schoolId(),
+    schoolYearId: uuid("school_year_id").notNull(),
+    name: text("name").notNull(),
+    kind: dayOffKindEnum("kind").notNull(),
+    startsOn: date("starts_on", { mode: "string" }).notNull(),
+    endsOn: date("ends_on", { mode: "string" }).notNull(),
+    createdByUserId: uuid("created_by_user_id").notNull(),
+    createdByName: text("created_by_name").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    foreignKey({
+      name: "school_days_off_year_fk",
+      columns: [t.schoolId, t.schoolYearId],
+      foreignColumns: [schoolYears.schoolId, schoolYears.id],
+    }).onDelete("cascade"),
+    index("school_days_off_dates_idx").on(t.schoolId, t.startsOn),
+    check("school_days_off_dates", sql`${t.endsOn} >= ${t.startsOn}`),
+  ],
+);
 
 /** Ausencia de un maestro (vacaciones, enfermedad, etc.). Cancelar no borra: queda el historial. */
 export const teacherLeaves = pgTable(
@@ -478,6 +591,70 @@ export const attendanceRecords = pgTable(
   ],
 );
 
+/** Un incidente de conducta que reporta el personal (maestro, coordinación o dirección). */
+export const conductIncidents = pgTable(
+  "conduct_incidents",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    schoolId: schoolId(),
+    studentId: uuid("student_id").notNull(),
+    date: date("date", { mode: "string" }).notNull(),
+    severity: conductSeverityEnum("severity").notNull(),
+    category: conductCategoryEnum("category").notNull(),
+    description: text("description").notNull(),
+    reportedByUserId: uuid("reported_by_user_id").notNull(),
+    reportedByName: text("reported_by_name").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique("conduct_incidents_tenant_key").on(t.schoolId, t.id),
+    index("conduct_incidents_school_date_idx").on(t.schoolId, t.date),
+    index("conduct_incidents_student_idx").on(t.schoolId, t.studentId, t.date),
+    foreignKey({
+      name: "conduct_incidents_student_fk",
+      columns: [t.schoolId, t.studentId],
+      foreignColumns: [students.schoolId, students.id],
+    }),
+  ],
+);
+
+/**
+ * Lo que decidió el centro por un incidente: llamado de atención, citación, compromiso, suspensión o
+ * expulsión. No se borra: si fue un error se anula y queda en el historial.
+ */
+export const conductMeasures = pgTable(
+  "conduct_measures",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    schoolId: schoolId(),
+    incidentId: uuid("incident_id").notNull(),
+    kind: conductMeasureEnum("kind").notNull(),
+    startsOn: date("starts_on", { mode: "string" }).notNull(),
+    endsOn: date("ends_on", { mode: "string" }),
+    notes: text("notes").notNull(),
+    decidedByUserId: uuid("decided_by_user_id").notNull(),
+    decidedByName: text("decided_by_name").notNull(),
+    createdAt: createdAt(),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    cancelledByUserId: uuid("cancelled_by_user_id"),
+    /** La familia la ve en su portal (en el llamado de atención se elige; lo demás, siempre). */
+    notifyFamily: boolean("notify_family").notNull().default(true),
+  },
+  (t) => [
+    index("conduct_measures_incident_idx").on(t.schoolId, t.incidentId),
+    foreignKey({
+      name: "conduct_measures_incident_fk",
+      columns: [t.schoolId, t.incidentId],
+      foreignColumns: [conductIncidents.schoolId, conductIncidents.id],
+    }),
+    // Solo la suspensión tiene último día, y nunca antes del primero.
+    check(
+      "conduct_measures_dates",
+      sql`(${t.kind} = 'suspension' and ${t.endsOn} is not null and ${t.endsOn} >= ${t.startsOn}) or (${t.kind} <> 'suspension' and ${t.endsOn} is null)`,
+    ),
+  ],
+);
+
 /** Lo que se hizo con un alumno en riesgo: llamada a la familia, reunión, referido a orientación… */
 export const studentFollowUps = pgTable(
   "student_follow_ups",
@@ -500,44 +677,6 @@ export const studentFollowUps = pgTable(
       columns: [t.schoolId, t.studentId],
       foreignColumns: [students.schoolId, students.id],
     }).onDelete("cascade"),
-  ],
-);
-
-/**
- * Disciplina: llamados de atención y medidas (citación, acta de compromiso, suspensión, expulsión).
- * Solo lo que se avisó a la familia aparece en su portal.
- */
-export const disciplineRecords = pgTable(
-  "discipline_records",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    schoolId: schoolId(),
-    studentId: uuid("student_id").notNull(),
-    kind: disciplineKindEnum("kind").notNull(),
-    severity: disciplineSeverityEnum("severity").notNull(),
-    date: date("date", { mode: "string" }).notNull(),
-    description: text("description").notNull(),
-    measure: text("measure"),
-    suspensionFrom: date("suspension_from", { mode: "string" }),
-    suspensionTo: date("suspension_to", { mode: "string" }),
-    notifyFamily: boolean("notify_family").notNull().default(false),
-    authorUserId: uuid("author_user_id").notNull(),
-    authorName: text("author_name").notNull(),
-    createdAt: createdAt(),
-  },
-  (t) => [
-    unique("discipline_records_tenant_key").on(t.schoolId, t.id),
-    index("discipline_records_student_idx").on(t.schoolId, t.studentId, t.date),
-    index("discipline_records_school_date_idx").on(t.schoolId, t.date),
-    foreignKey({
-      name: "discipline_records_student_fk",
-      columns: [t.schoolId, t.studentId],
-      foreignColumns: [students.schoolId, students.id],
-    }).onDelete("cascade"),
-    check(
-      "discipline_records_suspension_dates",
-      sql`${t.kind} <> 'suspension' OR (${t.suspensionFrom} IS NOT NULL AND ${t.suspensionTo} >= ${t.suspensionFrom})`,
-    ),
   ],
 );
 
@@ -779,6 +918,8 @@ export type Substitution = typeof substitutions.$inferSelect;
 export type GradingPeriod = typeof gradingPeriods.$inferSelect;
 export type Activity = typeof activities.$inferSelect;
 export type StudentFollowUp = typeof studentFollowUps.$inferSelect;
-export type DisciplineRecord = typeof disciplineRecords.$inferSelect;
 export type Announcement = typeof announcements.$inferSelect;
 export type StudentTransfer = typeof studentTransfers.$inferSelect;
+export type SchoolDayOff = typeof schoolDaysOff.$inferSelect;
+export type SchoolDocument = typeof documents.$inferSelect;
+export type LibraryItem = typeof libraryItems.$inferSelect;

@@ -1,6 +1,12 @@
 "use server";
 
-import { planTemplateInputSchema, reviewPlanInputSchema, weekStartSchema } from "@escolar/shared";
+import {
+  type PlanContent,
+  planDraftInputSchema,
+  planTemplateInputSchema,
+  reviewPlanInputSchema,
+  weekStartSchema,
+} from "@escolar/shared";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -96,4 +102,37 @@ export async function saveTemplateAction(_prev: FormState, formData: FormData): 
   }
   revalidatePath("/panel/planificacion/plantilla");
   return { ok: true, message: "Plantilla guardada. Se usa en las planificaciones nuevas." };
+}
+
+export interface DraftState extends FormState {
+  /** El borrador que llena el formulario (no se guarda hasta que el docente lo guarde). */
+  content?: PlanContent;
+  /** Cambia con cada borrador, para aplicar el mismo contenido dos veces si se pide de nuevo. */
+  stamp?: number;
+  remainingToday?: number;
+}
+
+/** Pide al asistente un borrador con la plantilla de la planificación. No guarda nada. */
+export async function draftPlanAction(
+  planId: string,
+  _prev: DraftState,
+  formData: FormData,
+): Promise<DraftState> {
+  const { accessToken } = await requireRole("docente", "admin", "coordinador");
+  const values = { topic: String(formData.get("topic") ?? ""), notes: String(formData.get("notes") ?? "") };
+  const parsed = planDraftInputSchema.safeParse(values);
+  if (!parsed.success) return { ...fromZodError(parsed.error), values };
+  try {
+    const { content, remainingToday } = await academic.draftPlan(accessToken, planId, parsed.data);
+    return {
+      ok: true,
+      content,
+      stamp: Date.now(),
+      remainingToday,
+      values,
+      message: `Borrador listo: revísalo y ajústalo antes de guardar. Te ${remainingToday === 1 ? "queda 1 borrador" : `quedan ${remainingToday} borradores`} hoy.`,
+    };
+  } catch (err) {
+    return { ...fromServiceError(err), values };
+  }
 }

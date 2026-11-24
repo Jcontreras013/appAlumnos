@@ -4,7 +4,9 @@ import {
   ACCESS_TOKEN_AUDIENCE,
   ACCESS_TOKEN_ISSUER,
   createAccessTokenVerifier,
+  type FileStore,
   JWT_ALGORITHM,
+  memoryFileStore,
 } from "@escolar/service-kit";
 import type { Role, ScopeActivityDto, ScopedSchoolDto, TransferTargetDto, UserDto } from "@escolar/shared";
 import { drizzle } from "drizzle-orm/pglite";
@@ -14,6 +16,7 @@ import { buildApp } from "../src/app";
 import { type Db, migrationsFolder } from "../src/db/client";
 import * as schema from "../src/db/schema";
 import type { IdentityClient } from "../src/lib/identity-client";
+import type { PlanDrafter } from "../src/lib/plan-assistant";
 
 export interface TestUser {
   id: string;
@@ -28,7 +31,9 @@ export interface TestUser {
  * Los tokens se firman con una llave generada aquí, igual que lo hace identity en producción,
  * y identity se reemplaza por un doble que responde con los usuarios registrados en el test.
  */
-export async function setupAcademic(options: { today?: string } = {}) {
+export async function setupAcademic(
+  options: { today?: string; planDrafter?: PlanDrafter | null; files?: FileStore } = {},
+) {
   const client = new PGlite();
   await migrate(drizzle(client, { schema }), { migrationsFolder: migrationsFolder() });
   const db = drizzle(client, { schema }) as unknown as Db;
@@ -101,6 +106,9 @@ export async function setupAcademic(options: { today?: string } = {}) {
     verifier: await createAccessTokenVerifier({ publicKey: keys.publicKey }),
     today: () => today,
     logger: false,
+    planDrafter: options.planDrafter ?? null,
+    // Los archivos (la biblioteca) quedan en memoria: las pruebas no escriben en disco.
+    files: options.files ?? memoryFileStore(),
   });
 
   async function sign(claims: Record<string, unknown>, id: string) {

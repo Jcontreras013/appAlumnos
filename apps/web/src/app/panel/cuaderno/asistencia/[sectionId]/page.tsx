@@ -1,6 +1,7 @@
 import { isIsoDate, todayInHonduras } from "@escolar/shared";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { DayOffBanner } from "@/components/day-off-banner";
 import { academic } from "@/lib/academic";
 import { ServiceError } from "@/lib/api";
 import { requireRole } from "@/lib/dal";
@@ -38,6 +39,11 @@ export default async function AttendancePage({
           {!sheet.canEdit && " · Solo lectura: la toma quien da clases en esta sección"}
         </p>
       </div>
+      {sheet.dayOff && (
+        <DayOffBanner dayOff={sheet.dayOff}>
+          Este día el centro no tiene clases: no hace falta pasar asistencia.
+        </DayOffBanner>
+      )}
       <AttendanceSheet
         owner={session.current.id}
         sheet={sheet}

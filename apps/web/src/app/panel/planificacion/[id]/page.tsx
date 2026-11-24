@@ -45,7 +45,12 @@ export default async function PlanPage({ params }: PageProps<"/panel/planificaci
       if (err instanceof ServiceError && (err.status === 404 || err.status === 400)) notFound();
       throw err;
     });
-  const sources = canEdit ? await academic.recentPlans(session.accessToken).catch(() => []) : [];
+  const [sources, assistant] = canEdit
+    ? await Promise.all([
+        academic.recentPlans(session.accessToken).catch(() => []),
+        academic.planAssistant(session.accessToken).catch(() => null),
+      ])
+    : [[], null];
   const overdue = !plan.submittedAt && todayInHonduras() > plan.deadline;
 
   return (
@@ -87,7 +92,7 @@ export default async function PlanPage({ params }: PageProps<"/panel/planificaci
       )}
 
       {canEdit ? (
-        <PlanEditor plan={plan} sources={sources} />
+        <PlanEditor plan={plan} sources={sources} assistant={assistant} />
       ) : (
         <section className="space-y-4">
           {plan.status === "enviada" && !canReview && (

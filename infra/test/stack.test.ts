@@ -112,6 +112,210 @@ describe("seguridad de la infraestructura", () => {
     });
   });
 
+  it("el asistente y los libros de la biblioteca tienen tiempo (Service Connect y balanceador)", () => {
+    const academic = Object.entries(template.findResources("AWS::ECS::Service")).find(([id]) =>
+      id.startsWith("AcademicService"),
+    )?.[1] as { Properties: { ServiceConnectConfiguration: { Services: Array<Record<string, unknown>> } } };
+    expect(academic.Properties.ServiceConnectConfiguration.Services[0]).toMatchObject({
+      Timeout: { PerRequestTimeoutSeconds: 600 },
+    });
+    template.hasResourceProperties("AWS::ElasticLoadBalancingV2::LoadBalancer", {
+      LoadBalancerAttributes: Match.arrayWith([{ Key: "idle_timeout.timeout_seconds", Value: "180" }]),
+    });
+  });
+
+  it("bucket privado y cifrado: identity para los mensajes, academic solo en «biblioteca/»", () => {
+    template.hasResourceProperties("AWS::S3::Bucket", {
+      PublicAccessBlockConfiguration: {
+        BlockPublicAcls: true,
+        BlockPublicPolicy: true,
+        IgnorePublicAcls: true,
+        RestrictPublicBuckets: true,
+      },
+      BucketEncryption: {
+        ServerSideEncryptionConfiguration: [{ ServerSideEncryptionByDefault: { SSEAlgorithm: "AES256" } }],
+      },
+    });
+    // Solo por HTTPS.
+    template.hasResourceProperties("AWS::S3::BucketPolicy", {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({ Effect: "Deny", Condition: { Bool: { "aws:SecureTransport": "false" } } }),
+        ]),
+      },
+    });
+    const tasks = template.findResources("AWS::ECS::TaskDefinition");
+    const env = (prefix: string) => {
+      const task = Object.entries(tasks).find(([id]) => id.startsWith(prefix))?.[1] as
+        | { Properties: { ContainerDefinitions: Array<{ Environment?: Array<{ Name: string }> }> } }
+        | undefined;
+      return task?.Properties.ContainerDefinitions[0]?.Environment?.map((e) => e.Name) ?? [];
+    };
+    expect(env("IdentityTask")).toContain("FILES_BUCKET");
+    expect(env("AcademicTask")).toContain("FILES_BUCKET");
+    // Solo identity y academic escriben en el bucket; academic, únicamente bajo «biblioteca/».
+    const policies = Object.entries(template.findResources("AWS::IAM::Policy")).filter(([, p]) =>
+      JSON.stringify(p).includes("s3:PutObject"),
+    );
+    const roles = policies.map(([id]) => id);
+    expect(roles.some((id) => id.startsWith("IdentityTaskTaskRole"))).toBe(true);
+    expect(
+      roles.every((id) => id.startsWith("IdentityTaskTaskRole") || id.startsWith("AcademicTaskTaskRole")),
+    ).toBe(true);
+    const academicPolicy = JSON.stringify(
+      policies.find(([id]) => id.startsWith("AcademicTaskTaskRole"))?.[1],
+    );
+    expect(academicPolicy).toContain("/biblioteca/*");
+    template.hasResourceProperties("AWS::EC2::VPCEndpoint", { VpcEndpointType: "Gateway" });
+  });
+
+  it("un video largo no se corta entre web e identity", () => {
+    const identity = Object.entries(template.findResources("AWS::ECS::Service")).find(([id]) =>
+      id.startsWith("IdentityService"),
+    )?.[1] as { Properties: { ServiceConnectConfiguration: { Services: Array<Record<string, unknown>> } } };
+    expect(identity.Properties.ServiceConnectConfiguration.Services[0]).toMatchObject({
+      Timeout: { PerRequestTimeoutSeconds: 600 },
+    });
+  });
+
+  it("si la base se reinicia, ECS no reemplaza las tareas: la revisión de salud no depende de ella", () => {
+    const tasks = Object.entries(template.findResources("AWS::ECS::TaskDefinition"));
+    for (const prefix of ["IdentityTask", "AcademicTask"]) {
+      const task = tasks.find(([id]) => id.startsWith(prefix))?.[1] as {
+        Properties: { ContainerDefinitions: Array<{ HealthCheck: { Command: string[] } }> };
+      };
+      const command = task.Properties.ContainerDefinitions[0]?.HealthCheck.Command.join(" ") ?? "";
+      expect(command).toContain("/health'");
+      expect(command).not.toContain("/health/ready");
+    }
+  });
+
+  it("el panel mantiene las conexiones más tiempo que el balanceador (sin 502 sueltos)", () => {
+    template.hasResourceProperties("AWS::ECS::TaskDefinition", {
+      ContainerDefinitions: Match.arrayWith([
+        Match.objectLike({
+          Name: "web",
+          Environment: Match.arrayWith([{ Name: "KEEP_ALIVE_TIMEOUT", Value: "185000" }]),
+        }),
+      ]),
+    });
+  });
+
+  it("respaldos y mantenimiento de la base de madrugada en Honduras, y registro de consultas lentas", () => {
+    template.hasResourceProperties("AWS::RDS::DBInstance", {
+      PreferredBackupWindow: "07:00-07:30",
+      PreferredMaintenanceWindow: "Sun:08:00-Sun:08:30",
+    });
+    template.hasResourceProperties("AWS::RDS::DBParameterGroup", {
+      Parameters: { log_min_duration_statement: "1000" },
+    });
+  });
+
+  it("la llave de Claude llega como secreto a academic, solo si se indica", () => {
+    const withoutKey = JSON.stringify(template.findResources("AWS::ECS::TaskDefinition"));
+    expect(withoutKey).not.toContain("ANTHROPIC_API_KEY");
+    const stack = new EscolarStack(new App(), "ConAsistente", {
+      stage: "dev",
+      jwtSecretArn: JWT_ARN,
+      anthropicSecretArn: "arn:aws:secretsmanager:us-east-1:111111111111:secret:escolar/dev/anthropic-AbCdEf",
+      env: { account: "111111111111", region: "us-east-1" },
+    });
+    const tasks = Template.fromStack(stack).findResources("AWS::ECS::TaskDefinition");
+    const academic = Object.entries(tasks).find(([id]) => id.startsWith("AcademicTask"))?.[1] as {
+      Properties: {
+        ContainerDefinitions: Array<{
+          Secrets?: Array<{ Name: string }>;
+          Environment?: Array<{ Name: string }>;
+        }>;
+      };
+    };
+    const container = academic.Properties.ContainerDefinitions[0];
+    expect(container?.Secrets?.map((s) => s.Name)).toContain("ANTHROPIC_API_KEY");
+    expect(container?.Environment?.map((e) => e.Name)).not.toContain("ANTHROPIC_API_KEY");
+  });
+
+  it("con la llave de Gemini, academic usa Gemini y la llave llega como secreto", () => {
+    const stack = new EscolarStack(new App(), "ConGemini", {
+      stage: "dev",
+      jwtSecretArn: JWT_ARN,
+      geminiSecretArn: "arn:aws:secretsmanager:us-east-1:111111111111:secret:escolar/dev/gemini-AbCdEf",
+      geminiModel: "gemini-3.5-flash",
+      env: { account: "111111111111", region: "us-east-1" },
+    });
+    const tasks = Template.fromStack(stack).findResources("AWS::ECS::TaskDefinition");
+    const academic = Object.entries(tasks).find(([id]) => id.startsWith("AcademicTask"))?.[1] as {
+      Properties: {
+        ContainerDefinitions: Array<{
+          Secrets?: Array<{ Name: string }>;
+          Environment?: Array<{ Name: string; Value: string }>;
+        }>;
+      };
+    };
+    const container = academic.Properties.ContainerDefinitions[0];
+    expect(container?.Secrets?.map((s) => s.Name)).toContain("GEMINI_API_KEY");
+    expect(container?.Environment).toEqual(
+      expect.arrayContaining([
+        { Name: "PLAN_ASSISTANT_PROVIDER", Value: "gemini" },
+        { Name: "GEMINI_MODEL", Value: "gemini-3.5-flash" },
+        { Name: "IDENTITY_URL", Value: "http://identity:3001" },
+      ]),
+    );
+    expect(container?.Environment?.map((e) => e.Name)).not.toContain("GEMINI_API_KEY");
+  });
+
+  it("con la llave de Groq, academic usa Groq y la llave llega como secreto", () => {
+    const stack = new EscolarStack(new App(), "ConGroq", {
+      stage: "dev",
+      jwtSecretArn: JWT_ARN,
+      groqSecretArn: "arn:aws:secretsmanager:us-east-1:111111111111:secret:escolar/dev/groq-AbCdEf",
+      groqModel: "openai/gpt-oss-20b",
+      env: { account: "111111111111", region: "us-east-1" },
+    });
+    const tasks = Template.fromStack(stack).findResources("AWS::ECS::TaskDefinition");
+    const academic = Object.entries(tasks).find(([id]) => id.startsWith("AcademicTask"))?.[1] as {
+      Properties: {
+        ContainerDefinitions: Array<{
+          Secrets?: Array<{ Name: string }>;
+          Environment?: Array<{ Name: string; Value: string }>;
+        }>;
+      };
+    };
+    const container = academic.Properties.ContainerDefinitions[0];
+    expect(container?.Secrets?.map((s) => s.Name)).toContain("GROQ_API_KEY");
+    expect(container?.Environment).toEqual(
+      expect.arrayContaining([
+        { Name: "PLAN_ASSISTANT_PROVIDER", Value: "groq" },
+        { Name: "GROQ_MODEL", Value: "openai/gpt-oss-20b" },
+      ]),
+    );
+    expect(container?.Environment?.map((e) => e.Name)).not.toContain("GROQ_API_KEY");
+  });
+
+  it("las llaves de los avisos al celular llegan como secretos a identity, solo si se indican", () => {
+    const withoutPush = JSON.stringify(template.findResources("AWS::ECS::TaskDefinition"));
+    expect(withoutPush).not.toContain("VAPID_PRIVATE_KEY");
+    expect(withoutPush).not.toContain("FCM_SERVICE_ACCOUNT");
+    const stack = new EscolarStack(new App(), "ConAvisos", {
+      stage: "dev",
+      jwtSecretArn: JWT_ARN,
+      pushSecretArn: "arn:aws:secretsmanager:us-east-1:111111111111:secret:escolar/dev/push-AbCdEf",
+      fcmSecretArn: "arn:aws:secretsmanager:us-east-1:111111111111:secret:escolar/dev/fcm-AbCdEf",
+      env: { account: "111111111111", region: "us-east-1" },
+    });
+    const tasks = Template.fromStack(stack).findResources("AWS::ECS::TaskDefinition");
+    const identity = Object.entries(tasks).find(([id]) => id.startsWith("IdentityTask"))?.[1] as {
+      Properties: { ContainerDefinitions: Array<{ Secrets?: Array<{ Name: string }> }> };
+    };
+    expect(identity.Properties.ContainerDefinitions[0]?.Secrets?.map((s) => s.Name)).toEqual(
+      expect.arrayContaining([
+        "VAPID_PUBLIC_KEY",
+        "VAPID_PRIVATE_KEY",
+        "VAPID_SUBJECT",
+        "FCM_SERVICE_ACCOUNT",
+      ]),
+    );
+  });
+
   it("falla con un mensaje claro si falta el secreto JWT", () => {
     expect(() => new EscolarStack(new App(), "SinSecreto", { stage: "dev" })).toThrow(/jwtSecretArn/);
   });
@@ -149,6 +353,16 @@ describe("producción (100 centros)", () => {
     });
   });
 
+  it("en producción el bucket de adjuntos se conserva aunque se borre el stack, con versiones por 90 días", () => {
+    prod.hasResource("AWS::S3::Bucket", { DeletionPolicy: "Retain", UpdateReplacePolicy: "Retain" });
+    prod.hasResourceProperties("AWS::S3::Bucket", {
+      VersioningConfiguration: { Status: "Enabled" },
+      LifecycleConfiguration: {
+        Rules: [Match.objectLike({ NoncurrentVersionExpiration: { NoncurrentDays: 90 } })],
+      },
+    });
+  });
+
   it("los tres servicios escalan de 2 a 4 tareas según la CPU", () => {
     const targets = prod.findResources("AWS::ApplicationAutoScaling::ScalableTarget");
     expect(Object.keys(targets)).toHaveLength(3);
@@ -169,8 +383,20 @@ describe("producción (100 centros)", () => {
     prod.resourceCountIs("AWS::WAFv2::WebACLAssociation", 1);
   });
 
-  it("alarmas por correo: errores, panel caído, CPU, memoria y base de datos", () => {
-    expect(Object.keys(prod.findResources("AWS::CloudWatch::Alarm")).length).toBeGreaterThanOrEqual(11);
+  it("alarmas por correo: errores, panel caído o lento, CPU, memoria y base de datos", () => {
+    expect(Object.keys(prod.findResources("AWS::CloudWatch::Alarm")).length).toBeGreaterThanOrEqual(14);
+    prod.hasResourceProperties("AWS::CloudWatch::Alarm", {
+      MetricName: "HTTPCode_ELB_5XX_Count",
+    });
+    prod.hasResourceProperties("AWS::CloudWatch::Alarm", {
+      MetricName: "TargetResponseTime",
+      ExtendedStatistic: "p95",
+      Threshold: 5,
+    });
+    prod.hasResourceProperties("AWS::CloudWatch::Alarm", {
+      MetricName: "DatabaseConnections",
+      Threshold: 150,
+    });
     prod.hasResourceProperties("AWS::SNS::Subscription", {
       Protocol: "email",
       Endpoint: "alertas@ejemplo.hn",

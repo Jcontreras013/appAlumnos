@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108">
+  <title>CONECTA</title>
+  <!-- Ícono de CONECTA: una «C» con un punto (conectar). Fondo verde de la marca (#0b8a6b). -->
+  <rect width="108" height="108" fill="#0b8a6b"/>
+  <path d="M 69.3 38.9 A 21 21 0 1 0 69.3 69.1" fill="none" stroke="#ffffff" stroke-width="9" stroke-linecap="round"/>
+  <circle cx="71" cy="54" r="5.5" fill="#ffffff"/>
+</svg>

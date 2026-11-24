@@ -2,16 +2,71 @@
  * Datos iniciales. Es idempotente: se puede correr varias veces sin duplicar nada.
  *
  * - Siempre: el superadmin de la plataforma (SEED_SUPERADMIN_EMAIL / SEED_SUPERADMIN_PASSWORD).
- * - Con SEED_DEMO=true: "Colegio Demo" con un usuario de cada rol (contraseña SEED_DEMO_PASSWORD).
+ * - Con SEED_DEMO=true: "Colegio Demo" con un usuario de cada rol (contraseña SEED_DEMO_PASSWORD) y una
+ *   conversación de ejemplo entre la dirección y un maestro.
  */
 import { databaseUrlFromEnv, optionalEnv, requireEnv } from "@escolar/service-kit";
 import type { SchoolRole } from "@escolar/shared";
 import { eq } from "drizzle-orm";
 import { createDb } from "../db/client";
-import { schools, users } from "../db/schema";
+import { conversationMembers, conversations, messages, schools, users } from "../db/schema";
+import { pairKeyOf } from "../lib/messages";
 import { type AccountInput, grantAccess } from "../lib/users";
 
 const { db, pool } = createDb(databaseUrlFromEnv());
+
+/** Conversación de ejemplo: el maestro pide que le cubran una clase y la dirección responde. */
+async function ensureDemoConversation(schoolId: string, directorId: string, teacherId: string) {
+  const pairKey = pairKeyOf(directorId, teacherId);
+  const [existing] = await db.select().from(conversations).where(eq(conversations.pairKey, pairKey));
+  if (existing) {
+    console.log("  = conversación de ejemplo ya existe");
+    return;
+  }
+  const hoursAgo = (h: number) => new Date(Date.now() - h * 60 * 60 * 1000);
+  const script: Array<[string, string, Date]> = [
+    [
+      teacherId,
+      "Buenos días, directora. Hoy tengo cita en el centro de salud a las 10. ¿Alguien puede cubrir mi clase de Matemáticas en cuarto grado?",
+      hoursAgo(26),
+    ],
+    [
+      directorId,
+      "Buenos días, Diego. Sí, la profesora Daniela cubre esa hora. Deje la guía de trabajo en la dirección, por favor.",
+      hoursAgo(25.8),
+    ],
+    [teacherId, "Listo, ya la dejé. Gracias.", hoursAgo(25.7)],
+    [
+      directorId,
+      "Diego, recuerde que el viernes se entregan las planificaciones de la próxima semana.",
+      hoursAgo(2),
+    ],
+  ];
+  const last = script.at(-1);
+  if (!last) return;
+  await db.transaction(async (tx) => {
+    const [conversation] = await tx
+      .insert(conversations)
+      .values({ schoolId, pairKey, lastMessageAt: last[2], lastSenderId: last[0] })
+      .returning();
+    if (!conversation) throw new Error("No se creó la conversación de ejemplo");
+    // El maestro todavía no leyó el último mensaje de la dirección.
+    await tx.insert(conversationMembers).values([
+      { conversationId: conversation.id, userId: directorId, schoolId, lastReadAt: last[2] },
+      { conversationId: conversation.id, userId: teacherId, schoolId, lastReadAt: script[2]?.[2] ?? null },
+    ]);
+    await tx.insert(messages).values(
+      script.map(([senderUserId, body, createdAt]) => ({
+        conversationId: conversation.id,
+        schoolId,
+        senderUserId,
+        body,
+        createdAt,
+      })),
+    );
+  });
+  console.log("  + conversación de ejemplo entre la dirección y Diego Docente");
+}
 
 async function ensureUser(input: AccountInput & { email: string }) {
   const [existing] = await db.select().from(users).where(eq(users.email, input.email));
@@ -54,9 +109,14 @@ try {
       ["docente", "Daniela Docente", "docente2@colegio-demo.hn"],
       ["padre", "Patricia Madre de Familia", "padre@colegio-demo.hn"],
     ];
+    const created = new Map<string, string>();
     for (const [role, name, email] of demoUsers) {
-      await ensureUser({ schoolId: school.id, name, email, password, role });
+      const user = await ensureUser({ schoolId: school.id, name, email, password, role });
+      created.set(email, user.id);
     }
+    const director = created.get("admin@colegio-demo.hn");
+    const teacher = created.get("docente@colegio-demo.hn");
+    if (director && teacher) await ensureDemoConversation(school.id, director, teacher);
   }
 } finally {
   await pool.end();

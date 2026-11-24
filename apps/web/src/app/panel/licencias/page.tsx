@@ -1,6 +1,7 @@
 import { formatDay, LEAVE_TYPE_LABELS, todayInHonduras } from "@escolar/shared";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { DayOffBanner } from "@/components/day-off-banner";
 import { Kpi } from "@/components/kpi";
 import { academic } from "@/lib/academic";
 import { requireRole } from "@/lib/dal";
@@ -33,7 +34,8 @@ export default async function LeavesPage({ searchParams }: PageProps<"/panel/lic
     .filter((u) => u.active && (u.role === "docente" || u.role === "coordinador"))
     .filter((u, i, all) => all.findIndex((x) => x.id === u.id) === i)
     .map((u) => ({ value: u.id, label: u.name }));
-  const uncovered = coverage.rows.filter((r) => r.status === "sin_cubrir");
+  // Un feriado o en vacaciones no hay clases: nadie queda «sin maestro».
+  const uncovered = coverage.dayOff ? [] : coverage.rows.filter((r) => r.status === "sin_cubrir");
 
   return (
     <div className="space-y-6">
@@ -44,6 +46,12 @@ export default async function LeavesPage({ searchParams }: PageProps<"/panel/lic
           quién cubre cada una de sus clases. Al terminar la licencia, las clases vuelven solas a su maestro.
         </p>
       </div>
+
+      {coverage.dayOff && (
+        <DayOffBanner dayOff={coverage.dayOff}>
+          Hoy no hay clases: ninguna clase queda sin maestro.
+        </DayOffBanner>
+      )}
 
       <section className="grid grid-cols-3 gap-3">
         <Kpi label="Con su maestro hoy" value={coverage.totals.normal} />

@@ -41,8 +41,14 @@ const nextConfig: NextConfig = {
       ...(isProduction
         ? [
             {
-              source: "/((?!panel|login).*)",
+              source: "/((?!panel|login|pdfjs).*)",
               headers: [{ key: "Content-Security-Policy", value: contentSecurityPolicy() }],
+            },
+            {
+              source: "/pdfjs/:path*",
+              headers: [
+                { key: "Content-Security-Policy", value: contentSecurityPolicy(undefined, { wasm: true }) },
+              ],
             },
           ]
         : []),

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { DayOffDto } from "./calendar";
 import { isIsoDate, isMonday, WEEKDAYS, type Weekday } from "./weeks";
 
 // ───────────────────────────── Estructura académica ─────────────────────────────
@@ -40,7 +41,19 @@ export type SectionInput = z.infer<typeof sectionInputSchema>;
 export const sectionUpdateSchema = sectionInputSchema.pick({ name: true, capacity: true });
 export type SectionUpdate = z.infer<typeof sectionUpdateSchema>;
 
-export const subjectInputSchema = z.object({ name: nameSchema() });
+/**
+ * Idioma en que se imparte la materia. En los colegios bilingües unas materias son en inglés: el
+ * asistente de planificación escribe el borrador en ese idioma.
+ */
+export const SUBJECT_LANGUAGES = ["es", "en"] as const;
+export type SubjectLanguage = (typeof SUBJECT_LANGUAGES)[number];
+export const SUBJECT_LANGUAGE_LABELS: Record<SubjectLanguage, string> = { es: "Español", en: "Inglés" };
+
+export const subjectInputSchema = z.object({
+  name: nameSchema(),
+  /** Si no se indica, queda como estaba (al crear: español). */
+  language: z.enum(SUBJECT_LANGUAGES, { error: "Elige el idioma" }).optional(),
+});
 export type SubjectInput = z.infer<typeof subjectInputSchema>;
 
 export const assignmentInputSchema = z.object({
@@ -258,6 +271,7 @@ export interface SectionDto {
 export interface SubjectDto {
   id: string;
   name: string;
+  language: SubjectLanguage;
 }
 
 export interface AssignmentDto {
@@ -267,6 +281,8 @@ export interface AssignmentDto {
   sectionLabel: string;
   subjectId: string;
   subjectName: string;
+  /** Idioma en que se imparte la materia. */
+  subjectLanguage: SubjectLanguage;
   teacherUserId: string;
   teacherName: string;
 }
@@ -323,6 +339,8 @@ export interface PlanBoardRowDto {
 export interface PlanBoardDto {
   weekStart: string;
   deadline: string;
+  /** Toda la semana sin clases (vacaciones, feriados): no se pide planificación ni hay atrasadas. */
+  dayOff: DayOffDto | null;
   rows: PlanBoardRowDto[];
   totals: Record<PlanStatus | "sin_iniciar" | "atrasadas", number>;
 }

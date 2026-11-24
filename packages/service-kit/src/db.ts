@@ -4,7 +4,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import type { PgDatabase } from "drizzle-orm/pg-core";
 import pg from "pg";
-import { optionalEnv } from "./config";
+import { intEnv, optionalEnv } from "./config";
 
 /** Base de datos de un servicio. Funciona igual con node-postgres (producción) y PGlite (tests). */
 // biome-ignore lint/suspicious/noExplicitAny: el tipo de resultado depende del driver
@@ -31,8 +31,75 @@ export function poolConfig(databaseUrl: string): pg.PoolConfig {
   };
 }
 
-export function createDb<TSchema extends Record<string, unknown>>(databaseUrl: string, schema: TSchema) {
-  const pool = new pg.Pool(poolConfig(databaseUrl));
+/**
+ * Límites para que un problema de la base no deje peticiones colgadas ni tumbe el servicio. Solo
+ * para el pool de las peticiones: las migraciones usan su propia conexión, sin límite de tiempo.
+ * - connectionTimeoutMillis: si la base no responde (reinicio, cambio de zona en Multi-AZ), la
+ *   petición falla en segundos con «intenta de nuevo» en vez de esperar indefinidamente.
+ * - statement_timeout: ninguna consulta corre más de 30 s (un tablero mal filtrado no bloquea a los demás).
+ * - idle_in_transaction_session_timeout: una transacción abandonada no retiene bloqueos.
+ * - keepAlive + maxLifetimeSeconds: se detectan conexiones muertas y se renuevan cada 30 min, así
+ *   que después de un cambio de servidor de RDS todas terminan apuntando al nuevo.
+ */
+export interface PoolLimits {
+  connectTimeoutMs: number;
+  statementTimeoutMs: number;
+  idleInTransactionTimeoutMs: number;
+  maxConnections: number;
+}
+
+export function poolLimitsFromEnv(): PoolLimits {
+  return {
+    connectTimeoutMs: intEnv("DB_CONNECT_TIMEOUT_MS", 5_000),
+    statementTimeoutMs: intEnv("DB_STATEMENT_TIMEOUT_MS", 30_000),
+    idleInTransactionTimeoutMs: intEnv("DB_IDLE_IN_TRANSACTION_TIMEOUT_MS", 60_000),
+    maxConnections: intEnv("DB_POOL_MAX", 10),
+  };
+}
+
+export function requestPoolConfig(
+  databaseUrl: string,
+  limits: PoolLimits = poolLimitsFromEnv(),
+): pg.PoolConfig {
+  return {
+    ...poolConfig(databaseUrl),
+    max: limits.maxConnections,
+    connectionTimeoutMillis: limits.connectTimeoutMs,
+    statement_timeout: limits.statementTimeoutMs,
+    idle_in_transaction_session_timeout: limits.idleInTransactionTimeoutMs,
+    keepAlive: true,
+    maxLifetimeSeconds: 30 * 60,
+  };
+}
+
+/**
+ * Una conexión que estaba quieta en el pool puede cerrarse desde la base (reinicio de RDS, cambio
+ * de zona). node-postgres lo avisa con el evento "error" del pool y, si nadie lo escucha, el proceso
+ * entero se cae. Aquí solo se registra: el pool descarta esa conexión y abre otra en la siguiente petición.
+ */
+function logIdleError(err: Error) {
+  console.error(
+    JSON.stringify({
+      level: 50,
+      time: Date.now(),
+      msg: "Se cerró una conexión inactiva con la base de datos; se abrirá otra",
+      err: { message: err.message, code: (err as { code?: string }).code },
+    }),
+  );
+}
+
+export function createDb<TSchema extends Record<string, unknown>>(
+  databaseUrl: string,
+  schema: TSchema,
+  options: { limits?: PoolLimits; onIdleError?: (err: Error) => void } = {},
+) {
+  const pool = new pg.Pool(requestPoolConfig(databaseUrl, options.limits));
+  const onError = options.onIdleError ?? logIdleError;
+  pool.on("error", onError);
+  // Lo mismo con una conexión prestada a una petición (p. ej. en medio de una transacción, entre
+  // una consulta y la siguiente): el pool solo escucha las que están quietas. Esa petición recibe el
+  // error en su siguiente consulta y la conexión se descarta al devolverla; el proceso sigue vivo.
+  pool.on("connect", (client) => client.on("error", onError));
   return { db: drizzle(pool, { schema }) as ServiceDb<TSchema>, pool };
 }
 

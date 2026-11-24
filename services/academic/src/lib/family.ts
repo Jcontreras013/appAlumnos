@@ -26,6 +26,8 @@ import {
   studentGuardians,
   students,
 } from "../db/schema";
+import { daysOffBetween } from "./calendar";
+import { conductRecordsFor } from "./conduct";
 import { ensureDefaultPeriods, passingGradeOf } from "./evaluation";
 import { findCurrentYear, getSection, listAssignments } from "./queries";
 
@@ -246,6 +248,8 @@ export async function familyChild(
     homework,
     generalAverage: general === null ? null : oneDecimal(general),
     atRisk: subjects.some((s) => s.atRisk) || attendanceRisk,
+    conduct: await conductRecordsFor(db, schoolId, studentId),
+    upcomingDaysOff: await daysOffBetween(db, schoolId, today, addDays(today, 60)),
   };
 }
 

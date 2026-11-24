@@ -81,6 +81,10 @@ export interface FamilyChildDto {
   homework: FamilyHomeworkDto[];
   generalAverage: number | null;
   atRisk: boolean;
+  /** Medidas de conducta del año (sin la descripción del incidente), la más reciente primero. */
+  conduct: import("./conduct").ConductRecordDto[];
+  /** Feriados y vacaciones de hoy en adelante (próximos 60 días), del calendario escolar del centro. */
+  upcomingDaysOff: import("./calendar").DayOffDto[];
 }
 
 export interface FamilyChildSummaryDto {

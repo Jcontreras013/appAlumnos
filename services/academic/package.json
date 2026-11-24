@@ -20,6 +20,7 @@
     "db:seed:region": "tsx --env-file-if-exists=.env src/scripts/seed-region.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "1.4.0",
     "@escolar/service-kit": "workspace:*",
     "@escolar/shared": "workspace:*",
     "@fastify/helmet": "13.2.0",

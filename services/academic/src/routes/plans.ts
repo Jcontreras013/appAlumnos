@@ -1,4 +1,5 @@
 import {
+  ApiError,
   badRequest,
   conflict,
   forbidden,
@@ -8,27 +9,37 @@ import {
   tenantOf,
 } from "@escolar/service-kit";
 import {
+  addDays,
   createPlanInputSchema,
   formatDay,
   type LessonPlanDto,
   missingRequiredFields,
   mondayOf,
+  openClassDays,
+  PLAN_DRAFTS_PER_DAY,
+  type PlanAssistantStatusDto,
   type PlanBoardDto,
   type PlanDetailDto,
+  type PlanDraftDto,
   type PlanTemplateDto,
   parsePlanContent,
+  planDraftInputSchema,
   planTemplateInputSchema,
   reviewPlanInputSchema,
   savePlanInputSchema,
+  WEEKDAYS,
   weekStartSchema,
 } from "@escolar/shared";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, gte, inArray, sql } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { DbOrTx } from "../db/client";
-import { lessonPlans, planTemplates } from "../db/schema";
+import { auditEvents, lessonPlans, planTemplates, scheduleSlots } from "../db/schema";
 import type { AcademicDeps } from "../deps";
 import { audit } from "../lib/audit";
+import { daysOffBetween } from "../lib/calendar";
+import { causeChain, PlanDraftError } from "../lib/plan-assistant";
+
 import {
   assignmentById,
   canAuthor,
@@ -52,7 +63,7 @@ const STAFF = ["admin", "coordinador", "secretaria", "docente"] as const;
  * la envía antes de la fecha límite; la dirección o coordinación la aprueba o la devuelve con
  * observaciones. Cada paso queda en el historial.
  */
-export async function planRoutes(app: FastifyInstance, { db, today }: AcademicDeps) {
+export async function planRoutes(app: FastifyInstance, { db, today, planDrafter }: AcademicDeps) {
   const staff = { preHandler: [app.authenticate, requireRole(...STAFF)] };
   const managers = { preHandler: [app.authenticate, requireRole("admin", "coordinador")] };
   const office = { preHandler: [app.authenticate, requireRole("admin", "coordinador", "secretaria")] };
@@ -227,6 +238,116 @@ export async function planRoutes(app: FastifyInstance, { db, today }: AcademicDe
     });
     reply.status(result.created ? 201 : 200);
     return detail(db, request, result.id);
+  });
+
+  // ── Asistente de planificación con IA ──
+  /** Borradores que el docente ya pidió hoy (hora de Honduras, UTC-6), en cualquiera de sus centros. */
+  async function draftsToday(userId: string): Promise<number> {
+    const [row] = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(auditEvents)
+      .where(
+        and(
+          eq(auditEvents.actorUserId, userId),
+          eq(auditEvents.action, "plan.ai_draft"),
+          gte(auditEvents.createdAt, new Date(`${today()}T06:00:00Z`)),
+        ),
+      );
+    return row?.n ?? 0;
+  }
+
+  app.get(
+    "/plans/assistant",
+    staff,
+    async (request): Promise<PlanAssistantStatusDto> => ({
+      enabled: planDrafter !== null,
+      remainingToday: Math.max(0, PLAN_DRAFTS_PER_DAY - (await draftsToday(request.auth.userId))),
+      dailyLimit: PLAN_DRAFTS_PER_DAY,
+    }),
+  );
+
+  /**
+   * Borrador de la planificación con la plantilla de esta planificación. No guarda nada: el docente
+   * lo revisa en el formulario y lo guarda. Solo quien la escribe, mientras se puede editar.
+   */
+  app.post("/plans/:id/draft", staff, async (request): Promise<PlanDraftDto> => {
+    const { id } = parseOrThrow(idParams, request.params);
+    const input = parseOrThrow(planDraftInputSchema, request.body);
+    if (!planDrafter) {
+      throw new ApiError(
+        503,
+        "assistant_disabled",
+        "El asistente de planificación no está activado en esta instalación.",
+      );
+    }
+    const { row, assignment, author } = await loadPlan(db, request, id);
+    if (!author || (row.status !== "borrador" && row.status !== "devuelta")) {
+      throw forbidden("Solo quien escribe la planificación la puede preparar con el asistente");
+    }
+    const used = await draftsToday(request.auth.userId);
+    if (used >= PLAN_DRAFTS_PER_DAY) {
+      throw new ApiError(
+        429,
+        "draft_limit",
+        `Ya usaste los ${PLAN_DRAFTS_PER_DAY} borradores de hoy. Mañana puedes pedir más.`,
+      );
+    }
+
+    // Días con esta clase según el horario (los cinco si el centro no lo ha armado).
+    const slots = await db
+      .selectDistinct({ weekday: scheduleSlots.weekday })
+      .from(scheduleSlots)
+      .where(and(eq(scheduleSlots.schoolId, row.schoolId), eq(scheduleSlots.assignmentId, assignment.id)));
+    const scheduled = WEEKDAYS.filter((_, i) => slots.some((s) => s.weekday === i + 1));
+    // Sin los feriados y vacaciones de esa semana (el calendario escolar del centro).
+    const weekDaysOff = await daysOffBetween(db, row.schoolId, row.weekStart, addDays(row.weekStart, 4));
+    const classDays = scheduled.length ? scheduled : [...WEEKDAYS];
+    const openDays = openClassDays(row.weekStart, classDays, weekDaysOff);
+    // Tema de la semana anterior en la misma clase, para dar continuidad.
+    const topicField = row.fields.find((f) => f.key === "tema") ?? row.fields.find((f) => f.type === "texto");
+    const [previous] = await db
+      .select({ content: lessonPlans.content })
+      .from(lessonPlans)
+      .where(
+        and(
+          eq(lessonPlans.assignmentId, assignment.id),
+          eq(lessonPlans.weekStart, addDays(row.weekStart, -7)),
+        ),
+      );
+    const previousTopic = topicField ? previous?.content[topicField.key] : undefined;
+
+    let content: Awaited<ReturnType<typeof planDrafter.draft>>;
+    try {
+      content = await planDrafter.draft({
+        fields: row.fields,
+        subjectName: assignment.subjectName,
+        sectionLabel: assignment.sectionLabel,
+        weekStart: row.weekStart,
+        classDays: openDays.length ? openDays : classDays,
+        language: assignment.subjectLanguage,
+        topic: input.topic,
+        notes: input.notes,
+        previousTopic: typeof previousTopic === "string" && previousTopic ? previousTopic : undefined,
+      });
+    } catch (err) {
+      if (err instanceof PlanDraftError) {
+        // El docente ve el mensaje; el motivo exacto (p. ej. lo que respondió el proveedor) queda aquí.
+        const detail = causeChain(err.cause);
+        request.log.warn({ reason: err.reason, detail }, "El asistente no preparó el borrador");
+        const status = err.reason === "refused" ? 422 : err.reason === "incomplete" ? 502 : 503;
+        throw new ApiError(status, `draft_${err.reason}`, err.message);
+      }
+      throw err;
+    }
+    // El tema que escribió el docente queda tal cual en el campo del tema.
+    if (topicField) content[topicField.key] = input.topic;
+    await audit(db, request, {
+      action: "plan.ai_draft",
+      entityType: "lesson_plan",
+      entityId: id,
+      data: { topic: input.topic },
+    });
+    return { content, remainingToday: Math.max(0, PLAN_DRAFTS_PER_DAY - used - 1) };
   });
 
   app.get("/plans/:id", staff, async (request): Promise<PlanDetailDto> => {

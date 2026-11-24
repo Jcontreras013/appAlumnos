@@ -12,6 +12,7 @@ import {
 import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { DayOffBanner } from "@/components/day-off-banner";
 import { Kpi } from "@/components/kpi";
 import { PlanStatusBadge } from "@/components/plan-status";
 import { academic } from "@/lib/academic";
@@ -55,7 +56,9 @@ export default async function PlanningPage({ searchParams }: PageProps<"/panel/p
           <h1 className="text-2xl font-semibold text-slate-900">Planificación semanal</h1>
           <p className="mt-1 text-sm text-slate-500">
             Semana del {formatWeekRange(week)}
-            {(mine ?? board) && <> · se entrega a más tardar el {formatDay((mine ?? board)?.deadline)}</>}
+            {(mine ?? board) && !(mine ?? board)?.dayOff && (
+              <> · se entrega a más tardar el {formatDay((mine ?? board)?.deadline)}</>
+            )}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -86,6 +89,11 @@ export default async function PlanningPage({ searchParams }: PageProps<"/panel/p
         </div>
       </div>
 
+      {(mine ?? board)?.dayOff && (
+        <DayOffBanner dayOff={(mine ?? board)?.dayOff as NonNullable<PlanBoardDto["dayOff"]>}>
+          Semana sin clases: no se pide planificación y nada queda atrasado.
+        </DayOffBanner>
+      )}
       {mine && (mine.rows.length > 0 || role === "docente") && <MyWeek board={mine} me={session.user.id} />}
       {board && <SchoolBoard board={board} filter={filter} href={href} />}
     </div>
@@ -100,7 +108,11 @@ function MyWeek({ board, me }: { board: PlanBoardDto; me: string }) {
         <h2 className="text-sm font-semibold text-slate-700">Mis clases</h2>
         {board.rows.length > 0 && (
           <p className="text-xs text-slate-500">
-            {pending === 0 ? "Todas entregadas" : `${pending} por entregar`}
+            {board.dayOff
+              ? "Semana sin clases"
+              : pending === 0
+                ? "Todas entregadas"
+                : `${pending} por entregar`}
           </p>
         )}
       </div>

@@ -8,16 +8,20 @@ import type {
   AttendanceInput,
   AttendanceSheetDto,
   AuditEventDto,
+  ConductActaDto,
+  ConductIncidentDto,
+  ConductOverviewDto,
+  ConductStudentOptionDto,
   CoverageDto,
+  CreateDocumentInput,
   CreatePlanInput,
   CreateStudentInput,
-  DisciplineActaDto,
-  DisciplineDto,
-  DisciplineInput,
-  DisciplineOverviewDto,
+  DayOffDto,
+  DayOffInput,
+  DocumentDto,
+  DocumentSummaryDto,
   FamilyChildDto,
   FamilyChildSummaryDto,
-  FamilyDisciplineDto,
   FollowUpDto,
   FollowUpInput,
   GradebookDto,
@@ -27,13 +31,20 @@ import type {
   GuardianInput,
   GuardianUpdate,
   ImportResultDto,
+  IncidentInput,
   LeaveDto,
   LeaveInput,
   LessonPlanDto,
+  LibraryItemDto,
+  LibraryLinkInput,
+  MeasureInput,
   PeriodsInput,
   PilotIndicatorsDto,
+  PlanAssistantStatusDto,
   PlanBoardDto,
   PlanDetailDto,
+  PlanDraftDto,
+  PlanDraftInput,
   PlanTemplateDto,
   PlanTemplateInput,
   PortalAccessDto,
@@ -46,10 +57,12 @@ import type {
   RegionalSchoolDetailDto,
   RegionalStudentDto,
   ReviewPlanInput,
+  SaveDocumentInput,
   SavePlanInput,
   ScheduleBlockDto,
   ScheduleBlocksInput,
   ScheduleDto,
+  SchoolCalendarDto,
   SchoolExportDto,
   SchoolFollowUpDto,
   SchoolYearDto,
@@ -64,6 +77,7 @@ import type {
   StudentFields,
   StudentListItemDto,
   SubjectDto,
+  SubjectInput,
   SubstitutionInput,
   TeacherClassDto,
   TransferDto,
@@ -106,10 +120,10 @@ export const academic = {
   deleteSection: (token: string, id: string) => call<void>(`/sections/${id}`, { method: "DELETE", token }),
 
   listSubjects: (token: string) => call<SubjectDto[]>("/subjects", { token }),
-  createSubject: (token: string, name: string) =>
-    call<SubjectDto>("/subjects", { method: "POST", token, body: { name } }),
-  updateSubject: (token: string, id: string, name: string) =>
-    call<SubjectDto>(`/subjects/${id}`, { method: "PUT", token, body: { name } }),
+  createSubject: (token: string, input: SubjectInput) =>
+    call<SubjectDto>("/subjects", { method: "POST", token, body: input }),
+  updateSubject: (token: string, id: string, input: SubjectInput) =>
+    call<SubjectDto>(`/subjects/${id}`, { method: "PUT", token, body: input }),
   deleteSubject: (token: string, id: string) => call<void>(`/subjects/${id}`, { method: "DELETE", token }),
 
   listAssignments: (token: string) => call<AssignmentDto[]>("/assignments", { token }),
@@ -217,22 +231,58 @@ export const academic = {
   addFollowUp: (token: string, studentId: string, input: FollowUpInput) =>
     call<FollowUpDto>(`/students/${studentId}/follow-ups`, { method: "POST", token, body: input }),
   deleteFollowUp: (token: string, id: string) => call<void>(`/follow-ups/${id}`, { method: "DELETE", token }),
-  disciplineOverview: (token: string) => call<DisciplineOverviewDto>("/discipline", { token }),
-  listDiscipline: (token: string, studentId: string) =>
-    call<DisciplineDto[]>(`/students/${studentId}/discipline`, { token }),
-  addDiscipline: (token: string, studentId: string, input: DisciplineInput) =>
-    call<DisciplineDto>(`/students/${studentId}/discipline`, { method: "POST", token, body: input }),
-  disciplineActa: (token: string, id: string) => call<DisciplineActaDto>(`/discipline/${id}`, { token }),
-  deleteDiscipline: (token: string, id: string) =>
-    call<void>(`/discipline/${id}`, { method: "DELETE", token }),
-  familyDiscipline: (token: string, childId: string) =>
-    call<FamilyDisciplineDto[]>(`/family/children/${childId}/discipline`, { token }),
+
+  // Conducta
+  conduct: (token: string) => call<ConductOverviewDto>("/conduct", { token }),
+  conductStudents: (token: string) => call<ConductStudentOptionDto[]>("/conduct/students", { token }),
+  studentConduct: (token: string, studentId: string) =>
+    call<ConductIncidentDto[]>(`/students/${studentId}/conduct`, { token }),
+  reportIncident: (token: string, input: IncidentInput) =>
+    call<ConductIncidentDto>("/conduct/incidents", { method: "POST", token, body: input }),
+  deleteIncident: (token: string, id: string) =>
+    call<void>(`/conduct/incidents/${id}`, { method: "DELETE", token }),
+  addMeasure: (token: string, incidentId: string, input: MeasureInput) =>
+    call<ConductIncidentDto>(`/conduct/incidents/${incidentId}/measures`, {
+      method: "POST",
+      token,
+      body: input,
+    }),
+  cancelMeasure: (token: string, measureId: string) =>
+    call<ConductIncidentDto>(`/conduct/measures/${measureId}/cancel`, { method: "POST", token }),
+  conductActa: (token: string, measureId: string) =>
+    call<ConductActaDto>(`/conduct/measures/${measureId}/acta`, { token }),
   announcements: (token: string) => call<AnnouncementDto[]>("/announcements", { token }),
   familyAnnouncements: (token: string) => call<AnnouncementDto[]>("/family/announcements", { token }),
   publishAnnouncement: (token: string, input: AnnouncementInput) =>
     call<AnnouncementDto>("/announcements", { method: "POST", token, body: input }),
   removeAnnouncement: (token: string, id: string) =>
     call<void>(`/announcements/${id}`, { method: "DELETE", token }),
+
+  // Documentos del centro
+  listDocuments: (token: string) => call<DocumentSummaryDto[]>("/documents", { token }),
+  createDocument: (token: string, input: CreateDocumentInput) =>
+    call<DocumentDto>("/documents", { method: "POST", token, body: input }),
+  getDocument: (token: string, id: string) => call<DocumentDto>(`/documents/${id}`, { token }),
+  saveDocument: (token: string, id: string, input: SaveDocumentInput) =>
+    call<DocumentDto>(`/documents/${id}`, { method: "PUT", token, body: input }),
+  deleteDocument: (token: string, id: string) => call<void>(`/documents/${id}`, { method: "DELETE", token }),
+
+  // Biblioteca virtual (los archivos se suben por /api/biblioteca y se bajan por /panel/biblioteca/archivo)
+  library: (token: string, filters: { grado?: string; materia?: string } = {}) => {
+    const query = new URLSearchParams(filters);
+    return call<LibraryItemDto[]>(`/library${query.size ? `?${query}` : ""}`, { token });
+  },
+  libraryItem: (token: string, id: string) => call<LibraryItemDto>(`/library/${id}`, { token }),
+  addLibraryLink: (token: string, input: LibraryLinkInput) =>
+    call<LibraryItemDto>("/library/links", { method: "POST", token, body: input }),
+  removeLibraryItem: (token: string, id: string) => call<void>(`/library/${id}`, { method: "DELETE", token }),
+
+  // Calendario escolar
+  calendar: (token: string) => call<SchoolCalendarDto>("/calendar", { token }),
+  addDayOff: (token: string, input: DayOffInput) =>
+    call<DayOffDto>("/calendar/days-off", { method: "POST", token, body: input }),
+  removeDayOff: (token: string, id: string) =>
+    call<void>(`/calendar/days-off/${id}`, { method: "DELETE", token }),
   auditLog: (token: string, before?: string) =>
     call<AuditEventDto[]>(`/audit?limite=50${before ? `&antes=${encodeURIComponent(before)}` : ""}`, {
       token,
@@ -303,6 +353,10 @@ export const academic = {
   createPlan: (token: string, input: CreatePlanInput) =>
     call<PlanDetailDto>("/plans", { method: "POST", token, body: input }),
   getPlan: (token: string, id: string) => call<PlanDetailDto>(`/plans/${id}`, { token }),
+  planAssistant: (token: string) => call<PlanAssistantStatusDto>("/plans/assistant", { token }),
+  /** El borrador con IA tarda (normalmente 20-60 s): se espera hasta 2 minutos y medio. */
+  draftPlan: (token: string, id: string, input: PlanDraftInput) =>
+    call<PlanDraftDto>(`/plans/${id}/draft`, { method: "POST", token, body: input, timeoutMs: 150_000 }),
   savePlan: (token: string, id: string, input: SavePlanInput) =>
     call<PlanDetailDto>(`/plans/${id}`, { method: "PUT", token, body: input }),
   submitPlan: (token: string, id: string, input: Partial<SavePlanInput>) =>

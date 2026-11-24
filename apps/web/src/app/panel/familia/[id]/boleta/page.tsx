@@ -3,15 +3,20 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PrintButton } from "@/components/print-button";
 import { ReportCard } from "@/components/report-card";
+import { ReportCardLanguageSwitch, reportCardLanguageOf } from "@/components/report-card-language";
 import { academic } from "@/lib/academic";
 import { ServiceError } from "@/lib/api";
 import { requireRole } from "@/lib/dal";
 
 export const metadata: Metadata = { title: "Boleta" };
 
-export default async function FamilyReportCardPage({ params }: PageProps<"/panel/familia/[id]/boleta">) {
+export default async function FamilyReportCardPage({
+  params,
+  searchParams,
+}: PageProps<"/panel/familia/[id]/boleta">) {
   const session = await requireRole("padre");
   const { id } = await params;
+  const language = reportCardLanguageOf(await searchParams);
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const child = await academic.familyChild(session.accessToken, id).catch((err) => {
     if (err instanceof ServiceError && (err.status === 404 || err.status === 400)) notFound();
@@ -23,9 +28,12 @@ export default async function FamilyReportCardPage({ params }: PageProps<"/panel
         <Link href={`/panel/familia/${id}`} className="text-sm text-slate-500 hover:text-slate-900">
           ← {child.student.name}
         </Link>
-        <PrintButton />
+        <div className="flex items-center gap-3">
+          <ReportCardLanguageSwitch base={`/panel/familia/${id}/boleta`} current={language} />
+          <PrintButton />
+        </div>
       </div>
-      <ReportCard child={child} school={session.school} />
+      <ReportCard child={child} school={session.school} language={language} />
     </div>
   );
 }

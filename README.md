@@ -40,6 +40,7 @@ Para colegios privados quedan además facturación (con CAI) y wallet de cafeter
 | 5    | Portal de familias: notas, asistencia y tareas de sus hijos; acceso con identidad; boleta imprimible        | ✅ Listo |
 | 6    | Piloto: corregir datos sin perder notas, Excel, indicadores del piloto, verificación en dos pasos (2FA)     | ✅ Listo |
 | 7    | Escuela: avisos, horario, seguimiento, traslados, constancias, bitácora; nota final, recuperación, cierre   | ✅ Listo |
+| 8    | Mensajes entre maestros y dirección (tipo chat), con «visto» y avisos al celular en horario de atención     | ✅ Listo |
 | —    | Para colegios privados: facturación con CAI y wallet de cafetería                                           | Después  |
 
 ## Arquitectura
@@ -294,6 +295,215 @@ pnpm test
   asistencia y notas. Medido en una computadora: tablero departamental ~1.4 s, indicadores del piloto
   ~0.6 s, Excel del departamento ~1.5 s (los centros se calculan de 4 en 4).
 
+## Robustez
+
+Lo que evita que un problema puntual se convierta en una caída, y cómo se comprobó:
+
+- **Base de datos:** cada consulta tiene un límite de 30 s y cada conexión 5 s para abrirse
+  (`DB_STATEMENT_TIMEOUT_MS`, `DB_CONNECT_TIMEOUT_MS`). Si la base corta conexiones (reinicio,
+  cambio de zona en Multi-AZ), el servicio no se cae: responde 503 «intenta de nuevo» y sigue.
+- **El cuaderno nunca pierde lo registrado:** se guarda primero en el teléfono y se reenvía hasta
+  que el servidor lo confirma; un 503 se reintenta solo.
+- **Despliegues sin cortes:** las consultas (GET) del panel a los servicios se reintentan una vez si
+  la conexión se corta, y las conexiones se mantienen abiertas más tiempo que el balanceador y Service
+  Connect (sin «502» sueltos).
+- **Asistente con respaldo:** si el proveedor de IA principal falla, se usa el siguiente que tenga
+  llave (ver abajo).
+
+**Prueba de carga del cierre de parcial** ([scripts/prueba-de-carga.mjs](scripts/prueba-de-carga.mjs)):
+maestros abriendo el cuaderno, guardando notas y pasando asistencia a la vez, y la dirección viendo
+el seguimiento. Con la demo cargada y `identity` y `academic` corriendo:
+
+```bash
+psql postgres://escolar:escolar@localhost:5432/escolar_identity -At -c "select u.email from users u join memberships m on m.user_id = u.id where m.role = 'docente' and u.email is not null" > /tmp/maestros.txt
+```
+
+```bash
+CUENTAS=/tmp/maestros.txt USUARIOS=150 DURACION=40 node scripts/prueba-de-carga.mjs
+```
+
+Medido en una computadora de 4 núcleos, con **una sola copia** de cada servicio (en AWS son 2 a 4):
+
+| Prueba                                       | Resultado                                                   |
+| -------------------------------------------- | ----------------------------------------------------------- |
+| 150 maestros a la vez                        | ~380 peticiones/s, 0 errores; el 95 % responde en < 0.3 s   |
+| 400 maestros a la vez                        | ~420 peticiones/s, 0 errores; el 95 % responde en ~1 s      |
+| 150 maestros y la base se reinicia dos veces | 0 caídas; solo 503 «intenta de nuevo» durante cada reinicio |
+| 200 inicios de sesión al mismo segundo       | todos en menos de 1 s                                       |
+
+Escribe notas y asistencia de verdad: úsala solo con la demo o un ambiente de pruebas.
+
+## Asistente de planificación con IA
+
+En el editor de la planificación semanal, el docente escribe el tema (y, si quiere, indicaciones:
+libro de texto, materiales, alumnos que necesitan apoyo) y el asistente llena la plantilla del centro
+con un borrador según el Currículo Nacional Básico. El borrador **no se guarda**: llena el formulario
+y el docente lo revisa, lo ajusta y lo guarda o lo envía como siempre.
+
+- Funciona con **Gemini** (Google), **Groq** o **Claude** (Anthropic), con la misma indicación y la
+  misma plantilla. Al modelo solo van la asignatura, el grado, el tema, los días con clase según el
+  horario, el tema de la semana anterior y las indicaciones del docente; **nunca datos de alumnos**.
+- Solo quien escribe la planificación lo usa, mientras está en borrador o devuelta; hasta 20
+  borradores por docente al día, y cada uso queda en la bitácora del centro.
+- Se activa con la llave del proveedor en `academic`; sin llave aparece como no disponible.
+  `PLAN_ASSISTANT=off` lo apaga aunque haya llave.
+
+**Gemini (capa gratuita, recomendada para el piloto).** La llave se saca gratis en
+aistudio.google.com → «Get API key». Va en `GEMINI_API_KEY`; `GEMINI_MODEL` fija la versión (por
+defecto `gemini-flash-latest`, el Flash más reciente: en producción conviene fijar una versión).
+La capa gratuita tiene límite de consultas por minuto (si se pasa, el docente ve «llegó a su límite
+de uso por ahora») y en ella Google puede usar lo que se envía para mejorar sus productos. Al crecer
+a muchos centros conviene la capa de pago.
+
+La capa gratuita es **por proyecto**: la llave tiene que ser de un proyecto **sin facturación**
+(en AI Studio → Dashboard → Projects, «Nivel de facturación» dice nivel gratuito). Un proyecto con
+cuenta de facturación pasa a «Nivel 1» y Google solo responde si tiene saldo prepagado; sin saldo
+contesta `402 … prepayment credits are depleted` y el docente ve «no está bien configurado». Si es
+el caso, crea un proyecto nuevo sin facturación y saca la llave ahí.
+
+**Groq (capa gratuita sin tarjeta).** La llave (empieza con `gsk_`) se saca en console.groq.com →
+«API Keys». Va en `GROQ_API_KEY`; `GROQ_MODEL` elige el modelo (por defecto `openai/gpt-oss-120b`,
+que en Groq responde con el formato estricto de la plantilla). La capa gratuita tiene límites por
+minuto y por día que alcanzan para un piloto; si se pasan, el docente ve «llegó a su límite de uso
+por ahora». Groq cambia su lista de modelos seguido: si el modelo deja de existir, el docente ve «no
+está bien configurado» y en los registros sale `404 model_not_found`; se arregla con `GROQ_MODEL`.
+
+**Claude.** Llave de console.anthropic.com en `ANTHROPIC_API_KEY` (modelo `claude-opus-5-5`).
+
+Con varias llaves se usa la primera en este orden: Claude, Gemini, Groq. `PLAN_ASSISTANT_PROVIDER`
+(`claude`, `gemini` o `groq`) elige otro. **Las demás llaves quedan de respaldo:** si el principal
+está ocupado, llegó a su límite o tiene la llave vencida, el borrador sale del siguiente sin que el
+docente lo note (en los registros queda «se usa el de respaldo»). Un rechazo por el contenido no se
+reintenta con otro. `PLAN_ASSISTANT_FALLBACK=off` usa solo el principal.
+
+- En la demo con Docker, guarda la llave en un archivo `.env` junto a `docker-compose.demo.yml`:
+  Docker Compose lo lee solo, y el proyecto lo deja fuera de git y de las imágenes. En PowerShell,
+  con la llave copiada (así no aparece en pantalla):
+  `Set-Content -Path .env -Value "GROQ_API_KEY=$(Get-Clipboard)" -Encoding ascii` (o
+  `GEMINI_API_KEY=...`), y luego `docker compose -f docker-compose.demo.yml up`. Las variables
+  definidas en la ventana de PowerShell (`$env:...`) ganan sobre el `.env`. Para ver que la tomó:
+  `docker logs escolar-demo-academic-1 2>&1 | Select-String "Asistente"` debe mostrar
+  «Asistente de planificación activo» con el proveedor.
+- En AWS, guarda la llave como secreto (el valor del secreto es la llave) y despliega con
+  `-c geminiSecretArn=arn:aws:secretsmanager:...` (o `-c groqSecretArn=...`, con `-c groqModel=...`
+  si hace falta, o `-c anthropicSecretArn=...`). El balanceador y Service Connect esperan hasta 3
+  minutos, porque un borrador tarda de 20 a 60 s.
+- Si un borrador falla, el docente ve un mensaje sencillo; el motivo exacto (lo que respondió el
+  proveedor) queda en los registros de `academic`.
+
+## Mensajes entre el personal
+
+Chat de dos personas entre maestros y dirección del mismo centro (las familias llegan en otra etapa).
+Está en **Mensajes**, con un contador de conversaciones sin leer en el menú.
+
+- Cada quien ve solo sus conversaciones y solo personas activas de su centro. Los mensajes **no se
+  editan ni se borran** (un trigger de la base de datos lo impide): son el registro de lo que se habló.
+- «✓» enviado, «✓✓» visto. La conversación se actualiza sola cada pocos segundos mientras está a la
+  vista; la lista y el contador, cada pocos segundos más.
+- Si alguien deja el centro, la conversación se conserva pero ya no se le escribe.
+- **Fotos, videos y documentos** (botón del clip): fotos (JPG, PNG, WebP), videos cortos (MP4, MOV,
+  WebM o 3GP, hasta 60 s y 50 MB) y documentos (PDF, Word, Excel, PowerPoint, hasta 10 MB), hasta 5 a
+  la vez. Cada adjunto viaja en su propio mensaje y, como el texto, no se borra.
+  - Las fotos se achican en el teléfono (1600 px por lado, JPEG) antes de enviarse: gastan menos datos
+    y pierden los datos ocultos de la cámara, como la ubicación.
+  - `identity` revisa cada archivo mientras llega: el contenido tiene que ser del tipo que dice (no se
+    acepta un programa con nombre de foto) y no pasar del tamaño. Lo entrega solo a quienes están en la
+    conversación, por tramos (`Range`) para que los videos se reproduzcan también en iPhone.
+  - Se guardan fuera de la base de datos: en AWS, en un bucket de S3 privado y cifrado (sin enlaces
+    públicos; `identity` llega a él por un endpoint de la VPC); en la demo con Docker, en el volumen
+    `adjuntos`; en desarrollo, en `services/identity/.adjuntos` (`FILES_DIR` lo cambia).
+  - El panel los sube por `/api/mensajes/:id/adjuntos`, fuera del proxy de `/panel`: el proxy guarda
+    en memoria el cuerpo de cada petición y corta a los 10 MB.
+- **Avisos al celular** (Web Push, opcional): de lunes a viernes de 6:00 a 19:00, hora de Honduras. Lo
+  que llega fuera de ese horario se avisa en un solo aviso al empezar la jornada. El aviso dice quién
+  escribió, nunca el texto. En iPhone hay que agregar CONECTA a la pantalla de inicio. Al cerrar sesión
+  el teléfono deja de recibir avisos.
+- Los avisos se activan con `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` y `VAPID_SUBJECT` en `identity`
+  (se generan con `pnpm push:keys tu-correo@dominio.hn`); sin ellas el chat funciona sin avisos. La
+  demo con Docker genera sus propias llaves; los avisos llegan si se abre por HTTPS (por ejemplo, con
+  un túnel) o en `localhost`.
+- En AWS: `pnpm -s push:keys tu-correo@dominio.hn --json` (en PowerShell, con
+  `| Out-File -Encoding ascii push.json`), luego
+  `aws secretsmanager create-secret --name escolar/dev/push --secret-string file://push.json`, borra
+  `push.json` y despliega con `-c pushSecretArn=arn:aws:secretsmanager:...`.
+- **Avisos en la app de Android** (opcional): el visor de la app no tiene Web Push, así que `identity`
+  le manda los avisos por Firebase Cloud Messaging (API HTTP v1), con el mismo horario y el mismo texto
+  (quién escribió, nunca el mensaje). Se activa con `FCM_SERVICE_ACCOUNT` (el JSON de la cuenta de
+  servicio de Firebase) en `identity`; en AWS, en un secreto con esa clave y
+  `-c fcmSecretArn=arn:aws:secretsmanager:...`. La app necesita además el `google-services.json` del
+  mismo proyecto de Firebase (ver `apps/mobile/README.md`).
+
+## Documentos del centro
+
+«Documentos» en el panel (dirección, coordinación, secretaría y maestros): circulares, actas,
+informes, oficios, constancias y listados escritos en CONECTA, sin salir a otra aplicación.
+
+- **Plantillas** con el nombre del centro, la fecha y quien lo escribe ya puestos: circular a padres,
+  acta de reunión (agenda, tabla de acuerdos y firmas), informe, oficio, constancia, listado y en blanco.
+- **Editor** (TipTap, código abierto MIT): títulos, negrita, cursiva, subrayado, listas, alineación,
+  líneas y **tablas** (agregar o quitar filas y columnas, unir celdas). Ctrl+S guarda.
+- **Descargar en Word** (.docx, con la librería `docx`, MIT): tamaño carta, Arial y el membrete del
+  centro (logo y nombre) en cada página. **Imprimir o PDF**: la hoja con el mismo membrete.
+- **Compartir:** cada documento es «solo yo» o «todo el personal del centro». Solo quien lo escribe lo
+  cambia o lo borra; los demás pueden «Hacer una copia» para usarlo como formato.
+- El contenido se guarda como el JSON del editor y el servicio lo valida: solo los elementos que el
+  editor ofrece (nada de HTML, enlaces ni imágenes). Si otra ventana guardó antes, no se pisa.
+
+## App para Android (Play Store)
+
+`apps/mobile`: la app de CONECTA para Android, con Capacitor. Abre la plataforma publicada (así cada
+mejora llega a la app sin publicar otra versión) y agrega ícono propio, descargas a «Descargas»,
+cámara al adjuntar, avisos del teléfono por Firebase, pantalla sin conexión y el botón «atrás».
+GitHub Actions la compila (`.github/workflows/android.yml`): un APK de prueba siempre y el AAB
+firmado para Play Store cuando están los secretos de la llave. Los pasos para publicarla están en
+[`apps/mobile/README.md`](apps/mobile/README.md). La política de privacidad que pide Play Store está
+en `/privacidad`.
+
+## Biblioteca virtual
+
+«Biblioteca» en el panel: libros de texto, guías, lecturas y enlaces (Educatrachos, videos) por grado
+y materia.
+
+- **Quién sube:** dirección, coordinación, secretaría y maestros. PDF, Word, Excel y PowerPoint hasta
+  80 MB (un libro escaneado entra) o un enlace `https://`. Cada material dice para qué grado y materia
+  es (o «todo el centro») y quién lo ve: **solo el personal** o **personal y familias** (se elige
+  siempre; no hay valor por defecto).
+- **Familias:** ven lo compartido con ellas para los grados en que sus hijos están matriculados este
+  año, más lo que es para todo el centro. Nada más (ni por la dirección del archivo).
+- **Archivos:** el servicio académico los revisa mientras llegan (el contenido tiene que ser lo que
+  dice ser: un PDF que empieza como PDF; un programa con nombre de libro se rechaza) y los guarda sin
+  pasar por la memoria: en AWS, en el mismo bucket privado de los adjuntos (`biblioteca/…`, con
+  permiso solo a esa carpeta); en la demo, en el volumen `biblioteca`. Se entregan solo a quien los
+  puede ver, por tramos (`Range`).
+- **Lector de PDF** (pdf.js, Apache 2.0) dentro de la página, porque el visor de Android no abre PDF.
+  Baja solo las páginas que se leen (pocos datos con un libro de 200 páginas), dibuja solo las
+  cercanas a la pantalla (no agota la memoria de un teléfono sencillo), acerca y aleja, salta a una
+  página y recuerda dónde se quedó. Sus archivos (worker, fuentes, decodificadores) se copian de
+  `pdfjs-dist` a `apps/web/public/pdfjs/<versión>/` al construir (`scripts/copy-pdfjs.mjs`).
+- **Leer sin internet:** «Guardar para leer sin internet» guarda el libro en el teléfono (Cache API); el
+  service worker guarda también la página del lector, así se abre sin señal. Al cerrar sesión se borra.
+- Solo quien lo subió, la dirección o la coordinación lo quitan (queda en la bitácora). Un grado o una
+  materia con materiales no se puede borrar.
+
+## Calendario escolar y colegios bilingües
+
+- **Calendario escolar** («Calendario escolar» en el panel): la secretaría o la dirección marcan los
+  feriados (un día) y las vacaciones (desde y hasta) del año lectivo. Esos días:
+  - no se pide asistencia;
+  - ninguna clase queda «sin maestro», aunque haya licencias (en el centro y en el tablero departamental);
+  - una semana entera sin clases no pide planificación y nada queda atrasado;
+  - el asistente de planificación deja fuera los días feriados de la semana.
+
+  Las familias ven los próximos días sin clases en su portal. Todo el personal consulta el calendario.
+- **Año de septiembre a junio** (colegios bilingües, año escolar de Estados Unidos): el año lectivo y
+  sus parciales son rangos de fechas, así que funciona igual que el de febrero a noviembre. Los
+  parciales se pueden llamar como el colegio quiera («First Quarter», «Bimestre I»…).
+- **Materias en inglés:** en «Estructura académica» cada materia dice si «se imparte en» español o
+  inglés. Con inglés, el asistente escribe el borrador de la planificación en inglés (y no lo alinea al
+  CNB, que es para las materias en español). La pantalla sigue en español.
+- **Boleta en inglés:** la boleta tiene arriba «Español · English» para imprimirla en el idioma que
+  entregue el colegio.
+
 ## Licencia de las copias vendidas (Gumroad)
 
 Las copias de CONECTA que se venden por Gumroad piden una clave de licencia; la demo y el servidor
@@ -316,19 +526,17 @@ servidor web necesita salida a `api.gumroad.com`.
 ## Despliegue en AWS
 
 Para **producción con 100 centros** (dominio con HTTPS, dos zonas, autoescalado, WAF, alarmas por
-correo, 30 días de respaldos y cómo restaurarlos) sigue [docs/despliegue.md](docs/despliegue.md);
+correo, 30 días de respaldos y cómo restaurarlos) sigue [docs/despliegue.md](docs/despliegue.md). La
+forma recomendada no necesita instalar nada: un permiso de GitHub en AWS (`infra/aws-github.yaml`) y
+los flujos **Preparar AWS (una vez)**, **Desplegar en AWS** y **Crear la cuenta del equipo de la
+plataforma**;
 cuesta del orden de US$210 al mes. La revisión de seguridad está en [docs/seguridad.md](docs/seguridad.md).
 Lo de abajo es el ambiente `dev` (de pruebas).
 
 La primera vez:
 
-1. Configura credenciales de AWS y prepara la cuenta para CDK:
-
-   ```bash
-   pnpm --filter @escolar/infra exec cdk bootstrap
-   ```
-
-2. Crea el secreto con las llaves JWT. Nunca se guardan en git:
+1. Con las credenciales de AWS configuradas, crea el secreto con las llaves JWT. Nunca se guardan
+   en git:
 
    ```bash
    pnpm -s keys:generate --json > jwt.json
@@ -342,7 +550,18 @@ La primera vez:
    rm jwt.json
    ```
 
-3. Despliega con el ARN completo que devolvió el paso anterior:
+   En PowerShell, `>` guarda el archivo en UTF-16 y AWS lo rechaza: usa
+   `pnpm -s keys:generate --json | Out-File -Encoding ascii jwt.json` y `Remove-Item jwt.json`.
+
+2. Prepara la cuenta para CDK con el ARN completo que devolvió el paso anterior. CDK arma la app para
+   saber dónde instalarse, y la app no arma sin ese secreto:
+
+   ```bash
+   pnpm --filter @escolar/infra exec cdk bootstrap -c jwtSecretArn=arn:aws:secretsmanager:...
+   ```
+
+3. Despliega con el mismo ARN. Docker tiene que estar corriendo: el despliegue construye las imágenes
+   en tu computadora y las sube a la cuenta.
 
    ```bash
    pnpm --filter @escolar/infra exec cdk deploy --all -c jwtSecretArn=arn:aws:secretsmanager:...
@@ -370,7 +589,7 @@ producción conviene pasar a subredes privadas con VPC endpoints.
 
 ```
 apps/web                 Next.js 16: panel por rol, cuaderno sin internet (service worker), seguimiento, alumnos, estructura académica, usuarios, colegios
-services/identity        Fastify + Drizzle + Postgres: auth, tenants, usuarios, auditoría
+services/identity        Fastify + Drizzle + Postgres: auth, tenants, usuarios, auditoría, mensajes del personal
 services/academic        Fastify + Drizzle + Postgres: estructura, matrícula, licencias, notas, asistencia, tablero regional
   drizzle/               migraciones SQL versionadas
   test/                  tests de API contra Postgres en memoria

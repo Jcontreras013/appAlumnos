@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { AssignmentDto, SectionDto } from "./academic";
+import type { DayOffDto } from "./calendar";
 import { addDays, isIsoDate } from "./weeks";
 
 /*
@@ -245,6 +246,8 @@ export interface AttendanceSheetDto {
     suspendedUntil: string | null;
   }>;
   totals: Record<AttendanceStatus | "sin_registro", number>;
+  /** Ese día el centro no tiene clases (feriado, vacaciones): no hace falta pasar asistencia. */
+  dayOff: DayOffDto | null;
   canEdit: boolean;
 }
 
@@ -319,7 +322,13 @@ export interface SchoolFollowUpDto {
   /** Días que faltan para el cierre de notas del parcial (negativo si ya pasó). */
   daysToClose: number | null;
   gradeProgress: { complete: number; total: number; items: GradeProgressDto[] };
-  attendance: { rate7d: number | null; sectionsRecordedToday: number; sections: number };
+  attendance: {
+    rate7d: number | null;
+    sectionsRecordedToday: number;
+    sections: number;
+    /** Hoy no hay clases: la asistencia de hoy no se espera. */
+    dayOff: DayOffDto | null;
+  };
   studentsAtRisk: StudentRiskDto[];
   /** Planificación semanal de la semana de `date`: entregadas = enviadas, devueltas o aprobadas. */
   plans: PlansSummaryDto;
@@ -333,6 +342,8 @@ export interface PlansSummaryDto {
   approved: number;
   /** Sin entregar y con la fecha límite vencida. */
   overdue: number;
+  /** Toda la semana sin clases: no se pide planificación. */
+  dayOff: DayOffDto | null;
 }
 
 // ───────────────────────────── Fin de año: nota final, recuperación y promoción ─────────────────────────────

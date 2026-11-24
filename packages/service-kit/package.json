@@ -12,6 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "3.1161.0",
     "@escolar/shared": "workspace:*",
     "@fastify/helmet": "13.2.0",
     "drizzle-orm": "0.45.4",

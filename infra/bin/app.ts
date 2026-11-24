@@ -13,6 +13,13 @@ new EscolarStack(app, `Escolar-${stage}`, {
   jwtSecretArn: app.node.tryGetContext("jwtSecretArn"),
   certificateArn: app.node.tryGetContext("certificateArn"),
   alertEmail: app.node.tryGetContext("alertEmail"),
+  anthropicSecretArn: app.node.tryGetContext("anthropicSecretArn"),
+  geminiSecretArn: app.node.tryGetContext("geminiSecretArn"),
+  geminiModel: app.node.tryGetContext("geminiModel"),
+  groqSecretArn: app.node.tryGetContext("groqSecretArn"),
+  groqModel: app.node.tryGetContext("groqModel"),
+  pushSecretArn: app.node.tryGetContext("pushSecretArn"),
+  fcmSecretArn: app.node.tryGetContext("fcmSecretArn"),
 });
 
 Tags.of(app).add("proyecto", "plataforma-escolar");

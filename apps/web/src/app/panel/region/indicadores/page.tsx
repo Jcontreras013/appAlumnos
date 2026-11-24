@@ -9,6 +9,7 @@ import {
 } from "@escolar/shared";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { FilterBar, FilterEmpty, FilterRow, FilterScope } from "@/components/quick-filter";
 import { academic } from "@/lib/academic";
 import { requireRole } from "@/lib/dal";
 
@@ -149,54 +150,60 @@ export default async function PilotPage({ searchParams }: PageProps<"/panel/regi
         <h2 className="border-b border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
           Por centro
         </h2>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="text-xs text-slate-500">
-              <tr>
-                <th className="px-4 py-2 font-semibold">Centro</th>
-                {PILOT_INDICATORS.map((k) => (
-                  <th key={k} className="px-3 py-2 text-right font-semibold" title={PILOT_GOALS[k].label}>
-                    {SHORT[k]}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {schools.map((s) => (
-                <tr key={s.schoolId}>
-                  <td className="px-4 py-2">
-                    <Link
-                      href={`/panel/region/${s.schoolId}`}
-                      className="font-medium text-slate-900 hover:underline"
-                    >
-                      {s.schoolName}
-                    </Link>
-                    {s.districtName && <span className="block text-xs text-slate-500">{s.districtName}</span>}
-                  </td>
-                  {PILOT_INDICATORS.map((k) => {
-                    const m = s.measures[k];
-                    const st = status(k, m);
-                    const tone =
-                      st.label === "Cumple"
-                        ? "text-brand-700"
-                        : st.label === "No cumple"
-                          ? "font-semibold text-red-700"
-                          : "text-slate-400";
-                    return (
-                      <td
-                        key={k}
-                        className={`px-3 py-2 text-right tabular-nums ${tone}`}
-                        title={`${PILOT_GOALS[k].label}: ${m.met} de ${m.total}`}
-                      >
-                        {k === "centros_activos" ? (m.met ? "Sí" : "No") : pct(pilotRate(m))}
-                      </td>
-                    );
-                  })}
+        <FilterScope items={schools.map((s) => ({ text: `${s.schoolName} ${s.districtName ?? ""}` }))}>
+          <FilterBar placeholder="Buscar centro o distrito" />
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="text-xs text-slate-500">
+                <tr>
+                  <th className="px-4 py-2 font-semibold">Centro</th>
+                  {PILOT_INDICATORS.map((k) => (
+                    <th key={k} className="px-3 py-2 text-right font-semibold" title={PILOT_GOALS[k].label}>
+                      {SHORT[k]}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {schools.map((s) => (
+                  <FilterRow key={s.schoolId} text={`${s.schoolName} ${s.districtName ?? ""}`}>
+                    <td className="px-4 py-2">
+                      <Link
+                        href={`/panel/region/${s.schoolId}`}
+                        className="font-medium text-slate-900 hover:underline"
+                      >
+                        {s.schoolName}
+                      </Link>
+                      {s.districtName && (
+                        <span className="block text-xs text-slate-500">{s.districtName}</span>
+                      )}
+                    </td>
+                    {PILOT_INDICATORS.map((k) => {
+                      const m = s.measures[k];
+                      const st = status(k, m);
+                      const tone =
+                        st.label === "Cumple"
+                          ? "text-brand-700"
+                          : st.label === "No cumple"
+                            ? "font-semibold text-red-700"
+                            : "text-slate-400";
+                      return (
+                        <td
+                          key={k}
+                          className={`px-3 py-2 text-right tabular-nums ${tone}`}
+                          title={`${PILOT_GOALS[k].label}: ${m.met} de ${m.total}`}
+                        >
+                          {k === "centros_activos" ? (m.met ? "Sí" : "No") : pct(pilotRate(m))}
+                        </td>
+                      );
+                    })}
+                  </FilterRow>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <FilterEmpty message="Ningún centro coincide con la búsqueda." />
+        </FilterScope>
       </section>
     </div>
   );

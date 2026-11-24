@@ -74,9 +74,9 @@ export async function createSubjectAction(_prev: FormState, formData: FormData):
   const { accessToken } = await writer();
   return runFormAction(formData, {
     schema: subjectInputSchema,
-    fields: ["name"],
-    submit: async ({ name }) =>
-      done(`Materia "${(await academic.createSubject(accessToken, name)).name}" creada.`),
+    fields: ["name", "language"],
+    submit: async (input) =>
+      done(`Materia "${(await academic.createSubject(accessToken, input)).name}" creada.`),
   });
 }
 
@@ -161,9 +161,9 @@ export async function updateSubjectAction(_prev: FormState, formData: FormData):
   const id = idOf(formData);
   return runFormAction(formData, {
     schema: subjectInputSchema,
-    fields: ["name"],
-    submit: async ({ name }) =>
-      done(`Materia "${(await academic.updateSubject(accessToken, id, name)).name}" guardada.`),
+    fields: ["name", "language"],
+    submit: async (input) =>
+      done(`Materia "${(await academic.updateSubject(accessToken, id, input)).name}" guardada.`),
   });
 }
 

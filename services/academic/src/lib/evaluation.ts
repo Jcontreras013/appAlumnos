@@ -24,7 +24,8 @@ import type { DbOrTx } from "../db/client";
 import {
   activities,
   attendanceRecords,
-  disciplineRecords,
+  conductIncidents,
+  conductMeasures,
   enrollments,
   evaluationSettings,
   gradingPeriods,
@@ -36,6 +37,7 @@ import {
   teacherLeaves,
   teachingAssignments,
 } from "../db/schema";
+import { dayOffFor } from "./calendar";
 import { weekBoard } from "./plans";
 import { findCurrentYear, listAssignments, listSections } from "./queries";
 
@@ -258,26 +260,35 @@ export async function attendanceSheet(
 ): Promise<AttendanceSheetDto> {
   const roster = await rosterOf(db, schoolId, [section.id]);
   const ids = roster.map((r) => r.studentId);
-  const [marks, suspensions] = await Promise.all([
+  const [marks, suspensions, dayOff] = await Promise.all([
     db
       .select()
       .from(attendanceRecords)
       .where(and(eq(attendanceRecords.sectionId, section.id), eq(attendanceRecords.date, date))),
-    // Quién está suspendido ese día: la maestra lo ve en la lista.
+    // Quién está suspendido ese día (suspensiones de Conducta no anuladas): la maestra lo ve en la lista.
     ids.length
       ? db
-          .select({ studentId: disciplineRecords.studentId, until: disciplineRecords.suspensionTo })
-          .from(disciplineRecords)
+          .select({ studentId: conductIncidents.studentId, until: conductMeasures.endsOn })
+          .from(conductMeasures)
+          .innerJoin(
+            conductIncidents,
+            and(
+              eq(conductIncidents.schoolId, conductMeasures.schoolId),
+              eq(conductIncidents.id, conductMeasures.incidentId),
+            ),
+          )
           .where(
             and(
-              eq(disciplineRecords.schoolId, schoolId),
-              eq(disciplineRecords.kind, "suspension"),
-              inArray(disciplineRecords.studentId, ids),
-              lte(disciplineRecords.suspensionFrom, date),
-              gte(disciplineRecords.suspensionTo, date),
+              eq(conductMeasures.schoolId, schoolId),
+              eq(conductMeasures.kind, "suspension"),
+              isNull(conductMeasures.cancelledAt),
+              inArray(conductIncidents.studentId, ids),
+              lte(conductMeasures.startsOn, date),
+              gte(conductMeasures.endsOn, date),
             ),
           )
       : Promise.resolve([]),
+    dayOffFor(db, schoolId, date),
   ]);
   const suspendedUntil = new Map<string, string>();
   for (const s of suspensions) {
@@ -296,7 +307,7 @@ export async function attendanceSheet(
       suspendedUntil: suspendedUntil.get(r.studentId) ?? null,
     };
   });
-  return { section, date, students: rows, totals, canEdit };
+  return { section, date, students: rows, totals, canEdit, dayOff };
 }
 
 /**
@@ -310,7 +321,7 @@ export async function followUp(db: DbOrTx, schoolId: string, date: string): Prom
     passingGrade: DEFAULT_PASSING_GRADE,
     daysToClose: null,
     gradeProgress: { complete: 0, total: 0, items: [] },
-    attendance: { rate7d: null, sectionsRecordedToday: 0, sections: 0 },
+    attendance: { rate7d: null, sectionsRecordedToday: 0, sections: 0, dayOff: null },
     studentsAtRisk: [],
     plans: {
       weekStart: mondayOf(date),
@@ -319,6 +330,7 @@ export async function followUp(db: DbOrTx, schoolId: string, date: string): Prom
       delivered: 0,
       approved: 0,
       overdue: 0,
+      dayOff: null,
     },
   };
   const year = await findCurrentYear(db, schoolId);
@@ -473,7 +485,12 @@ export async function followUp(db: DbOrTx, schoolId: string, date: string): Prom
         )
       : null,
     gradeProgress: { complete: items.filter((i) => i.complete).length, total: items.length, items },
-    attendance: { rate7d, sectionsRecordedToday, sections: sectionList.length },
+    attendance: {
+      rate7d,
+      sectionsRecordedToday,
+      sections: sectionList.length,
+      dayOff: await dayOffFor(db, schoolId, date),
+    },
     studentsAtRisk,
     plans: await plansSummary(db, schoolId, assignments, date),
   };
@@ -493,5 +510,6 @@ async function plansSummary(
     delivered: board.rows.filter((r) => r.submittedAt !== null).length,
     approved: board.totals.aprobada,
     overdue: board.totals.atrasadas,
+    dayOff: board.dayOff,
   };
 }

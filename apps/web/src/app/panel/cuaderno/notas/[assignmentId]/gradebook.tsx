@@ -5,6 +5,7 @@ import {
   activityInputSchema,
   formatDay,
   type GradebookDto,
+  matchesSearch,
   periodGrade,
   RISK_RULES,
 } from "@escolar/shared";
@@ -46,6 +47,10 @@ function applyOps(book: GradebookDto, ops: SyncOp[]) {
 
 const sortActivities = (list: ActivityDto[]) => [...list].sort((a, b) => a.date.localeCompare(b.date));
 
+/** Qué alumnos se ven: todos, los que tienen notas sin poner o los que van reprobando. */
+const VIEWS = { todos: "Todos", pendientes: "Notas sin poner", reprobando: "Van reprobando" } as const;
+type View = keyof typeof VIEWS;
+
 export function Gradebook({ owner, book }: { owner: string; book: GradebookDto }) {
   const scope = `notas:${book.assignment.id}`;
   const initial = useMemo(() => applyOps(book, []), [book]);
@@ -54,6 +59,9 @@ export function Gradebook({ owner, book }: { owner: string; book: GradebookDto }
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [editing, setEditing] = useState<ActivityDto | "nueva" | null>(null);
+  // Buscar y filtrar solo cambia qué filas se ven; las notas se guardan igual, también sin internet.
+  const [query, setQuery] = useState("");
+  const [view, setView] = useState<View>("todos");
 
   useEffect(() => {
     startSync(owner);
@@ -75,17 +83,27 @@ export function Gradebook({ owner, book }: { owner: string; book: GradebookDto }
   }, [owner, scope, book]);
 
   const possible = activities.reduce((acc, a) => acc + a.maxPoints, 0);
-  const rows = book.students.map((s) => {
+  const rows = book.students.map((s, i) => {
     const own = scores[s.studentId] ?? {};
     const result = periodGrade(activities, own);
     const atRisk =
       result.projected !== null &&
       result.possible >= RISK_RULES.minPointsToProject &&
       result.projected < book.passingGrade;
-    return { ...s, ...result, scores: own, atRisk };
+    // El número de lista es el de la lista completa, aunque se filtre.
+    return { ...s, ...result, scores: own, atRisk, number: i + 1 };
   });
   const missing = rows.reduce((acc, r) => acc + r.missing, 0);
   const atRisk = rows.filter((r) => r.atRisk).length;
+  const pendingStudents = rows.filter((r) => r.missing > 0).length;
+  const trimmed = query.trim();
+  const visible = rows.filter((r) => {
+    if (view === "pendientes" && r.missing === 0) return false;
+    if (view === "reprobando" && !r.atRisk) return false;
+    // Un número solo busca ese número de lista (el 1 no trae al 10 ni al 21).
+    return /^\d+$/.test(trimmed) ? r.number === Number(trimmed) : matchesSearch(r.name, trimmed);
+  });
+  const filtering = trimmed !== "" || view !== "todos";
   const canEdit = book.canEdit;
 
   function commitScore(studentId: string, activity: ActivityDto, text: string) {
@@ -188,22 +206,81 @@ export function Gradebook({ owner, book }: { owner: string; book: GradebookDto }
       )}
 
       <section className="card overflow-hidden">
+        {book.students.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 px-3 py-3">
+            <input
+              type="search"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              // Al volver a tocar el buscador se selecciona lo escrito: el siguiente nombre lo reemplaza.
+              onFocus={(e) => e.target.select()}
+              placeholder="Buscar alumno por nombre o número de lista"
+              aria-label="Buscar alumno"
+              autoComplete="off"
+              className="input min-w-56 flex-1 sm:max-w-sm"
+            />
+            {(Object.keys(VIEWS) as View[]).map((v) => {
+              const count = v === "todos" ? rows.length : v === "pendientes" ? pendingStudents : atRisk;
+              return (
+                <button
+                  key={v}
+                  type="button"
+                  aria-pressed={view === v}
+                  onClick={() => setView(v)}
+                  className={`rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                    view === v
+                      ? "border-brand-600 bg-brand-600 text-white"
+                      : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  {VIEWS[v]} ({count})
+                </button>
+              );
+            })}
+            {filtering && (
+              <span className="text-xs text-slate-500">
+                {visible.length} de {rows.length}
+              </span>
+            )}
+          </div>
+        )}
         {book.students.length === 0 ? (
           <p className="p-8 text-center text-sm text-slate-500">
             Esta sección todavía no tiene alumnos matriculados.
           </p>
+        ) : visible.length === 0 ? (
+          <div className="p-6 text-center text-sm text-slate-500">
+            <p>
+              {view === "pendientes" && !trimmed
+                ? "Todos los alumnos tienen todas sus notas."
+                : view === "reprobando" && !trimmed
+                  ? "Nadie va reprobando con lo evaluado hasta ahora."
+                  : "Ningún alumno coincide con la búsqueda."}
+            </p>
+            <button
+              type="button"
+              className="mt-2 font-semibold text-brand-700 hover:underline"
+              onClick={() => {
+                setQuery("");
+                setView("todos");
+              }}
+            >
+              Ver la lista completa
+            </button>
+          </div>
         ) : (
-          <div className="overflow-x-auto">
+          // Con alto máximo, la fila de actividades queda fija arriba al bajar por la lista.
+          <div className="max-h-[75vh] overflow-auto">
             <table className="w-full border-separate border-spacing-0 text-left text-sm">
               <thead className="text-xs text-slate-500">
                 <tr>
-                  <th className="sticky left-0 z-10 min-w-48 border-b border-slate-200 bg-slate-50 px-3 py-2 font-semibold uppercase tracking-wide">
+                  <th className="sticky left-0 top-0 z-30 min-w-48 border-b border-slate-200 bg-slate-50 px-3 py-2 font-semibold uppercase tracking-wide">
                     Alumno
                   </th>
                   {activities.map((a) => (
                     <th
                       key={a.id}
-                      className="min-w-24 border-b border-slate-200 bg-slate-50 px-2 py-2 align-bottom"
+                      className="sticky top-0 z-20 min-w-24 border-b border-slate-200 bg-slate-50 px-2 py-2 align-bottom"
                     >
                       {canEdit ? (
                         <button
@@ -219,18 +296,19 @@ export function Gradebook({ owner, book }: { owner: string; book: GradebookDto }
                       )}
                     </th>
                   ))}
-                  <th className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-right font-semibold uppercase tracking-wide">
+                  <th className="sticky top-0 z-20 border-b border-slate-200 bg-slate-50 px-3 py-2 text-right font-semibold uppercase tracking-wide">
                     Acumulado
                   </th>
-                  <th className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-right font-semibold uppercase tracking-wide">
+                  <th className="sticky top-0 z-20 border-b border-slate-200 bg-slate-50 px-3 py-2 text-right font-semibold uppercase tracking-wide">
                     Nota
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r, row) => (
+                {visible.map((r, row) => (
                   <tr key={r.studentId} className={r.atRisk ? "bg-red-50/50" : undefined}>
                     <td className="sticky left-0 z-10 border-b border-slate-100 bg-white px-3 py-2">
+                      <span className="mr-2 tabular-nums text-slate-400">{r.number}.</span>
                       <span className="font-medium text-slate-900">{r.name}</span>
                       {r.atRisk && (
                         <span className="ml-2 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-800">

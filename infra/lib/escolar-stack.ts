@@ -10,6 +10,7 @@ import * as ecsPatterns from "aws-cdk-lib/aws-ecs-patterns";
 import * as elbv2 from "aws-cdk-lib/aws-elasticloadbalancingv2";
 import * as logs from "aws-cdk-lib/aws-logs";
 import * as rds from "aws-cdk-lib/aws-rds";
+import * as s3 from "aws-cdk-lib/aws-s3";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import * as sns from "aws-cdk-lib/aws-sns";
 import * as subscriptions from "aws-cdk-lib/aws-sns-subscriptions";
@@ -42,6 +43,37 @@ export interface EscolarStackProps extends StackProps {
   certificateArn?: string;
   /** Correo que recibe las alarmas (se confirma desde el correo que manda AWS). */
   alertEmail?: string;
+  /**
+   * ARN del secreto con la llave de la API de Claude (el valor del secreto es la llave). Opcional:
+   * sin él, el asistente de planificación aparece como no disponible.
+   */
+  anthropicSecretArn?: string;
+  /**
+   * ARN del secreto con la llave de la API de Gemini (Google; el valor del secreto es la llave).
+   * Opcional. Si se indica, el asistente de planificación usa Gemini aunque también haya llave de
+   * Claude. `geminiModel` fija la versión (por defecto, el Flash más reciente).
+   */
+  geminiSecretArn?: string;
+  geminiModel?: string;
+  /**
+   * ARN del secreto con la llave de la API de Groq (el valor del secreto es la llave). Opcional. Si
+   * se indica (y no hay de Gemini), el asistente usa Groq aunque también haya llave de Claude.
+   * `groqModel` elige el modelo (por defecto, GPT-OSS 120B).
+   */
+  groqSecretArn?: string;
+  groqModel?: string;
+  /**
+   * ARN del secreto con las llaves de los avisos de mensajes al celular (VAPID_PUBLIC_KEY,
+   * VAPID_PRIVATE_KEY, VAPID_SUBJECT; se generan con `pnpm push:keys`). Opcional: sin él los
+   * mensajes funcionan, pero el teléfono no avisa.
+   */
+  pushSecretArn?: string;
+  /**
+   * ARN del secreto con la cuenta de servicio de Firebase (clave FCM_SERVICE_ACCOUNT: el JSON que
+   * descarga Firebase) para los avisos a la app de Android. Opcional: sin él la app funciona sin
+   * avisos.
+   */
+  fcmSecretArn?: string;
 }
 
 /**
@@ -110,6 +142,15 @@ export class EscolarStack extends Stack {
       deletionProtection: isProd,
       removalPolicy: isProd ? RemovalPolicy.SNAPSHOT : RemovalPolicy.DESTROY,
       cloudwatchLogsExports: ["postgresql"],
+      // Respaldos y mantenimiento de madrugada en Honduras (UTC-6), nunca en horario de clases:
+      // respaldo diario a la 1:00 a. m. y actualizaciones de AWS los domingos a las 2:00 a. m.
+      preferredBackupWindow: "07:00-07:30",
+      preferredMaintenanceWindow: "Sun:08:00-Sun:08:30",
+      // Registra las consultas que tardan más de 1 s, para encontrar lo lento antes de que se note.
+      parameterGroup: new rds.ParameterGroup(this, "ParametrosPostgres", {
+        engine: rds.DatabaseInstanceEngine.postgres({ version: rds.PostgresEngineVersion.VER_16 }),
+        parameters: { log_min_duration_statement: "1000" },
+      }),
     });
     const dbSecret = database.secret;
     if (!dbSecret) throw new Error("RDS no generó el secreto de credenciales");
@@ -137,6 +178,8 @@ export class EscolarStack extends Stack {
         secrets?: Record<string, ecs.Secret>;
         /** CPU y memoria en prod (en dev siempre 256/512). */
         prodSize?: { cpu: number; memoryLimitMiB: number };
+        /** Cuánto espera Service Connect cada respuesta (15 s por defecto). */
+        requestTimeout?: Duration;
       },
     ) => {
       const id = name.charAt(0).toUpperCase() + name.slice(1);
@@ -173,10 +216,13 @@ export class EscolarStack extends Stack {
           DB_PASSWORD: ecs.Secret.fromSecretsManager(dbSecret, "password"),
           ...options.secrets,
         },
+        // Solo revisa que el proceso responda (/health), no la base (/health/ready): si la base se
+        // reinicia o cambia de zona por un par de minutos, las tareas siguen vivas y se recuperan
+        // solas en cuanto vuelve, en vez de que ECS las reemplace todas a la vez.
         healthCheck: {
           command: [
             "CMD-SHELL",
-            `node -e "fetch('http://localhost:${options.port}/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"`,
+            `node -e "fetch('http://localhost:${options.port}/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"`,
           ],
           interval: Duration.seconds(30),
           startPeriod: Duration.seconds(60),
@@ -192,7 +238,14 @@ export class EscolarStack extends Stack {
         maxHealthyPercent: 200,
         circuitBreaker: { enable: true, rollback: true },
         serviceConnectConfiguration: {
-          services: [{ portMappingName: name, dnsName: name, port: options.port }],
+          services: [
+            {
+              portMappingName: name,
+              dnsName: name,
+              port: options.port,
+              ...(options.requestTimeout ? { perRequestTimeout: options.requestTimeout } : {}),
+            },
+          ],
         },
       });
       database.connections.allowDefaultPortFrom(service, `${name} -> Postgres`);
@@ -200,23 +253,110 @@ export class EscolarStack extends Stack {
       return { task, service };
     };
 
+    const pushSecret = props.pushSecretArn
+      ? secretsmanager.Secret.fromSecretCompleteArn(this, "PushSecret", props.pushSecretArn)
+      : undefined;
+    const fcmSecret = props.fcmSecretArn
+      ? secretsmanager.Secret.fromSecretCompleteArn(this, "FcmSecret", props.fcmSecretArn)
+      : undefined;
+    // Fotos, videos y documentos de los mensajes: bucket privado y cifrado, solo por HTTPS. No hay
+    // enlaces públicos: identity entrega cada archivo después de revisar quién lo pide.
+    const attachmentsBucket = new s3.Bucket(this, "Adjuntos", {
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true,
+      objectOwnership: s3.ObjectOwnership.BUCKET_OWNER_ENFORCED,
+      removalPolicy: isProd ? RemovalPolicy.RETAIN : RemovalPolicy.DESTROY,
+      autoDeleteObjects: !isProd,
+      // En producción se guardan versiones: si un archivo se borra o se sobrescribe por error, la
+      // versión anterior se puede recuperar durante 90 días.
+      versioned: isProd,
+      lifecycleRules: [
+        {
+          abortIncompleteMultipartUploadAfter: Duration.days(1),
+          ...(isProd ? { noncurrentVersionExpiration: Duration.days(90) } : {}),
+        },
+      ],
+    });
+    // Identity llega a S3 por dentro de la VPC (sin costo y sin pasar por internet).
+    vpc.addGatewayEndpoint("S3", {
+      service: ec2.GatewayVpcEndpointAwsService.S3,
+      subnets: [{ subnetType: ec2.SubnetType.PUBLIC }],
+    });
+
     const identity = backendService("identity", {
       port: 3001,
+      environment: { FILES_BUCKET: attachmentsBucket.bucketName, AWS_REGION: this.region },
+      // Un video puede tardar minutos en bajar con una conexión lenta: Service Connect no lo corta.
+      requestTimeout: Duration.minutes(10),
       secrets: {
         JWT_KEY_ID: ecs.Secret.fromSecretsManager(jwtSecret, "JWT_KEY_ID"),
         JWT_PRIVATE_KEY: ecs.Secret.fromSecretsManager(jwtSecret, "JWT_PRIVATE_KEY"),
         JWT_PUBLIC_KEY: ecs.Secret.fromSecretsManager(jwtSecret, "JWT_PUBLIC_KEY"),
+        // Avisos de mensajes al celular: identity los manda directo a los servicios de avisos de
+        // Google, Apple y Mozilla (sale a internet por su IP pública, como hacia ECR).
+        ...(pushSecret
+          ? {
+              VAPID_PUBLIC_KEY: ecs.Secret.fromSecretsManager(pushSecret, "VAPID_PUBLIC_KEY"),
+              VAPID_PRIVATE_KEY: ecs.Secret.fromSecretsManager(pushSecret, "VAPID_PRIVATE_KEY"),
+              VAPID_SUBJECT: ecs.Secret.fromSecretsManager(pushSecret, "VAPID_SUBJECT"),
+            }
+          : {}),
+        // Avisos a la app de Android, por Firebase (también sale a internet por su IP pública).
+        ...(fcmSecret
+          ? { FCM_SERVICE_ACCOUNT: ecs.Secret.fromSecretsManager(fcmSecret, "FCM_SERVICE_ACCOUNT") }
+          : {}),
       },
     });
     const identityService = identity.service;
+    attachmentsBucket.grantReadWrite(identity.task.taskRole);
+
+    /** Asistente de planificación: la llave del proveedor llega como secreto, nunca en claro. */
+    const assistantSettings = () => {
+      const secrets: Record<string, ecs.Secret> = {};
+      const environment: Record<string, string> = { IDENTITY_URL: "http://identity:3001" };
+      if (props.anthropicSecretArn) {
+        secrets.ANTHROPIC_API_KEY = ecs.Secret.fromSecretsManager(
+          secretsmanager.Secret.fromSecretCompleteArn(this, "AnthropicKey", props.anthropicSecretArn),
+        );
+      }
+      if (props.geminiSecretArn) {
+        secrets.GEMINI_API_KEY = ecs.Secret.fromSecretsManager(
+          secretsmanager.Secret.fromSecretCompleteArn(this, "GeminiKey", props.geminiSecretArn),
+        );
+        if (props.geminiModel) environment.GEMINI_MODEL = props.geminiModel;
+      }
+      if (props.groqSecretArn) {
+        secrets.GROQ_API_KEY = ecs.Secret.fromSecretsManager(
+          secretsmanager.Secret.fromSecretCompleteArn(this, "GroqKey", props.groqSecretArn),
+        );
+        if (props.groqModel) environment.GROQ_MODEL = props.groqModel;
+      }
+      // Quien configura un proveedor gratuito lo quiere usar: gana sobre Claude (y Gemini sobre Groq).
+      if (props.geminiSecretArn) environment.PLAN_ASSISTANT_PROVIDER = "gemini";
+      else if (props.groqSecretArn) environment.PLAN_ASSISTANT_PROVIDER = "groq";
+      return { environment, ...(Object.keys(secrets).length ? { secrets } : {}) };
+    };
 
     // academic no tiene la llave privada: verifica tokens con el JWKS público de identity.
+    const assistant = assistantSettings();
     const academic = backendService("academic", {
       port: 3002,
-      environment: { IDENTITY_URL: "http://identity:3001" },
       // Tableros y seguimiento recorren muchos datos: más CPU en prod.
       prodSize: { cpu: 512, memoryLimitMiB: 1024 },
+      // El asistente de IA tarda cerca de un minuto, y un libro de la biblioteca puede tardar varios
+      // minutos en subir o bajar con una conexión lenta: Service Connect no lo corta.
+      requestTimeout: Duration.minutes(10),
+      // Libros y documentos de la biblioteca: el mismo bucket privado, bajo «biblioteca/».
+      environment: {
+        ...assistant.environment,
+        FILES_BUCKET: attachmentsBucket.bucketName,
+        AWS_REGION: this.region,
+      },
+      ...(assistant.secrets ? { secrets: assistant.secrets } : {}),
     });
+    // academic solo puede leer y escribir en la carpeta de la biblioteca, no en los adjuntos de los mensajes.
+    attachmentsBucket.grantReadWrite(academic.task.taskRole, "biblioteca/*");
     identityService.connections.allowFrom(academic.service, ec2.Port.tcp(3001), "academic -> identity");
 
     // ───────────────────────────── Frontend web ─────────────────────────────
@@ -232,6 +372,8 @@ export class EscolarStack extends Stack {
       assignPublicIp: true,
       taskSubnets: { subnetType: ec2.SubnetType.PUBLIC },
       publicLoadBalancer: true,
+      // El borrador del asistente de planificación tarda; el ALB corta a los 60 s por defecto.
+      idleTimeout: Duration.minutes(3),
       minHealthyPercent: 100,
       circuitBreaker: { rollback: true },
       ...(certificate
@@ -253,6 +395,10 @@ export class EscolarStack extends Stack {
           IDENTITY_URL: "http://identity:3001",
           ACADEMIC_URL: "http://academic:3002",
           COOKIE_SECURE: certificate ? "true" : "false",
+          // El balanceador reusa cada conexión hasta 3 min (idleTimeout). Next.js las cierra a los
+          // 5 s por defecto, y entonces el balanceador a veces manda una petición por una conexión
+          // ya cerrada y el usuario ve un «502» suelto. El servidor debe esperar más que el balanceador.
+          KEEP_ALIVE_TIMEOUT: String(185_000),
         },
         logDriver: ecs.LogDrivers.awsLogs({
           streamPrefix: "web",
@@ -355,6 +501,19 @@ export class EscolarStack extends Stack {
       2,
     );
     alarm(
+      "AlarmaErroresBalanceador",
+      "El balanceador está devolviendo errores propios (502/503/504): tareas caídas o conexiones cortadas",
+      web.loadBalancer.metrics.httpCodeElb(elbv2.HttpCodeElb.ELB_5XX_COUNT, { period: fiveMinutes }),
+      10,
+      2,
+    );
+    alarm(
+      "AlarmaPanelLento",
+      "El panel está lento: el 5 % de las peticiones más lentas tarda más de 5 s",
+      web.loadBalancer.metrics.targetResponseTime({ period: fiveMinutes, statistic: "p95" }),
+      5,
+    );
+    alarm(
       "AlarmaPanelCaido",
       "El balanceador no tiene ninguna tarea sana del panel",
       web.targetGroup.metrics.unhealthyHostCount({ period: Duration.minutes(1) }),
@@ -384,6 +543,12 @@ export class EscolarStack extends Stack {
       "Base de datos: CPU alta por 15 minutos",
       database.metricCPUUtilization({ period: fiveMinutes }),
       80,
+    );
+    alarm(
+      "AlarmaBaseConexiones",
+      "Base de datos: muchas conexiones abiertas (cerca del máximo de la instancia)",
+      database.metricDatabaseConnections({ period: fiveMinutes }),
+      isProd ? 150 : 60,
     );
     new cloudwatch.Alarm(this, "AlarmaBaseDisco", {
       alarmDescription: "Base de datos: queda poco disco (menos de 5 GB)",

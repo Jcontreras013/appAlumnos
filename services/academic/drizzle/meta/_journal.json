@@ -75,8 +75,36 @@
     {
       "idx": 10,
       "version": "7",
-      "when": 1794957268106,
-      "tag": "0010_disciplina",
+      "when": 1795031328211,
+      "tag": "0010_conducta",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1795106357663,
+      "tag": "0011_conducta_aviso_familia",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1795230180189,
+      "tag": "0012_calendario_idioma",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1795283377561,
+      "tag": "0013_documentos",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1795452101926,
+      "tag": "0014_biblioteca",
       "breakpoints": true
     }
   ]

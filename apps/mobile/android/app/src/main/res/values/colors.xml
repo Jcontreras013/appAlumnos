@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Verde de CONECTA (brand-600 / brand-700 / brand-500 de la web). -->
+    <color name="colorPrimary">#0B8A6B</color>
+    <color name="colorPrimaryDark">#086F57</color>
+    <color name="colorAccent">#10A37F</color>
+</resources>
