@@ -45,6 +45,19 @@ export interface PasswordResetDto {
   temporaryPassword: string;
 }
 
+/**
+ * Una cuenta buscada por el equipo de la plataforma antes de eliminarla: de quién es y dónde tiene
+ * acceso, para no equivocarse de persona.
+ */
+export interface AccountLookupDto {
+  id: string;
+  name: string;
+  login: string;
+  /** Equipo de la plataforma: esas cuentas no se eliminan desde aquí. */
+  platformTeam: boolean;
+  accesses: Array<{ role: Role; place: string | null; active: boolean }>;
+}
+
 /** Cuenta del portal de familias recién creada (o ya existente, enlazada a este centro). */
 export interface FamilyAccountDto {
   userId: string;

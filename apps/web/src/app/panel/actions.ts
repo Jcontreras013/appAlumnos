@@ -1,6 +1,7 @@
 "use server";
 
 import {
+  type AccountLookupDto,
   accountUpdateSchema,
   changePasswordInputSchema,
   mfaCodeInputSchema,
@@ -140,6 +141,62 @@ export async function enableMfaAction(_prev: MfaEnableState, formData: FormData)
   } catch (err) {
     return { error: fromServiceError(err).error };
   }
+}
+
+export interface EraseAccountState extends FormState {
+  /** La cuenta encontrada, para confirmar antes de eliminarla. */
+  found?: AccountLookupDto;
+}
+
+/**
+ * Equipo de la plataforma: eliminar una cuenta a pedido de la persona (ver /eliminar-cuenta).
+ * Primero se busca y se muestra de quién es; se elimina solo después de escribir ELIMINAR.
+ */
+export async function eraseAccountAction(
+  prev: EraseAccountState,
+  formData: FormData,
+): Promise<EraseAccountState> {
+  const { accessToken } = await requireRole("superadmin");
+  const intent = formData.get("intent");
+  if (intent === "buscar") {
+    const login = String(formData.get("login") ?? "").trim();
+    if (login.length < 3) {
+      const error = "Escribe el correo o la identidad";
+      return { error, fields: { login: error }, values: { login } };
+    }
+    try {
+      return { found: await identity.lookupAccount(accessToken, login) };
+    } catch (err) {
+      return { ...fromServiceError(err), values: { login } };
+    }
+  }
+  if (intent === "eliminar") {
+    const id = z.uuid().safeParse(formData.get("id"));
+    if (!id.success) return { error: "Busca la cuenta otra vez" };
+    // Lo encontrado se sigue mostrando si hay que corregir la confirmación (solo para mostrar: quien
+    // decide si se puede eliminar es identity).
+    const found = prev.found?.id === id.data ? prev.found : undefined;
+    if (
+      String(formData.get("confirmacion") ?? "")
+        .trim()
+        .toUpperCase() !== "ELIMINAR"
+    ) {
+      const error = "Escribe ELIMINAR para confirmar";
+      return { found, error, fields: { confirmacion: error } };
+    }
+    try {
+      await identity.eraseAccount(accessToken, id.data);
+      return {
+        ok: true,
+        message: found
+          ? `Listo: la cuenta de ${found.name} (${found.login}) quedó eliminada.`
+          : "Listo: la cuenta quedó eliminada.",
+      };
+    } catch (err) {
+      return { ...fromServiceError(err), found };
+    }
+  }
+  return {};
 }
 
 /** Equipo de la plataforma: quitar la verificación de alguien que perdió el teléfono y sus códigos. */

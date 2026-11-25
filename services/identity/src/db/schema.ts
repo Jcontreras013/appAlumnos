@@ -119,10 +119,20 @@ export const users = pgTable(
     /** Segundo paso pendiente del inicio de sesión: hash del desafío y hasta cuándo vale. */
     mfaChallengeHash: text("mfa_challenge_hash"),
     mfaChallengeExpiresAt: timestamp("mfa_challenge_expires_at", { withTimezone: true }),
+    /**
+     * Cuenta eliminada a pedido de la persona: sin correo, identidad ni contraseña. La fila queda para
+     * que el registro escolar y los mensajes no pierdan a quién se refieren.
+     */
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [check("users_login_identifier", sql`${t.email} is not null or ${t.nationalId} is not null`)],
+  (t) => [
+    check(
+      "users_login_identifier",
+      sql`${t.email} is not null or ${t.nationalId} is not null or ${t.deletedAt} is not null`,
+    ),
+  ],
 );
 
 /**

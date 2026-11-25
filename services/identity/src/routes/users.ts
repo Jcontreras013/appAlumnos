@@ -16,7 +16,7 @@ import {
   SCHOOL_ROLES,
   type UserDto,
 } from "@escolar/shared";
-import { and, asc, eq, notInArray } from "drizzle-orm";
+import { and, asc, eq, isNull, notInArray } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { memberships, users } from "../db/schema";
@@ -50,6 +50,8 @@ export async function userRoutes(app: FastifyInstance, { db, tokens }: IdentityD
         and(
           eq(memberships.schoolId, schoolId),
           role ? eq(memberships.role, role) : notInArray(memberships.role, [...PORTAL_ROLES]),
+          // Las cuentas eliminadas a pedido de la persona ya no son parte del personal.
+          isNull(users.deletedAt),
         ),
       )
       .orderBy(asc(users.name), asc(memberships.role));
@@ -100,6 +102,14 @@ export async function userRoutes(app: FastifyInstance, { db, tokens }: IdentityD
     const { active } = parseOrThrow(statusBody, request.body);
     if (id === request.auth.userId && !active) {
       throw badRequest("No puedes desactivar tu propia cuenta");
+    }
+    if (active) {
+      const [target] = await db.select({ deletedAt: users.deletedAt }).from(users).where(eq(users.id, id));
+      if (target?.deletedAt) {
+        throw conflict(
+          "Esta cuenta se eliminó a pedido de la persona: para que vuelva, créale una cuenta nueva",
+        );
+      }
     }
     return db.transaction(async (tx) => {
       const updated = await tx

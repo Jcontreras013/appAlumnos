@@ -7,6 +7,7 @@ import {
   requireRole,
 } from "@escolar/service-kit";
 import {
+  type AccountLookupDto,
   accountUpdateSchema,
   formatNationalId,
   loginIdentifier,
@@ -15,17 +16,26 @@ import {
   type ScopedPersonDto,
   type UserDto,
 } from "@escolar/shared";
-import { and, asc, eq, notInArray } from "drizzle-orm";
+import { and, asc, eq, isNull, notInArray } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { DbOrTx } from "../db/client";
-import { districts, type Membership, memberships, schools, users } from "../db/schema";
+import {
+  departments,
+  districts,
+  type Membership,
+  memberships,
+  pushDevices,
+  pushSubscriptions,
+  schools,
+  users,
+} from "../db/schema";
 import type { IdentityDeps } from "../deps";
 import { audit } from "../lib/audit";
 import { resetToTemporary, toUserDto } from "../lib/users";
 
 const idParams = z.object({ id: z.uuid() });
-const mfaResetSchema = z.object({
+const loginSchema = z.object({
   login: z
     .string({ error: "Escribe el correo o la identidad" })
     .trim()
@@ -174,7 +184,7 @@ export async function accountRoutes(app: FastifyInstance, { db, tokens }: Identi
     "/accounts/mfa/reset",
     { preHandler: [app.authenticate, requireRole("superadmin")] },
     async (request, reply) => {
-      const { login } = parseOrThrow(mfaResetSchema, request.body);
+      const { login } = parseOrThrow(loginSchema, request.body);
       const who = loginIdentifier(login);
       const [user] = await db
         .select()
@@ -210,6 +220,106 @@ export async function accountRoutes(app: FastifyInstance, { db, tokens }: Identi
       return reply.status(204).send();
     },
   );
+
+  const platformTeam = { preHandler: [app.authenticate, requireRole("superadmin")] };
+
+  /**
+   * Eliminar una cuenta a pedido de la persona (o de su familia, si es un alumno). Primero se busca
+   * por correo o identidad para ver de quién es y dónde tiene acceso; después se elimina.
+   */
+  app.post("/accounts/lookup", platformTeam, async (request): Promise<AccountLookupDto> => {
+    const { login } = parseOrThrow(loginSchema, request.body);
+    const who = loginIdentifier(login);
+    const [user] = await db
+      .select()
+      .from(users)
+      .where("nationalId" in who ? eq(users.nationalId, who.nationalId) : eq(users.email, who.email));
+    if (!user) throw notFound("No hay ninguna cuenta con ese correo o identidad");
+    const rows = await db
+      .select({
+        role: memberships.role,
+        active: memberships.active,
+        school: schools.name,
+        district: districts.name,
+        department: departments.name,
+      })
+      .from(memberships)
+      .leftJoin(schools, eq(schools.id, memberships.schoolId))
+      .leftJoin(districts, eq(districts.id, memberships.districtId))
+      .leftJoin(departments, eq(departments.id, memberships.departmentId))
+      .where(eq(memberships.userId, user.id))
+      .orderBy(asc(memberships.createdAt));
+    return {
+      id: user.id,
+      name: user.name,
+      login: user.nationalId ? formatNationalId(user.nationalId) : (user.email ?? ""),
+      platformTeam: rows.some((r) => r.role === "superadmin"),
+      accesses: rows.map((r) => ({
+        role: r.role,
+        place: r.school ?? r.district ?? r.department ?? null,
+        active: r.active,
+      })),
+    };
+  });
+
+  /**
+   * Borra lo que identifica a la persona y le permite entrar: correo, identidad, contraseña,
+   * verificación en dos pasos, sesiones y avisos del teléfono. La fila queda (con «Cuenta eliminada»)
+   * para que el registro escolar y los mensajes sigan apuntando a alguien.
+   */
+  app.post("/accounts/:id/erase", platformTeam, async (request, reply) => {
+    const { id } = parseOrThrow(idParams, request.params);
+    if (id === request.auth.userId) throw forbidden("Tu propia cuenta la elimina otra persona del equipo");
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    if (!user) throw notFound("Cuenta no encontrada");
+    if (user.deletedAt) throw conflict("Esta cuenta ya fue eliminada");
+    const own = await db.select().from(memberships).where(eq(memberships.userId, id));
+    if (own.some((m) => m.role === "superadmin")) {
+      throw forbidden("Las cuentas del equipo de la plataforma no se eliminan desde aquí");
+    }
+    const now = new Date();
+    await db.transaction(async (tx) => {
+      await tokens.revokeAllForUser(tx, id);
+      await tx.update(memberships).set({ active: false, updatedAt: now }).where(eq(memberships.userId, id));
+      await tx.delete(pushSubscriptions).where(eq(pushSubscriptions.userId, id));
+      await tx.delete(pushDevices).where(eq(pushDevices.userId, id));
+      await tx
+        .update(users)
+        .set({
+          name: "Cuenta eliminada",
+          email: null,
+          nationalId: null,
+          // No es un hash válido: ninguna contraseña coincide.
+          passwordHash: "eliminada",
+          mustChangePassword: false,
+          failedLogins: 0,
+          lockedUntil: null,
+          active: false,
+          lastMembershipId: null,
+          lastLoginAt: null,
+          totpSecret: null,
+          totpPendingSecret: null,
+          totpEnabledAt: null,
+          totpLastStep: null,
+          recoveryCodeHashes: [],
+          mfaChallengeHash: null,
+          mfaChallengeExpiresAt: null,
+          deletedAt: now,
+          updatedAt: now,
+        })
+        .where(eq(users.id, id));
+      // Solo los cargos que tenía: nada que identifique a la persona.
+      await audit(tx, request, {
+        action: "account.erased",
+        schoolId: null,
+        actorUserId: request.auth.userId,
+        entityType: "user",
+        entityId: id,
+        data: { roles: own.map((m) => m.role) },
+      });
+    });
+    return reply.status(204).send();
+  });
 
   /**
    * Nombre y centros (del ámbito) de una persona. Lo usa academic para actualizar las copias de su
@@ -260,7 +370,13 @@ export async function accountRoutes(app: FastifyInstance, { db, tokens }: Identi
         .select({ user: users, membership: memberships })
         .from(memberships)
         .innerJoin(users, eq(users.id, memberships.userId))
-        .where(and(eq(memberships.schoolId, id), notInArray(memberships.role, [...PORTAL_ROLES])))
+        .where(
+          and(
+            eq(memberships.schoolId, id),
+            notInArray(memberships.role, [...PORTAL_ROLES]),
+            isNull(users.deletedAt),
+          ),
+        )
         .orderBy(asc(memberships.role), asc(users.name));
       return rows.map((r) => toUserDto(r.user, r.membership));
     },

@@ -53,7 +53,9 @@ export default function DeleteAccountPage() {
           El registro escolar que la normativa educativa obliga a guardar: matrícula, notas, asistencia,
           conducta, y las tareas y exámenes que entregó el alumno. Lo conserva el centro mientras use{" "}
           {APP_NAME}; al terminar el servicio, el centro recibe sus datos y se borran de la plataforma. Los
-          mensajes que envió una persona del personal siguen visibles para quien los recibió.
+          mensajes que envió una persona del personal siguen visibles para quien los recibió. También se
+          conserva la bitácora de cambios (quién hizo cada cambio y cuándo), que por seguridad no se modifica
+          y puede incluir el correo con que se creó la cuenta.
         </p>
       </Section>
 

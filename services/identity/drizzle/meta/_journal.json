@@ -92,6 +92,13 @@
       "when": 1795562322520,
       "tag": "0012_alumnos",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1795635134739,
+      "tag": "0013_cuentas_eliminadas",
+      "breakpoints": true
     }
   ]
 }

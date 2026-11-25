@@ -1,5 +1,6 @@
 import "server-only";
 import type {
+  AccountLookupDto,
   AccountUpdate,
   AuditEventDto,
   ConversationDto,
@@ -50,6 +51,10 @@ export const identity = {
     call<MfaEnabledDto>("/auth/mfa/enable", { method: "POST", token, body: { code } }),
   resetMfa: (token: string, login: string) =>
     call<void>("/accounts/mfa/reset", { method: "POST", token, body: { login } }),
+  lookupAccount: (token: string, login: string) =>
+    call<AccountLookupDto>("/accounts/lookup", { method: "POST", token, body: { login } }),
+  eraseAccount: (token: string, userId: string) =>
+    call<void>(`/accounts/${userId}/erase`, { method: "POST", token }),
   refresh: (refreshToken: string) =>
     call<TokenPairDto>("/auth/refresh", { method: "POST", body: { refreshToken } }),
   logout: (refreshToken: string) => call<void>("/auth/logout", { method: "POST", body: { refreshToken } }),
