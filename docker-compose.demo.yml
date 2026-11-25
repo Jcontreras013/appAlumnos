@@ -132,7 +132,7 @@ services:
         condition: service_healthy
 
   # Carga la demo de la departamental de Islas de la Bahía y el centro de demostración con el aula
-  # virtual (si ya están cargados, no hace nada).
+  # virtual (si ya están cargados, no duplica nada).
   seed:
     <<: *tools
     environment:

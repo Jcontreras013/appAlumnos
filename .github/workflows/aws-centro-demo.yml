@@ -3,11 +3,14 @@ name: Cargar el centro de demostración
 # Crea (una vez) el «Centro Educativo Demostración CONECTA» en la plataforma desplegada: el personal,
 # alumnos de Primer grado y Séptimo grado con sus familias, notas, asistencia, biblioteca y el aula
 # virtual (temas, tareas entregadas y calificadas, un examen abierto). Sirve para enseñar CONECTA y para
-# la revisión de Google Play. Todo es ficticio. Si ya estaba cargado, no hace nada.
+# la revisión de Google Play. Todo es ficticio. Se puede correr otra vez sin duplicar nada: si una
+# carga se quedó a medias, sigue con lo que falta; si ya estaba completa, solo pone al día las
+# contraseñas (así se cambia DEMO_PASSWORD).
 #
 # Corre dos tareas de ECS en la cuenta de AWS: el seed de identity (el centro y su personal) y el de
 # academic (lo demás, a través de las APIs de identity y academic, dentro de la VPC).
-# La contraseña de todas las cuentas de la demo sale del secreto DEMO_PASSWORD (mínimo 10 caracteres).
+# La contraseña de todas las cuentas de la demo sale del secreto DEMO_PASSWORD, con la misma regla de
+# CONECTA (mínimo 10 caracteres y que no sea de las muy usadas); si no sirve, se avisa antes de crear nada.
 # Este registro es público: no muestra contraseñas.
 
 on:
@@ -109,7 +112,19 @@ jobs:
           TAREA=$(correr "$IDENTITY_TASK" "$GRUPO_IDENTITY" "$CAMBIOS")
           CODIGO=$(esperar "$TAREA" identity)
           if [ "$CODIGO" != "0" ]; then
-            echo "::error::La carga del personal terminó con el código $CODIGO. Revisa los registros de identity en CloudWatch (AWS)."
+            # Solo el aviso de por qué no sirve DEMO_PASSWORD: el resto del registro de identity trae
+            # el correo del superadmin y este registro es público.
+            GRUPO_LOGS=$(aws ecs describe-task-definition --task-definition "$IDENTITY_TASK" \
+              --query "taskDefinition.containerDefinitions[0].logConfiguration.options.\"awslogs-group\"" --output text)
+            MOTIVO=$(aws logs get-log-events --log-group-name "$GRUPO_LOGS" \
+              --log-stream-name "identity/identity/${TAREA##*/}" --query "events[].message" --output text 2>/dev/null \
+              | tr '\t' '\n' | grep -o 'Error: La contraseña de la demo (DEMO_PASSWORD) no sirve:.*' \
+              | head -n 1 | sed 's/^Error: //' || true)
+            if [ -n "$MOTIVO" ]; then
+              echo "::error::$MOTIVO. Cambia el secreto DEMO_PASSWORD (Settings → Environments → $STAGE) y vuelve a correr el flujo."
+            else
+              echo "::error::La carga del personal terminó con el código $CODIGO. Revisa los registros de identity en CloudWatch (AWS)."
+            fi
             exit 1
           fi
 
