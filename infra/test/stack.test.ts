@@ -187,7 +187,7 @@ describe("seguridad de la infraestructura", () => {
     });
   });
 
-  it("bucket privado y cifrado: identity para los mensajes, academic solo en «biblioteca/»", () => {
+  it("bucket privado y cifrado: identity para los mensajes, academic solo en «biblioteca/» y «aula/»", () => {
     template.hasResourceProperties("AWS::S3::Bucket", {
       PublicAccessBlockConfiguration: {
         BlockPublicAcls: true,
@@ -216,7 +216,8 @@ describe("seguridad de la infraestructura", () => {
     };
     expect(env("IdentityTask")).toContain("FILES_BUCKET");
     expect(env("AcademicTask")).toContain("FILES_BUCKET");
-    // Solo identity y academic escriben en el bucket; academic, únicamente bajo «biblioteca/».
+    // Solo identity y academic escriben en el bucket; academic, únicamente bajo «biblioteca/» (libros)
+    // y «aula/» (materiales, tareas y entregas del aula virtual), nunca en todo el bucket.
     const policies = Object.entries(template.findResources("AWS::IAM::Policy")).filter(([, p]) =>
       JSON.stringify(p).includes("s3:PutObject"),
     );
@@ -229,6 +230,8 @@ describe("seguridad de la infraestructura", () => {
       policies.find(([id]) => id.startsWith("AcademicTaskTaskRole"))?.[1],
     );
     expect(academicPolicy).toContain("/biblioteca/*");
+    expect(academicPolicy).toContain("/aula/*");
+    expect(academicPolicy).not.toContain('"/*"');
     template.hasResourceProperties("AWS::EC2::VPCEndpoint", { VpcEndpointType: "Gateway" });
   });
 
