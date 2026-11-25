@@ -25,7 +25,8 @@ cambia algo en `apps/mobile`, o a mano desde la pestaña **Actions → App Andro
 
 - **APK de prueba** (`conecta-prueba-apk`): se instala directo en un teléfono Android (hay que permitir
   «instalar apps de origen desconocido»). Sirve para probar antes de publicar.
-- **AAB para Play Store** (`conecta-play-store-aab`): solo si están los secretos de la llave de firma.
+- **AAB para Play Store**: sale del flujo aparte **Actions → App Android para Play Store**, firmado con
+  la llave guardada en AWS (ver abajo, paso 4).
 
 En una computadora con Android Studio también se puede: `pnpm install`, `pnpm --filter @escolar/mobile
 sync` y abrir la carpeta `apps/mobile/android`.
@@ -43,27 +44,19 @@ sync` y abrir la carpeta `apps/mobile/android`.
    `android/app/build.gradle` (`namespace` y `applicationId`), en
    `android/app/src/main/res/values/strings.xml`, en la carpeta de `MainActivity.java` y en
    `capacitor.config.ts`.
-4. **Crear la llave de firma** (una sola vez, en cualquier computadora con Java):
-
-   ```bash
-   keytool -genkeypair -v -keystore conecta.keystore -alias conecta -keyalg RSA -keysize 2048 -validity 10000
-   ```
-
-   Guardar el archivo y las contraseñas en un lugar seguro (si se pierden, no se puede actualizar la
-   app). **Nunca** se suben al repositorio.
-5. **En GitHub** (Settings → Secrets and variables → Actions, a nivel del repositorio, no dentro de un
-   ambiente):
-   - Variable `CONECTA_URL`: la dirección del paso 2.
-   - Secretos: `ANDROID_KEYSTORE_BASE64` (el archivo en base64: `base64 -w0 conecta.keystore` en Linux o
-     `[Convert]::ToBase64String([IO.File]::ReadAllBytes("conecta.keystore"))` en PowerShell),
-     `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (`conecta`) y `ANDROID_KEY_PASSWORD`.
-6. **Compilar**: Actions → App Android → Run workflow. Bajar el artefacto `conecta-play-store-aab`.
-7. **En Play Console**: crear la app y completar la ficha y los cuestionarios con lo que está en
+4. **Compilar la versión para Play Store**: Actions → **«App Android para Play Store»** → Run
+   workflow, con el ambiente cuya dirección debe abrir la app (usa su variable `DOMINIO`, o la
+   variable `CONECTA_URL` si está). La primera vez crea la **llave de firma** y la guarda en AWS
+   Secrets Manager (`escolar/android/firma`); las siguientes usan la misma. Nadie tiene que guardar
+   archivos ni contraseñas: con «Firma de apps de Play», si un día se perdiera, Google permite
+   cambiarla. Bajar el artefacto `conecta-play-store-<número>` (adentro está `app-release.aab`).
+5. **En Play Console**: crear la app y completar la ficha y los cuestionarios con lo que está en
    [`store/ficha-play-store.md`](store/ficha-play-store.md): textos, capturas (`store/capturas/`),
    ícono, gráfico destacado, política de privacidad, seguridad de los datos, clasificación, público
    objetivo y la cuenta de prueba para la revisión de Google.
-8. **Subir el AAB** primero a «Prueba interna» (hasta 100 personas, sin revisión larga), probarlo y
-   después pasarlo a «Producción». Las cuentas personales nuevas deben hacer antes una prueba cerrada
+6. **Subir el AAB** primero a «Prueba interna» (hasta 100 personas, sin revisión larga), probarlo y
+   después pasarlo a «Producción». Al subir el primero, dejar **«Firma de apps de Play»** (la opción
+   recomendada). Las cuentas personales nuevas deben hacer antes una prueba cerrada
    con al menos 12 personas durante 14 días; las de organización, no.
 
 Cada nueva compilación sube sola el número de versión (`versionCode` = número de la compilación en

@@ -69,8 +69,18 @@ alumnos ni familias»:
 
 **Anuncios:** No contiene anuncios.
 
-**Público objetivo:** **18 años o más.** La usan el personal del centro y las familias (personas
-adultas); no está dirigida a niños. Así no aplica el programa «Diseñada para familias».
+**Público objetivo:** **13 a 15, 16 a 17 y 18 años o más.** La usan el personal del centro, las
+familias y, con el aula virtual, los alumnos de secundaria. No está dirigida a menores de 13: así no
+aplica el programa «Diseñada para familias». ¿Atrae a niños? **No** (es una herramienta escolar, sin
+juegos ni personajes).
+
+- Lo que protege a los alumnos (sirve para las preguntas de Google): las cuentas las crea el centro
+  (nadie se registra solo); los alumnos no pueden escribir mensajes ni ver datos de otros; no hay
+  anuncios ni se recopila la ubicación. Ver la sección «Alumnos menores de edad» de `/privacidad`.
+- **Si un centro va a dar cuenta a alumnos menores de 13** (por ejemplo, de primaria), hay que marcar
+  también **9 a 12**: entonces aplica «Diseñada para familias» y Google pide más (revisión más
+  estricta). Mientras tanto, los menores de 13 pueden usar el aula virtual desde el navegador o con la
+  cuenta de su familia.
 
 **Clasificación del contenido:** categoría «Referencia, noticias o educación». Violencia, contenido
 sexual, lenguaje, drogas, apuestas: **no**. ¿Los usuarios pueden comunicarse entre sí? **Sí** (mensajes
@@ -84,17 +94,17 @@ entre el personal del centro). ¿Comparte la ubicación? **No**. ¿Compras digit
 | ¿Datos cifrados en tránsito?   | **Sí**                                                                |
 | ¿Se puede pedir que se borren? | **Sí**, a través del centro educativo (ver la política de privacidad) |
 
-| Tipo de dato                                                            | Para qué                                         | ¿Obligatorio?              |
-| ----------------------------------------------------------------------- | ------------------------------------------------ | -------------------------- |
-| Información personal: nombre                                            | Funciones de la app; administración de la cuenta | Sí                         |
-| Información personal: correo                                            | Administración de la cuenta                      | Sí (o número de identidad) |
-| Información personal: IDs de usuario                                    | Administración de la cuenta                      | Sí                         |
-| Información personal: teléfono                                          | Funciones de la app (contacto del responsable)   | No                         |
-| Información personal: otra (notas, asistencia, conducta de los alumnos) | Funciones de la app                              | Sí                         |
-| Mensajes: otros mensajes en la app                                      | Funciones de la app                              | No                         |
-| Fotos y videos                                                          | Funciones de la app (adjuntos de los mensajes)   | No                         |
-| Archivos y documentos                                                   | Funciones de la app (adjuntos y biblioteca)      | No                         |
-| ID del dispositivo u otros IDs                                          | Funciones de la app (avisos de mensajes)         | No                         |
+| Tipo de dato                                                                                                        | Para qué                                                            | ¿Obligatorio?              |
+| ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- | -------------------------- |
+| Información personal: nombre                                                                                        | Funciones de la app; administración de la cuenta                    | Sí                         |
+| Información personal: correo                                                                                        | Administración de la cuenta                                         | Sí (o número de identidad) |
+| Información personal: IDs de usuario                                                                                | Administración de la cuenta                                         | Sí                         |
+| Información personal: teléfono                                                                                      | Funciones de la app (contacto del responsable)                      | No                         |
+| Información personal: otra (notas, asistencia, conducta, tareas entregadas y respuestas de exámenes de los alumnos) | Funciones de la app                                                 | Sí                         |
+| Mensajes: otros mensajes en la app                                                                                  | Funciones de la app                                                 | No                         |
+| Fotos y videos                                                                                                      | Funciones de la app (adjuntos de los mensajes, fotos de las tareas) | No                         |
+| Archivos y documentos                                                                                               | Funciones de la app (adjuntos, biblioteca, aula virtual y tareas)   | No                         |
+| ID del dispositivo u otros IDs                                                                                      | Funciones de la app (avisos de mensajes)                            | No                         |
 
 Nada se usa para publicidad ni se vende. Al asistente de planificación con IA solo van la
 asignatura, el grado, el tema y las indicaciones del docente, nunca datos de los alumnos.

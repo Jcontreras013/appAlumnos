@@ -33,7 +33,14 @@ export default function PrivacyPage() {
             De los alumnos: nombre, datos de matrícula, notas, asistencia, planificación de clases, conducta y
             los responsables de cada alumno.
           </li>
-          <li>Mensajes entre el personal y los archivos que se adjuntan o se suben a la biblioteca.</li>
+          <li>
+            De los alumnos con cuenta del aula virtual: su correo o número de identidad para entrar, las
+            tareas que entregan (texto, fotos y documentos) y las respuestas de sus exámenes en línea.
+          </li>
+          <li>
+            Mensajes entre la dirección y los maestros, y los archivos que se adjuntan, se suben a la
+            biblioteca o se publican en el aula virtual.
+          </li>
           <li>
             Datos técnicos mínimos para que funcione: la sesión abierta, la bitácora de cambios del centro y,
             si se activan los avisos, el identificador del teléfono para enviarlos.
@@ -47,15 +54,32 @@ export default function PrivacyPage() {
           educativas que le corresponden. No hay publicidad, no se venden ni se comparten datos con terceros
           para otros fines, y no se usan herramientas de rastreo o analítica de terceros.
         </p>
+        <p>
+          El asistente de planificación envía a un proveedor de inteligencia artificial solo la asignatura, el
+          grado, el tema y las indicaciones que escribe el maestro; nunca datos de los alumnos.
+        </p>
       </Section>
 
       <Section title="Quién los ve">
         <ul className="list-disc space-y-1 pl-5">
           <li>El personal del centro, según su rol (por ejemplo, cada maestro ve sus secciones).</li>
           <li>Cada familia ve solo la información de sus hijos y lo que el centro comparte con ella.</li>
+          <li>
+            Cada alumno ve solo sus clases, tareas, exámenes y notas. Sus entregas y respuestas las ven sus
+            maestros y su familia.
+          </li>
           <li>La dirección departamental o distrital ve lo que le corresponde de los centros a su cargo.</li>
           <li>El equipo técnico de {APP_NAME}, solo para dar soporte cuando el centro lo pide.</li>
         </ul>
+      </Section>
+
+      <Section title="Alumnos menores de edad">
+        <p>
+          Las cuentas de los alumnos las crea el centro educativo, que es quien cuenta con la autorización de
+          sus padres o encargados. Los alumnos no pueden escribir mensajes ni ver datos de otros alumnos, no
+          hay publicidad y no se recopila su ubicación. Los padres o encargados pueden pedir al centro ver,
+          corregir o borrar los datos de sus hijos, o cerrar su cuenta.
+        </p>
       </Section>
 
       <Section title="Cómo se protegen">

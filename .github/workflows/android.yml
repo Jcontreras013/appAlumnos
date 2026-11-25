@@ -1,14 +1,12 @@
 name: App Android
 
-# Compila la app de CONECTA para Android (apps/mobile):
-#   - APK de prueba, para instalar directo en un teléfono (siempre).
-#   - AAB firmado para Play Store (solo si están los secretos de la llave de firma).
+# Compila el APK de prueba de la app de CONECTA (apps/mobile), para instalar directo en un teléfono.
+# La versión para Google Play sale del flujo «App Android para Play Store» (android-play.yml).
 # Variables del repositorio (Settings → Secrets and variables → Actions → Variables):
-#   CONECTA_URL     Dirección pública de CONECTA con https (obligatoria para el AAB de Play Store).
+#   CONECTA_URL     Dirección pública de CONECTA con https (opcional: si no, la app de prueba deja
+#                   escribir la dirección al abrirla).
 #   CONECTA_APP_ID  Identificador en Play Store (opcional; por defecto com.jcsystem.conecta).
-# Secretos (Settings → Secrets and variables → Actions → Secrets):
-#   ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD
-#   GOOGLE_SERVICES_JSON  (opcional: el archivo de Firebase, para los avisos del teléfono)
+# Secreto opcional GOOGLE_SERVICES_JSON: el archivo de Firebase, para los avisos del teléfono.
 # Ver apps/mobile/README.md.
 
 on:
@@ -74,38 +72,3 @@ jobs:
           name: conecta-prueba-apk
           path: apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 14
-
-      - name: Llave de firma
-        id: firma
-        env:
-          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-        run: |
-          if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "::notice::Sin llave de firma: solo se compiló el APK de prueba."
-            echo "lista=no" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          if [ -z "$CONECTA_URL" ]; then
-            echo "::error::Falta la variable CONECTA_URL (la dirección https de CONECTA) para la versión de Play Store."
-            exit 1
-          fi
-          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/conecta.keystore"
-          echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/conecta.keystore" >> "$GITHUB_ENV"
-          echo "lista=si" >> "$GITHUB_OUTPUT"
-      - name: AAB firmado para Play Store
-        if: steps.firma.outputs.lista == 'si'
-        working-directory: apps/mobile/android
-        env:
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: ./gradlew bundleRelease --no-daemon --stacktrace
-      - if: steps.firma.outputs.lista == 'si'
-        uses: actions/upload-artifact@v4
-        with:
-          name: conecta-play-store-aab
-          path: apps/mobile/android/app/build/outputs/bundle/release/app-release.aab
-          retention-days: 30
-      - name: Borrar la llave del equipo
-        if: always()
-        run: rm -f "$RUNNER_TEMP/conecta.keystore"
