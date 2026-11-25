@@ -613,5 +613,16 @@ export class EscolarStack extends Stack {
     new CfnOutput(this, "SubredesPublicas", {
       value: vpc.publicSubnets.map((s) => s.subnetId).join(","),
     });
+    // Para cargar el centro de demostración: una tarea de academic que llega a identity y academic
+    // por su IP dentro de la VPC (con los grupos de academic y del panel, que ya tienen permiso).
+    new CfnOutput(this, "AcademicTaskDefinition", { value: academic.task.family });
+    new CfnOutput(this, "AcademicSecurityGroup", {
+      value: academic.service.connections.securityGroups.map((sg) => sg.securityGroupId).join(","),
+    });
+    new CfnOutput(this, "WebSecurityGroup", {
+      value: web.service.connections.securityGroups.map((sg) => sg.securityGroupId).join(","),
+    });
+    new CfnOutput(this, "IdentityServiceName", { value: identityService.serviceName });
+    new CfnOutput(this, "AcademicServiceName", { value: academic.service.serviceName });
   }
 }

@@ -131,7 +131,8 @@ services:
       identity:
         condition: service_healthy
 
-  # Carga la demo de la departamental de Islas de la Bahía (si ya está cargada, no hace nada).
+  # Carga la demo de la departamental de Islas de la Bahía y el centro de demostración con el aula
+  # virtual (si ya están cargados, no hace nada).
   seed:
     <<: *tools
     environment:
@@ -141,6 +142,7 @@ services:
       SEED_SUPERADMIN_EMAIL: superadmin@escolar.local
       SEED_SUPERADMIN_PASSWORD: Demo-superadmin-2026
       SEED_DEMO: "false"
+      SEED_CENTRO_DEMO: "true"
       SEED_DEMO_PASSWORD: Demo-colegio-2026
     command:
       - sh
@@ -148,6 +150,7 @@ services:
       - >-
         cd services/identity && ./node_modules/.bin/tsx src/scripts/seed.ts
         && cd ../academic && ./node_modules/.bin/tsx src/scripts/seed-region.ts
+        && ./node_modules/.bin/tsx src/scripts/seed-centro-demo.ts
     depends_on:
       identity:
         condition: service_healthy

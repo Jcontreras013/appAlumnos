@@ -4,9 +4,12 @@
  * - Siempre: el superadmin de la plataforma (SEED_SUPERADMIN_EMAIL / SEED_SUPERADMIN_PASSWORD).
  * - Con SEED_DEMO=true: "Colegio Demo" con un usuario de cada rol (contraseña SEED_DEMO_PASSWORD) y una
  *   conversación de ejemplo entre la dirección y un maestro.
+ * - Con SEED_CENTRO_DEMO=true: "Centro Educativo Demostración CONECTA", el centro para enseñar CONECTA
+ *   (y para la revisión de Google Play), con su personal (contraseña SEED_DEMO_PASSWORD). Los alumnos,
+ *   las familias, las notas y el aula virtual los carga después academic con `seed-centro-demo`.
  */
 import { databaseUrlFromEnv, optionalEnv, requireEnv } from "@escolar/service-kit";
-import type { SchoolRole } from "@escolar/shared";
+import { CENTRO_DEMO, type SchoolRole } from "@escolar/shared";
 import { eq } from "drizzle-orm";
 import { createDb } from "../db/client";
 import { conversationMembers, conversations, messages, schools, users } from "../db/schema";
@@ -16,7 +19,12 @@ import { type AccountInput, grantAccess } from "../lib/users";
 const { db, pool } = createDb(databaseUrlFromEnv());
 
 /** Conversación de ejemplo: el maestro pide que le cubran una clase y la dirección responde. */
-async function ensureDemoConversation(schoolId: string, directorId: string, teacherId: string) {
+async function ensureDemoConversation(
+  schoolId: string,
+  directorId: string,
+  teacherId: string,
+  names = { teacher: "Diego", substitute: "la profesora Daniela" },
+) {
   const pairKey = pairKeyOf(directorId, teacherId);
   const [existing] = await db.select().from(conversations).where(eq(conversations.pairKey, pairKey));
   if (existing) {
@@ -32,13 +40,13 @@ async function ensureDemoConversation(schoolId: string, directorId: string, teac
     ],
     [
       directorId,
-      "Buenos días, Diego. Sí, la profesora Daniela cubre esa hora. Deje la guía de trabajo en la dirección, por favor.",
+      `Buenos días, ${names.teacher}. Sí, ${names.substitute} cubre esa hora. Deje la guía de trabajo en la dirección, por favor.`,
       hoursAgo(25.8),
     ],
     [teacherId, "Listo, ya la dejé. Gracias.", hoursAgo(25.7)],
     [
       directorId,
-      "Diego, recuerde que el viernes se entregan las planificaciones de la próxima semana.",
+      `${names.teacher}, recuerde que el viernes se entregan las planificaciones de la próxima semana.`,
       hoursAgo(2),
     ],
   ];
@@ -65,7 +73,7 @@ async function ensureDemoConversation(schoolId: string, directorId: string, teac
       })),
     );
   });
-  console.log("  + conversación de ejemplo entre la dirección y Diego Docente");
+  console.log(`  + conversación de ejemplo entre la dirección y ${names.teacher}`);
 }
 
 async function ensureUser(input: AccountInput & { email: string }) {
@@ -117,6 +125,33 @@ try {
     const director = created.get("admin@colegio-demo.hn");
     const teacher = created.get("docente@colegio-demo.hn");
     if (director && teacher) await ensureDemoConversation(school.id, director, teacher);
+  }
+
+  if (optionalEnv("SEED_CENTRO_DEMO", "false") === "true") {
+    const password = requireEnv("SEED_DEMO_PASSWORD");
+    let [school] = await db.select().from(schools).where(eq(schools.slug, CENTRO_DEMO.slug));
+    if (!school) {
+      [school] = await db
+        .insert(schools)
+        .values({ slug: CENTRO_DEMO.slug, name: CENTRO_DEMO.name, sector: "privado" })
+        .returning();
+    }
+    if (!school) throw new Error("No se pudo crear el centro de demostración");
+
+    console.log(`${CENTRO_DEMO.name}:`);
+    const created = new Map<string, string>();
+    for (const [role, name, email] of CENTRO_DEMO.staff) {
+      const user = await ensureUser({ schoolId: school.id, name, email, password, role });
+      created.set(email, user.id);
+    }
+    const director = created.get(CENTRO_DEMO.staff[0][2]);
+    const teacher = created.get(CENTRO_DEMO.staff[4][2]);
+    if (director && teacher) {
+      await ensureDemoConversation(school.id, director, teacher, {
+        teacher: "Andrés",
+        substitute: "la profesora Lucía",
+      });
+    }
   }
 } finally {
   await pool.end();

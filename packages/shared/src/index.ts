@@ -4,6 +4,7 @@ export * from "./calendar";
 export * from "./classroom";
 export * from "./conduct";
 export * from "./csv";
+export * from "./demo";
 export * from "./documents";
 export * from "./enrollment";
 export * from "./evaluation";

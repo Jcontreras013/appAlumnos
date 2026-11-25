@@ -1,0 +1,172 @@
+name: Cargar el centro de demostración
+
+# Crea (una vez) el «Centro Educativo Demostración CONECTA» en la plataforma desplegada: el personal,
+# alumnos de Primer grado y Séptimo grado con sus familias, notas, asistencia, biblioteca y el aula
+# virtual (temas, tareas entregadas y calificadas, un examen abierto). Sirve para enseñar CONECTA y para
+# la revisión de Google Play. Todo es ficticio. Si ya estaba cargado, no hace nada.
+#
+# Corre dos tareas de ECS en la cuenta de AWS: el seed de identity (el centro y su personal) y el de
+# academic (lo demás, a través de las APIs de identity y academic, dentro de la VPC).
+# La contraseña de todas las cuentas de la demo sale del secreto DEMO_PASSWORD (mínimo 10 caracteres).
+# Este registro es público: no muestra contraseñas.
+
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: Ambiente
+        type: choice
+        options: [prod, dev]
+        default: prod
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: aws-${{ inputs.stage }}
+  cancel-in-progress: false
+
+jobs:
+  cargar:
+    name: Cargar el centro de demostración
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.stage }}
+    timeout-minutes: 30
+    env:
+      STAGE: ${{ inputs.stage }}
+      DOMINIO: ${{ vars.DOMINIO }}
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          mask-aws-account-id: true
+
+      - name: Cargar
+        env:
+          CLAVE_DEMO: ${{ secrets.DEMO_PASSWORD }}
+          CORREO_ADMIN: ${{ secrets.SUPERADMIN_EMAIL }}
+          CLAVE_ADMIN: ${{ secrets.SUPERADMIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "$CLAVE_DEMO" ]; then
+            echo "::error::Falta el secreto DEMO_PASSWORD (Settings → Environments → $STAGE): la contraseña de las cuentas de la demo."
+            exit 1
+          fi
+          if [ "${#CLAVE_DEMO}" -lt 10 ]; then
+            echo "::error::DEMO_PASSWORD tiene que tener al menos 10 caracteres."
+            exit 1
+          fi
+          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+          echo "::add-mask::$ACCOUNT"
+          salida() {
+            aws cloudformation describe-stacks --stack-name "Escolar-$STAGE" \
+              --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue | [0]" --output text
+          }
+          CLUSTER=$(salida NombreCluster)
+          if [ -z "$CLUSTER" ] || [ "$CLUSTER" = "None" ]; then
+            echo "::error::No encontré la plataforma desplegada (Escolar-$STAGE): corre primero «Desplegar en AWS»."
+            exit 1
+          fi
+          ACADEMIC_TASK=$(salida AcademicTaskDefinition)
+          if [ "$ACADEMIC_TASK" = "None" ]; then
+            echo "::error::La plataforma desplegada es de una versión anterior: corre «Desplegar en AWS» y vuelve a intentar."
+            exit 1
+          fi
+          IDENTITY_TASK=$(salida IdentityTaskDefinition)
+          SUBREDES=$(salida SubredesPublicas)
+          GRUPO_IDENTITY=$(salida IdentitySecurityGroup)
+          GRUPO_ACADEMIC=$(salida AcademicSecurityGroup)
+          GRUPO_WEB=$(salida WebSecurityGroup)
+
+          correr() {
+            # $1 definición, $2 grupos, $3 JSON de cambios (con las claves: no se imprime)
+            aws ecs run-task --cluster "$CLUSTER" --task-definition "$1" --launch-type FARGATE \
+              --network-configuration "awsvpcConfiguration={subnets=[$SUBREDES],securityGroups=[$2],assignPublicIp=ENABLED}" \
+              --overrides "$3" --query "tasks[0].taskArn" --output text
+          }
+          esperar() {
+            # $1 tarea, $2 contenedor
+            aws ecs wait tasks-stopped --cluster "$CLUSTER" --tasks "$1"
+            aws ecs describe-tasks --cluster "$CLUSTER" --tasks "$1" \
+              --query "tasks[0].containers[?name=='$2'].exitCode | [0]" --output text
+          }
+
+          echo "1/2 · El centro y su personal…"
+          CAMBIOS=$(jq -cn --arg demo "$CLAVE_DEMO" --arg correo "$CORREO_ADMIN" --arg clave "$CLAVE_ADMIN" '{
+            containerOverrides: [{
+              name: "identity",
+              command: ["node", "dist/scripts/seed.js"],
+              environment: [
+                {name: "SEED_CENTRO_DEMO", value: "true"},
+                {name: "SEED_DEMO_PASSWORD", value: $demo},
+                {name: "SEED_SUPERADMIN_EMAIL", value: $correo},
+                {name: "SEED_SUPERADMIN_PASSWORD", value: $clave}
+              ]
+            }]
+          }')
+          TAREA=$(correr "$IDENTITY_TASK" "$GRUPO_IDENTITY" "$CAMBIOS")
+          CODIGO=$(esperar "$TAREA" identity)
+          if [ "$CODIGO" != "0" ]; then
+            echo "::error::La carga del personal terminó con el código $CODIGO. Revisa los registros de identity en CloudWatch (AWS)."
+            exit 1
+          fi
+
+          ip_de() {
+            local servicio tarea
+            servicio=$(salida "$1")
+            tarea=$(aws ecs list-tasks --cluster "$CLUSTER" --service-name "$servicio" --desired-status RUNNING \
+              --query "taskArns[0]" --output text)
+            aws ecs describe-tasks --cluster "$CLUSTER" --tasks "$tarea" \
+              --query "tasks[0].attachments[0].details[?name=='privateIPv4Address'].value | [0]" --output text
+          }
+          IP_IDENTITY=$(ip_de IdentityServiceName)
+          IP_ACADEMIC=$(ip_de AcademicServiceName)
+
+          echo "2/2 · Alumnos, familias, notas y aula virtual (unos minutos)…"
+          CAMBIOS=$(jq -cn --arg demo "$CLAVE_DEMO" --arg identity "http://$IP_IDENTITY:3001" \
+            --arg academic "http://$IP_ACADEMIC:3002" '{
+            containerOverrides: [{
+              name: "academic",
+              command: ["node", "dist/scripts/seed-centro-demo.js"],
+              environment: [
+                {name: "SEED_DEMO_PASSWORD", value: $demo},
+                {name: "IDENTITY_URL", value: $identity},
+                {name: "ACADEMIC_URL", value: $academic}
+              ]
+            }]
+          }')
+          # Con los grupos de academic y del panel: identity acepta a academic y academic acepta al panel.
+          TAREA=$(correr "$ACADEMIC_TASK" "$GRUPO_ACADEMIC,$GRUPO_WEB" "$CAMBIOS")
+          CODIGO=$(esperar "$TAREA" academic)
+          # Lo que imprimió la carga (solo avances y errores; nunca contraseñas).
+          GRUPO_LOGS=$(aws ecs describe-task-definition --task-definition "$ACADEMIC_TASK" \
+            --query "taskDefinition.containerDefinitions[0].logConfiguration.options.\"awslogs-group\"" --output text)
+          aws logs get-log-events --log-group-name "$GRUPO_LOGS" \
+            --log-stream-name "academic/academic/${TAREA##*/}" --query "events[].message" --output text 2>/dev/null \
+            | tr '\t' '\n' | tail -n 30 || true
+          if [ "$CODIGO" != "0" ]; then
+            echo "::error::La carga de los datos terminó con el código $CODIGO (el detalle está arriba)."
+            exit 1
+          fi
+
+          SITIO="https://${DOMINIO:-<dominio de CONECTA>}"
+          {
+            echo "## Centro de demostración listo ($STAGE)"
+            echo
+            echo "Entra en $SITIO con cualquiera de estas cuentas. La contraseña de todas es la del secreto **DEMO_PASSWORD**."
+            echo
+            echo "| Quién | Usuario | Qué ve |"
+            echo "|---|---|---|"
+            echo "| Dirección (Marta Reyes) | \`direccion@demo.jcsystemhn.com\` | Todo el centro |"
+            echo "| Coordinación (Jorge Mejía) | \`coordinacion@demo.jcsystemhn.com\` | Seguimiento y planificación |"
+            echo "| Secretaría (Karla Funes) | \`secretaria@demo.jcsystemhn.com\` | Alumnos, familias y cuentas |"
+            echo "| Maestra de Matemáticas y Ciencias, 7.º (Lucía Paz) | \`maestra@demo.jcsystemhn.com\` | Su cuaderno y su aula virtual |"
+            echo "| Maestro de Español, Sociales e Inglés, 7.º (Andrés Castillo) | \`maestro@demo.jcsystemhn.com\` | Su cuaderno y su aula virtual |"
+            echo "| Maestra de Primer grado (Rosa Martínez) | \`primaria@demo.jcsystemhn.com\` | Su cuaderno y su aula virtual |"
+            echo "| Alumna de 7.º (Valeria Gómez) | \`alumna@demo.jcsystemhn.com\` | Mis clases, tareas, exámenes y notas |"
+            echo "| Familia (Ana Gómez, madre de Valeria y Mateo) | \`familia@demo.jcsystemhn.com\` | Sus dos hijos y sus clases |"
+            echo
+            echo "Para la revisión de Google Play: la cuenta de la maestra y la de la familia (no piden verificación en dos pasos)."
+          } >> "$GITHUB_STEP_SUMMARY"
