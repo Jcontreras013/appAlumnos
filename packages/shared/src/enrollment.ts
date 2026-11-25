@@ -279,6 +279,10 @@ export interface StudentDetailDto {
   sex: "F" | "M" | null;
   medicalNotes: string | null;
   notes: string | null;
+  /** Correo del alumno (para entrar al aula virtual si no tiene identidad a mano). */
+  email: string | null;
+  /** Ya tiene su cuenta del aula virtual. */
+  hasStudentAccess: boolean;
   guardians: GuardianLinkDto[];
   enrollments: EnrollmentDto[];
   /** Hermanos: otros alumnos que comparten algún responsable. */

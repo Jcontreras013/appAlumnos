@@ -16,6 +16,7 @@ export const ROLES = [
   "secretaria",
   "docente",
   "padre",
+  "estudiante",
 ] as const;
 
 export type Role = (typeof ROLES)[number];
@@ -27,6 +28,7 @@ export const SCHOOL_ROLES = [
   "secretaria",
   "docente",
   "padre",
+  "estudiante",
 ] as const satisfies readonly Role[];
 export type SchoolRole = (typeof SCHOOL_ROLES)[number];
 
@@ -46,7 +48,19 @@ export const ROLE_LABELS: Record<Role, string> = {
   secretaria: "Secretaría",
   docente: "Docente",
   padre: "Familia",
+  estudiante: "Alumno",
 };
+
+/**
+ * Cuentas del portal, no del personal: las familias y los alumnos. Las crea la secretaría o la
+ * dirección desde la ficha del alumno; no aparecen en «Personal y usuarios».
+ */
+export const PORTAL_ROLES = ["padre", "estudiante"] as const satisfies readonly SchoolRole[];
+export type PortalRole = (typeof PORTAL_ROLES)[number];
+
+export function isPortalRole(role: Role): role is PortalRole {
+  return (PORTAL_ROLES as readonly string[]).includes(role);
+}
 
 export function isRole(value: unknown): value is Role {
   return typeof value === "string" && (ROLES as readonly string[]).includes(value);

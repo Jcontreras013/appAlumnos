@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { academic, type StudentFilters } from "@/lib/academic";
 import { requireRole } from "@/lib/dal";
+import { SectionAccess } from "./section-access";
 
 export const metadata: Metadata = { title: "Alumnos" };
 
@@ -36,6 +37,7 @@ export default async function StudentsPage({ searchParams }: PageProps<"/panel/a
     academic.listSections(session.accessToken),
   ]);
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const selectedSection = sections.find((s) => s.id === filters.sectionId);
   const imported = one(params.importados);
   const pageHref = (n: number) => {
     const next = new URLSearchParams({ ...(filters.q ? { q: filters.q } : {}), estado: estado ?? "todos" });
@@ -111,6 +113,14 @@ export default async function StudentsPage({ searchParams }: PageProps<"/panel/a
           </button>
         </form>
       </search>
+
+      {canEdit && selectedSection && (
+        <SectionAccess
+          key={selectedSection.id}
+          sectionId={selectedSection.id}
+          sectionLabel={selectedSection.label}
+        />
+      )}
 
       <section className="card overflow-hidden">
         {items.length === 0 ? (

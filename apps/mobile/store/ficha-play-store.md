@@ -58,10 +58,14 @@ Lo que se copia en Play Console. Los gráficos están en esta misma carpeta.
 
 ## Contenido de la app (Política → Contenido de la app)
 
-**Acceso a la app:** «Todas o algunas funciones están restringidas». Dar a Google una cuenta de
-prueba de un **centro de demostración** en el CONECTA publicado (nunca de un centro real): una de
-maestro y una de familia, con su contraseña y la indicación «La verificación en dos pasos no se pide
-a maestros ni familias».
+**Acceso a la app:** «Todas o algunas funciones están restringidas». Dar a Google las cuentas del
+**centro de demostración** (flujo «Cargar el centro de demostración»; nunca de un centro real), con la
+contraseña de `DEMO_PASSWORD` y la indicación «La verificación en dos pasos no se pide a maestros,
+alumnos ni familias»:
+
+- Maestra: `maestra@demo.jcsystemhn.com` (cuaderno, aula virtual: temas, tareas y exámenes).
+- Familia: `familia@demo.jcsystemhn.com` (notas, asistencia y clases de sus dos hijos).
+- Alumna: `alumna@demo.jcsystemhn.com` (sus clases, entregar tareas y presentar un examen).
 
 **Anuncios:** No contiene anuncios.
 

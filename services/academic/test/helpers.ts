@@ -48,6 +48,8 @@ export async function setupAcademic(
   const transferTargets = new Map<string, TransferTargetDto[]>();
   /** Cuentas de familia creadas en identity (por identidad o correo), como las guardaría identity. */
   const familyAccounts = new Map<string, { userId: string; password: string; active: boolean }>();
+  /** Cuentas de alumnos del aula virtual, igual. */
+  const studentAccounts = new Map<string, { userId: string; password: string; active: boolean }>();
   const identity: IdentityClient = {
     async getUser(_token, userId) {
       return directory.get(userId) ?? null;
@@ -96,6 +98,35 @@ export async function setupAcademic(
     },
     async revokeFamilyAccount(_token, userId) {
       for (const account of familyAccounts.values()) if (account.userId === userId) account.active = false;
+    },
+    async createStudentAccount(_token, input) {
+      const key = input.nationalId ?? input.email ?? "";
+      const existing = studentAccounts.get(key);
+      if (existing) {
+        existing.active = true;
+        return { userId: existing.userId, login: key, temporaryPassword: null, linkedExisting: true };
+      }
+      const account = {
+        userId: randomUUID(),
+        password: `Alumno-${studentAccounts.size + 1000}-Clave`,
+        active: true,
+      };
+      studentAccounts.set(key, account);
+      return {
+        userId: account.userId,
+        login: key,
+        temporaryPassword: account.password,
+        linkedExisting: false,
+      };
+    },
+    async resetStudentPassword(_token, userId) {
+      const entry = [...studentAccounts.entries()].find(([, a]) => a.userId === userId);
+      if (!entry) throw new Error("cuenta no encontrada");
+      entry[1].password = `Nueva-${Date.now() % 10000}-Clave`;
+      return { userId, login: entry[0], temporaryPassword: entry[1].password, linkedExisting: true };
+    },
+    async revokeStudentAccount(_token, userId) {
+      for (const account of studentAccounts.values()) if (account.userId === userId) account.active = false;
     },
   };
 
@@ -241,6 +272,7 @@ export async function setupAcademic(
     regionalUser,
     call,
     familyAccounts,
+    studentAccounts,
     activity,
     scopes,
     transferTargets,

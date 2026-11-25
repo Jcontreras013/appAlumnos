@@ -29,6 +29,9 @@ export interface IdentityClient {
   createFamilyAccount(bearerToken: string, input: FamilyAccountInput): Promise<FamilyAccountDto>;
   resetFamilyPassword(bearerToken: string, userId: string): Promise<FamilyAccountDto>;
   revokeFamilyAccount(bearerToken: string, userId: string): Promise<void>;
+  createStudentAccount(bearerToken: string, input: FamilyAccountInput): Promise<FamilyAccountDto>;
+  resetStudentPassword(bearerToken: string, userId: string): Promise<FamilyAccountDto>;
+  revokeStudentAccount(bearerToken: string, userId: string): Promise<void>;
 }
 
 export const bearerOf = (request: FastifyRequest) =>
@@ -123,5 +126,11 @@ export function httpIdentityClient(baseUrl: string): IdentityClient {
       send<FamilyAccountDto>(`${baseUrl}/family-accounts/${userId}/reset-password`, bearerToken, "POST"),
     revokeFamilyAccount: (bearerToken, userId) =>
       send<void>(`${baseUrl}/family-accounts/${userId}`, bearerToken, "DELETE"),
+    createStudentAccount: (bearerToken, input) =>
+      send<FamilyAccountDto>(`${baseUrl}/student-accounts`, bearerToken, "POST", input),
+    resetStudentPassword: (bearerToken, userId) =>
+      send<FamilyAccountDto>(`${baseUrl}/student-accounts/${userId}/reset-password`, bearerToken, "POST"),
+    revokeStudentAccount: (bearerToken, userId) =>
+      send<void>(`${baseUrl}/student-accounts/${userId}`, bearerToken, "DELETE"),
   };
 }

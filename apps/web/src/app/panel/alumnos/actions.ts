@@ -8,6 +8,8 @@ import {
   type ImportResultDto,
   type PortalAccessDto,
   portalAccessInputSchema,
+  type SectionStudentAccessDto,
+  type StudentAccessDto,
   studentFieldsSchema,
   withdrawInputSchema,
 } from "@escolar/shared";
@@ -266,6 +268,60 @@ export async function portalAccessAction(
     const access = await academic.grantPortalAccess(accessToken, guardianId, parsed.data);
     revalidatePath(`/panel/alumnos/${studentId}`);
     return { ok: true, access };
+  } catch (err) {
+    return fromServiceError(err);
+  }
+}
+
+export interface StudentAccessState extends FormState {
+  access?: StudentAccessDto;
+}
+
+/** Cuenta del alumno para el aula virtual: dársela, nueva contraseña temporal o quitarla. */
+export async function studentAccessAction(
+  _prev: StudentAccessState,
+  formData: FormData,
+): Promise<StudentAccessState> {
+  const { accessToken } = await requireRole("admin", "secretaria");
+  const studentId = z.uuid().parse(formData.get("studentId"));
+  const intent = String(formData.get("intent") ?? "dar");
+  try {
+    if (intent === "quitar") {
+      await academic.revokeStudentAccess(accessToken, studentId);
+      revalidatePath(`/panel/alumnos/${studentId}`);
+      return { ok: true, message: "Se quitó la cuenta del alumno." };
+    }
+    if (intent === "restablecer") {
+      const access = await academic.resetStudentAccess(accessToken, studentId);
+      revalidatePath(`/panel/alumnos/${studentId}`);
+      return { ok: true, access };
+    }
+    const values = formValues(formData, ["nationalId", "email"]);
+    const parsed = portalAccessInputSchema.safeParse(values);
+    if (!parsed.success) return { ...fromZodError(parsed.error), values };
+    const access = await academic.grantStudentAccess(accessToken, studentId, parsed.data);
+    revalidatePath(`/panel/alumnos/${studentId}`);
+    return { ok: true, access };
+  } catch (err) {
+    return fromServiceError(err);
+  }
+}
+
+export interface SectionAccessState extends FormState {
+  result?: SectionStudentAccessDto;
+}
+
+/** Cuentas del aula virtual para todos los alumnos de una sección que todavía no tienen. */
+export async function sectionStudentAccessAction(
+  _prev: SectionAccessState,
+  formData: FormData,
+): Promise<SectionAccessState> {
+  const { accessToken } = await requireRole("admin", "secretaria");
+  const sectionId = z.uuid().parse(formData.get("sectionId"));
+  try {
+    const result = await academic.sectionStudentAccess(accessToken, sectionId);
+    revalidatePath("/panel/alumnos");
+    return { ok: true, result };
   } catch (err) {
     return fromServiceError(err);
   }

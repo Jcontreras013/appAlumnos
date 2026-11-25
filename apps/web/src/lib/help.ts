@@ -66,6 +66,19 @@ const LIBRARY: HelpSection = {
   tip: "Solo quien lo subió, la dirección o la coordinación pueden quitar un material. Al cerrar sesión, los libros guardados se borran del teléfono.",
 };
 
+const CLASSROOM: HelpSection = {
+  title: "Aula virtual: temas, tareas y exámenes",
+  steps: [
+    "En «Aula virtual» toca una de tus clases: es su página, la que ven tus alumnos y sus familias.",
+    "«Nuevo tema»: escribe la explicación y después «Agregar video, enlace o archivo»: un video de YouTube se ve ahí mismo; también guías en PDF, Word, PowerPoint o fotos de la pizarra. Con las flechas ordenas los temas.",
+    "«Clase en línea»: pega el enlace de Meet, Zoom o Jitsi y cuándo es; tus alumnos entran con «Entrar a la clase».",
+    "«Nueva tarea»: instrucciones, fecha de entrega y, si lleva nota, su valor y el parcial. Se crea sola su columna en tu cuaderno. Al abrirla ves quién entregó, abres lo que mandaron y pones la nota con un comentario: cae en la libreta.",
+    "«Nuevo examen»: elige cuándo abre y cierra, el tiempo para resolverlo y su valor. Agrega preguntas de selección múltiple, verdadero o falso (se califican solas) o abiertas (las revisas tú) y toca «Publicar examen».",
+    "En los resultados del examen, «Revisar respuestas abiertas» y pon los puntos: con todo revisado, la nota va a la libreta.",
+  ],
+  tip: "Los videos van por enlace de YouTube (súbelos como «no listado»): así no gastan espacio del centro. Una tarea sin valor es solo para entregar. Cuando un alumno ya empezó un examen, sus preguntas no se pueden cambiar.",
+};
+
 const MESSAGES: HelpSection = {
   title: "Mensajes con el personal",
   steps: [
@@ -142,6 +155,7 @@ export const HELP_GUIDES: HelpGuide[] = [
       MESSAGES,
       DOCUMENTS,
       LIBRARY,
+      CLASSROOM,
       {
         title: "Reportar un incidente de conducta",
         steps: [
@@ -235,6 +249,7 @@ export const HELP_GUIDES: HelpGuide[] = [
       MESSAGES,
       DOCUMENTS,
       LIBRARY,
+      CLASSROOM,
       CALENDAR,
       {
         title: "Traslados entre centros",
@@ -293,6 +308,7 @@ export const HELP_GUIDES: HelpGuide[] = [
       FIRST_LOGIN,
       DOCUMENTS,
       LIBRARY,
+      CLASSROOM,
       {
         title: "Revisar planificaciones",
         steps: [
@@ -359,11 +375,71 @@ export const HELP_GUIDES: HelpGuide[] = [
         ],
       },
       {
+        title: "Cuentas de los alumnos (aula virtual)",
+        steps: [
+          "Con su cuenta, el alumno ve sus clases, entrega tareas y presenta exámenes. Recomendado desde 7.º grado; en primaria la familia entrega por ellos.",
+          "Uno por uno: en la ficha del alumno, «Cuenta del aula virtual» → «Darle su cuenta». Entra con su identidad (o su correo, si no la tiene).",
+          "Toda una sección: en «Alumnos», filtra por la sección y toca «Dar cuentas a la sección». Imprime la hoja de accesos y recorta una tira para cada alumno.",
+          "Las contraseñas temporales solo se muestran una vez. Si un alumno la olvida, en su ficha: «Nueva contraseña temporal».",
+        ],
+      },
+      {
         title: "Traslados y avisos",
         steps: [
           "Si un alumno se va a otro centro del departamento: en su ficha, «Trasladar a otro centro».",
           "Los alumnos que llegan aparecen en «Traslados»: elige la sección y «Recibir».",
           "En «Avisos» puedes publicar avisos para las familias o el personal.",
+        ],
+      },
+    ],
+  },
+  {
+    key: "alumnos",
+    title: "Alumnos",
+    intro:
+      "Tu aula virtual: tus notas, tus clases, las tareas y los exámenes, desde el teléfono o la computadora.",
+    roles: ["estudiante"],
+    sections: [
+      {
+        title: "Entrar",
+        steps: [
+          "El centro te entrega una tira con tu usuario (tu número de identidad o tu correo) y una contraseña temporal.",
+          "Al entrar por primera vez eliges tu propia contraseña. No se la compartas a nadie.",
+          "Si la olvidas, pídele una nueva a la secretaría del centro.",
+        ],
+      },
+      {
+        title: "Tus clases",
+        steps: [
+          "En «Mis clases» está cada materia con su página: los temas con la explicación del maestro, videos, guías y avisos.",
+          "Si tu maestro da clases en línea, toca «Entrar a la clase» a la hora indicada.",
+        ],
+      },
+      {
+        title: "Entregar una tarea",
+        steps: [
+          "En la página de la clase, abre la tarea en «Tareas» y lee las instrucciones.",
+          "«Agregar foto o documento»: en el teléfono puedes tomar la foto de tu cuaderno ahí mismo. También puedes escribir tu respuesta.",
+          "Toca «Entregar». Si te equivocaste, «Anular entrega para corregir» (mientras no tenga nota).",
+          "Cuando el maestro la califique, verás tu nota y su comentario.",
+        ],
+        tip: "Fíjate en la fecha de entrega: algunas tareas no aceptan entregas tarde.",
+      },
+      {
+        title: "Presentar un examen",
+        steps: [
+          "En «Exámenes» abre el que diga «Disponible» y toca «Comenzar examen». Se presenta una sola vez.",
+          "Arriba ves el tiempo que te queda. Tus respuestas se guardan solas mientras respondes.",
+          "Al terminar, «Entregar examen». Si se acaba el tiempo, se entrega solo con lo que respondiste.",
+          "Las preguntas de selección y verdadero o falso se califican al momento; las abiertas, cuando tu maestro las revise.",
+        ],
+      },
+      {
+        title: "Tus notas",
+        steps: [
+          "En «Mis notas» ves tus notas por materia y parcial, tu asistencia, las tareas de la semana y tu horario.",
+          "Si aparece «Pide apoyo a tus maestros», todavía hay tiempo de mejorar: habla con ellos.",
+          "En «Biblioteca» están los libros y guías de tu grado; los puedes guardar para leer sin internet.",
         ],
       },
     ],
@@ -393,6 +469,14 @@ export const HELP_GUIDES: HelpGuide[] = [
           "Más abajo está el horario de clases de su sección.",
           "Si el centro registró un llamado de atención o una medida y te la avisó, aparece en «Llamados de atención y medidas».",
           "Arriba de «Mis hijos» aparecen los avisos del centro.",
+        ],
+      },
+      {
+        title: "Clases, tareas y exámenes",
+        steps: [
+          "En «Clases» ves la página de cada materia de tus hijos: temas, videos, guías, avisos y el enlace de la clase en línea.",
+          "Cada tarea dice si ya la entregó y su nota. En primaria puedes entregarla tú: abre la tarea, sube la foto del trabajo y toca «Entregar».",
+          "Los exámenes en línea también los puede presentar desde tu teléfono, si el maestro lo indica.",
         ],
       },
       {

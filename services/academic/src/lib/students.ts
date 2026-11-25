@@ -141,6 +141,8 @@ export async function getStudentDetail(
     sex: student.sex,
     medicalNotes: student.medicalNotes,
     notes: student.notes,
+    email: student.email,
+    hasStudentAccess: student.userId !== null,
     guardians: links.map(
       ({ link, guardian }): GuardianLinkDto => ({
         id: guardian.id,

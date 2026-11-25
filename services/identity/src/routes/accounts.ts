@@ -11,10 +11,11 @@ import {
   formatNationalId,
   loginIdentifier,
   type PasswordResetDto,
+  PORTAL_ROLES,
   type ScopedPersonDto,
   type UserDto,
 } from "@escolar/shared";
-import { and, asc, eq, ne } from "drizzle-orm";
+import { and, asc, eq, notInArray } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { DbOrTx } from "../db/client";
@@ -30,7 +31,7 @@ const mfaResetSchema = z.object({
     .trim()
     .min(3, { error: "Escribe el correo o la identidad" }),
 });
-const SCHOOL_STAFF_ROLES = ["docente", "coordinador", "secretaria", "finanzas", "padre"];
+const SCHOOL_STAFF_ROLES = ["docente", "coordinador", "secretaria", "finanzas", "padre", "estudiante"];
 
 /** Centros sobre los que tiene autoridad quien pide (null = todos, solo el equipo de la plataforma). */
 async function schoolsUnder(db: DbOrTx, request: FastifyRequest): Promise<Set<string> | null> {
@@ -259,7 +260,7 @@ export async function accountRoutes(app: FastifyInstance, { db, tokens }: Identi
         .select({ user: users, membership: memberships })
         .from(memberships)
         .innerJoin(users, eq(users.id, memberships.userId))
-        .where(and(eq(memberships.schoolId, id), ne(memberships.role, "padre")))
+        .where(and(eq(memberships.schoolId, id), notInArray(memberships.role, [...PORTAL_ROLES])))
         .orderBy(asc(memberships.role), asc(users.name));
       return rows.map((r) => toUserDto(r.user, r.membership));
     },

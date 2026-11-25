@@ -16,7 +16,7 @@ import type { DbOrTx } from "../db/client";
 import { enrollments, scheduleBlocks, scheduleSlots } from "../db/schema";
 import type { AcademicDeps } from "../deps";
 import { audit } from "../lib/audit";
-import { childrenOf } from "../lib/family";
+import { childrenOf, studentOf } from "../lib/family";
 import { findCurrentYear, getSection, listAssignments } from "../lib/queries";
 
 const idParams = z.object({ id: z.uuid() });
@@ -177,6 +177,28 @@ export async function scheduleRoutes(app: FastifyInstance, { db }: AcademicDeps)
     };
   });
 
+  /** El horario de la sección en la que está matriculado el alumno este año. */
+  async function studentSchedule(schoolId: string, id: string): Promise<ScheduleDto> {
+    const year = await findCurrentYear(db, schoolId);
+    const [enrollment] = year
+      ? await db
+          .select({ sectionId: enrollments.sectionId })
+          .from(enrollments)
+          .where(
+            and(
+              eq(enrollments.schoolId, schoolId),
+              eq(enrollments.studentId, id),
+              eq(enrollments.schoolYearId, year.id),
+              eq(enrollments.status, "activa"),
+            ),
+          )
+      : [];
+    return {
+      blocks: await blocksOf(db, schoolId),
+      slots: enrollment ? await slotsOf(db, schoolId, (s) => s.sectionId === enrollment.sectionId) : [],
+    };
+  }
+
   /** Para la familia: el horario de la sección de su hijo. */
   app.get(
     "/family/children/:id/schedule",
@@ -186,24 +208,19 @@ export async function scheduleRoutes(app: FastifyInstance, { db }: AcademicDeps)
       const { id } = parseOrThrow(idParams, request.params);
       if (!(await childrenOf(db, schoolId, request.auth.userId)).includes(id))
         throw notFound("Alumno no encontrado");
-      const year = await findCurrentYear(db, schoolId);
-      const [enrollment] = year
-        ? await db
-            .select({ sectionId: enrollments.sectionId })
-            .from(enrollments)
-            .where(
-              and(
-                eq(enrollments.schoolId, schoolId),
-                eq(enrollments.studentId, id),
-                eq(enrollments.schoolYearId, year.id),
-                eq(enrollments.status, "activa"),
-              ),
-            )
-        : [];
-      return {
-        blocks: await blocksOf(db, schoolId),
-        slots: enrollment ? await slotsOf(db, schoolId, (s) => s.sectionId === enrollment.sectionId) : [],
-      };
+      return studentSchedule(schoolId, id);
+    },
+  );
+
+  /** Para el alumno: su propio horario. */
+  app.get(
+    "/student/me/schedule",
+    { preHandler: [app.authenticate, requireRole("estudiante")] },
+    async (request): Promise<ScheduleDto> => {
+      const schoolId = tenantOf(request);
+      const id = await studentOf(db, schoolId, request.auth.userId);
+      if (!id) throw notFound("Tu cuenta no está ligada a un alumno del centro");
+      return studentSchedule(schoolId, id);
     },
   );
 }

@@ -106,6 +106,34 @@
       "when": 1795452101926,
       "tag": "0014_biblioteca",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1795562421788,
+      "tag": "0015_cuentas_alumnos",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1795562848621,
+      "tag": "0016_aula_clases",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1795563477355,
+      "tag": "0017_aula_tareas",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1795564342062,
+      "tag": "0018_aula_examenes",
+      "breakpoints": true
     }
   ]
 }

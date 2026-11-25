@@ -81,6 +81,13 @@ registros; las llaves se crean y se guardan directo en AWS Secrets Manager.
    `FCM_SERVICE_ACCOUNT` y el JSON de la cuenta de servicio de Firebase (ver
    [`apps/mobile/README.md`](../apps/mobile/README.md)). Volver a desplegar.
 
+10. **Centro de demostración (opcional):** un secreto `DEMO_PASSWORD` en el ambiente (mínimo 10
+    caracteres, distinta de las demás) y **Actions → «Cargar el centro de demostración» → Run
+    workflow**. Crea el «Centro Educativo Demostración CONECTA» (ficticio) con su personal, alumnos de
+    Primer y Séptimo grado, una familia, notas, asistencia y el aula virtual llena. El resumen del flujo
+    trae la lista de usuarios; todos usan la contraseña de `DEMO_PASSWORD`. Sirve para enseñar CONECTA
+    y para la revisión de Google Play. Correrlo otra vez no duplica nada.
+
 Para actualizar CONECTA más adelante, solo se repite el paso 6. Al terminar, el flujo revisa que el
 panel llegue a identity y academic (y los reinicia solo si hace falta).
 

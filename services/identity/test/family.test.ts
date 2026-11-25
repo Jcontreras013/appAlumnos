@@ -155,3 +155,61 @@ describe("cuentas de familias", () => {
     expect(reset.statusCode).toBe(404);
   });
 });
+
+describe("cuentas de alumnos", () => {
+  const grantStudent = (payload: object, token = secretaria) =>
+    ctx.app.inject({ method: "POST", url: "/student-accounts", headers: ctx.auth(token), payload });
+  let student: FamilyAccountDto;
+  let password: string;
+
+  it("la secretaría le da su cuenta a un alumno: entra con su identidad, como «Alumno»", async () => {
+    const res = await grantStudent({ name: "Luis Martínez", nationalId: "0801-2011-05555" });
+    expect(res.statusCode).toBe(200);
+    student = res.json();
+    expect(student).toMatchObject({ login: "0801-2011-05555", linkedExisting: false });
+    const login = await ctx.login("0801201105555", student.temporaryPassword as string);
+    expect(login.res.statusCode).toBe(200);
+    expect(login.body.user).toMatchObject({ role: "estudiante", mustChangePassword: true });
+  });
+
+  it("no aparece en el personal; sí con ?role=estudiante", async () => {
+    const staff = (await ctx.app.inject({ method: "GET", url: "/users", headers: ctx.auth(admin) })).json<
+      UserDto[]
+    >();
+    expect(staff.some((u) => u.role === "estudiante")).toBe(false);
+    const students = (
+      await ctx.app.inject({ method: "GET", url: "/users?role=estudiante", headers: ctx.auth(admin) })
+    ).json<UserDto[]>();
+    expect(students.map((u) => u.name)).toContain("Luis Martínez");
+  });
+
+  it("la contraseña de un alumno se restablece por su ruta, no por la de familias", async () => {
+    const asFamily = await ctx.app.inject({
+      method: "POST",
+      url: `/family-accounts/${student.userId}/reset-password`,
+      headers: ctx.auth(secretaria),
+    });
+    expect(asFamily.statusCode).toBe(404);
+    const reset = await ctx.app.inject({
+      method: "POST",
+      url: `/student-accounts/${student.userId}/reset-password`,
+      headers: ctx.auth(secretaria),
+    });
+    expect(reset.statusCode).toBe(200);
+    password = reset.json<FamilyAccountDto>().temporaryPassword as string;
+    expect(password).toBeTruthy();
+  });
+
+  it("un docente no crea cuentas de alumno; quitar la cuenta lo deja sin entrar", async () => {
+    const docente = await ctx.tokenFor("docente@familias.hn");
+    expect((await grantStudent({ name: "Otro", nationalId: "0801201100002" }, docente)).statusCode).toBe(403);
+    const del = await ctx.app.inject({
+      method: "DELETE",
+      url: `/student-accounts/${student.userId}`,
+      headers: ctx.auth(secretaria),
+    });
+    expect(del.statusCode).toBe(204);
+    const login = await ctx.login("0801201105555", password);
+    expect(login.res.statusCode).not.toBe(200);
+  });
+});

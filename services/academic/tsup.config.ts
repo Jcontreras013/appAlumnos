@@ -1,7 +1,12 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
-  entry: ["src/index.ts", "src/scripts/migrate.ts", "src/scripts/seed-demo.ts"],
+  entry: [
+    "src/index.ts",
+    "src/scripts/migrate.ts",
+    "src/scripts/seed-demo.ts",
+    "src/scripts/seed-centro-demo.ts",
+  ],
   format: ["esm"],
   target: "node22",
   platform: "node",

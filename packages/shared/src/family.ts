@@ -18,6 +18,23 @@ export const portalAccessInputSchema = z.object({
 });
 export type PortalAccessInput = z.infer<typeof portalAccessInputSchema>;
 
+/** Cuenta del alumno en el aula virtual recién creada (o enlazada, o con contraseña nueva). */
+export interface StudentAccessDto extends FamilyAccountDto {
+  studentId: string;
+  studentName: string;
+  /** Grado y sección del año vigente, para la carta de acceso. */
+  sectionLabel: string | null;
+}
+
+/** Cuentas para toda una sección: las nuevas (con su contraseña temporal) y las que no se pudieron. */
+export interface SectionStudentAccessDto {
+  created: StudentAccessDto[];
+  /** Ya tenían cuenta: siguen con su contraseña. */
+  alreadyActive: number;
+  /** Sin identidad ni correo en su ficha: hay que completarla primero. */
+  skipped: Array<{ studentId: string; studentName: string }>;
+}
+
 export interface PortalAccessDto extends FamilyAccountDto {
   guardianId: string;
   guardianName: string;

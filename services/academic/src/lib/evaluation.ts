@@ -1,4 +1,4 @@
-import type { AccessClaims } from "@escolar/service-kit";
+import { type AccessClaims, conflict } from "@escolar/service-kit";
 import {
   type AssignmentDto,
   type AttendanceSheetDto,
@@ -19,7 +19,7 @@ import {
   type StudentRiskDto,
   type TeacherClassDto,
 } from "@escolar/shared";
-import { and, asc, desc, eq, gte, inArray, isNull, lte } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, isNull, lte } from "drizzle-orm";
 import type { DbOrTx } from "../db/client";
 import {
   activities,
@@ -93,6 +93,7 @@ export async function rosterOf(db: DbOrTx, schoolId: string, sectionIds: string[
       firstNames: students.firstNames,
       lastNames: students.lastNames,
       nationalId: students.nationalId,
+      userId: students.userId,
     })
     .from(enrollments)
     .innerJoin(students, eq(students.id, enrollments.studentId))
@@ -512,4 +513,69 @@ async function plansSummary(
     overdue: board.totals.atrasadas,
     dayOff: board.dayOff,
   };
+}
+
+/**
+ * Crea o actualiza una actividad de la libreta (del cuaderno o de una tarea del aula virtual). Cada
+ * parcial vale 100 puntos: las actividades de una clase no pueden repartir más, y una actividad no
+ * puede valer menos que una nota ya puesta. Va dentro de la transacción de quien la llama.
+ */
+export async function saveActivity(
+  tx: DbOrTx,
+  input: {
+    id: string;
+    schoolId: string;
+    assignmentId: string;
+    periodId: string;
+    name: string;
+    maxPoints: number;
+    date: string;
+    userId: string;
+  },
+): Promise<void> {
+  const [existing] = await tx
+    .select()
+    .from(activities)
+    .where(and(eq(activities.schoolId, input.schoolId), eq(activities.id, input.id)));
+  if (existing && existing.assignmentId !== input.assignmentId)
+    throw conflict("Esa actividad es de otra clase");
+  const others = await tx
+    .select({ id: activities.id, maxPoints: activities.maxPoints })
+    .from(activities)
+    .where(and(eq(activities.assignmentId, input.assignmentId), eq(activities.periodId, input.periodId)));
+  const used = others.filter((a) => a.id !== input.id).reduce((acc, a) => acc + a.maxPoints, 0);
+  if (used + input.maxPoints > 100) {
+    throw conflict(
+      `El parcial ya tiene ${used} puntos repartidos; a esta actividad le puedes dar hasta ${100 - used}`,
+    );
+  }
+  if (existing) {
+    const tooHigh = await tx
+      .select({ points: scores.points })
+      .from(scores)
+      .where(and(eq(scores.activityId, input.id), gt(scores.points, input.maxPoints)))
+      .limit(1);
+    if (tooHigh.length) throw conflict("Hay notas mayores a ese valor; corrígelas antes de bajarlo");
+    await tx
+      .update(activities)
+      .set({
+        name: input.name,
+        maxPoints: input.maxPoints,
+        date: input.date,
+        periodId: input.periodId,
+        updatedAt: new Date(),
+      })
+      .where(eq(activities.id, input.id));
+  } else {
+    await tx.insert(activities).values({
+      id: input.id,
+      schoolId: input.schoolId,
+      assignmentId: input.assignmentId,
+      periodId: input.periodId,
+      name: input.name,
+      maxPoints: input.maxPoints,
+      date: input.date,
+      createdByUserId: input.userId,
+    });
+  }
 }

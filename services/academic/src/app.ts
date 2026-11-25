@@ -16,6 +16,7 @@ import type { PlanDrafter } from "./lib/plan-assistant";
 import { announcementRoutes } from "./routes/announcements";
 import { auditLogRoutes } from "./routes/audit-log";
 import { calendarRoutes } from "./routes/calendar";
+import { classroomRoutes } from "./routes/classroom";
 import { conductRoutes } from "./routes/conduct";
 import { documentRoutes } from "./routes/documents";
 import { evaluationRoutes } from "./routes/evaluation";
@@ -26,11 +27,14 @@ import { followUpRoutes } from "./routes/followups";
 import { importRoutes } from "./routes/import";
 import { libraryRoutes } from "./routes/library";
 import { planRoutes } from "./routes/plans";
+import { quizRoutes } from "./routes/quizzes";
 import { regionalRoutes } from "./routes/regional";
 import { scheduleRoutes } from "./routes/schedule";
 import { staffRoutes } from "./routes/staff";
 import { structureRoutes } from "./routes/structure";
+import { studentAccessRoutes } from "./routes/student-access";
 import { studentRoutes } from "./routes/students";
+import { taskRoutes } from "./routes/tasks";
 import { transferRoutes } from "./routes/transfers";
 
 export interface BuildAppOptions {
@@ -75,6 +79,10 @@ export async function buildApp(options: BuildAppOptions) {
     await evaluationRoutes(scope, deps);
     await planRoutes(scope, deps);
     await familyRoutes(scope, deps);
+    await studentAccessRoutes(scope, deps);
+    await classroomRoutes(scope, deps);
+    await taskRoutes(scope, deps);
+    await quizRoutes(scope, deps);
     await exportRoutes(scope, deps);
     await followUpRoutes(scope, deps);
     await announcementRoutes(scope, deps);

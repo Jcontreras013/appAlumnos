@@ -485,6 +485,32 @@ y materia.
 - Solo quien lo subió, la dirección o la coordinación lo quitan (queda en la bitácora). Un grado o una
   materia con materiales no se puede borrar.
 
+## Aula virtual
+
+Cada clase (una materia en una sección, con su maestro) tiene su página, como en Canvas o Classroom.
+
+- **Cuentas de alumno** (rol «Alumno»): la secretaría o la dirección las dan desde la ficha del
+  alumno o a toda una sección («Alumnos» filtrado por sección), con la hoja de accesos para recortar.
+  El alumno entra con su identidad (o su correo) y una contraseña temporal. Ve «Mis clases», «Mis
+  notas» (lo mismo que su familia) y la biblioteca de su grado. En primaria entrega la familia.
+- **Temas** con la explicación del maestro y materiales: videos de YouTube dentro de la página (la
+  política de contenido solo deja `youtube-nocookie.com` en iframes), enlaces y archivos (PDF, Office
+  e imágenes hasta 30 MB, revisados al subir). **Avisos** de la clase y el **enlace de la clase en
+  línea** (Meet, Zoom o Jitsi).
+- **Tareas:** instrucciones, fecha y hora de entrega, si acepta entregas tarde y adjuntos. Si llevan
+  nota, se crea su actividad en la libreta del parcial (con la regla de los 100 puntos del cuaderno).
+  El alumno o su familia entregan texto, fotos y documentos (hasta 10 de 15 MB), pueden anular la
+  entrega para corregirla y ven la nota y el comentario. El maestro califica y la nota cae en la
+  libreta; si la cambia en el cuaderno, manda la del cuaderno.
+- **Exámenes en línea:** ventana de apertura y cierre, tiempo límite opcional y orden de preguntas
+  distinto por alumno. Selección múltiple y verdadero o falso se califican solas; las abiertas las
+  revisa el maestro. Se presentan una vez; las respuestas se guardan mientras se responde y, al
+  acabarse el tiempo, se entrega solo. La nota se lleva al valor del examen en la libreta. Las
+  respuestas correctas se ven cuando cierra.
+- **Quién ve qué:** publica quien da la clase (o lo sustituye), la dirección y la coordinación; la
+  secretaría la ve; el alumno de la sección y su familia la ven. Una entrega solo la ven su alumno, su
+  familia y el personal. Los archivos van al mismo almacenamiento que la biblioteca (`aula/…`).
+
 ## Calendario escolar y colegios bilingües
 
 - **Calendario escolar** («Calendario escolar» en el panel): la secretaría o la dirección marcan los
@@ -495,6 +521,7 @@ y materia.
   - el asistente de planificación deja fuera los días feriados de la semana.
 
   Las familias ven los próximos días sin clases en su portal. Todo el personal consulta el calendario.
+
 - **Año de septiembre a junio** (colegios bilingües, año escolar de Estados Unidos): el año lectivo y
   sus parciales son rangos de fechas, así que funciona igual que el de febrero a noviembre. Los
   parciales se pueden llamar como el colegio quiera («First Quarter», «Bimestre I»…).

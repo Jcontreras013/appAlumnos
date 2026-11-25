@@ -7,8 +7,8 @@ import { LibraryBrowser } from "./library-browser";
 export const metadata: Metadata = { title: "Biblioteca" };
 
 export default async function LibraryPage() {
-  const session = await requireRole("admin", "coordinador", "secretaria", "docente", "padre");
-  const family = session.user.role === "padre";
+  const session = await requireRole("admin", "coordinador", "secretaria", "docente", "padre", "estudiante");
+  const family = session.user.role === "padre" || session.user.role === "estudiante";
   const [items, grades, subjects] = await Promise.all([
     academic.library(session.accessToken),
     family ? [] : academic.listGrades(session.accessToken),
