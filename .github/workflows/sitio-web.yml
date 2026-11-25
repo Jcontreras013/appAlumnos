@@ -1,0 +1,164 @@
+name: Publicar el sitio de Jc-System
+
+# Sube la carpeta sitio/ a AWS y la publica en jcsystemhn.com (S3 + CloudFront, con HTTPS).
+# Corre solo cuando cambia sitio/ en main, o a mano desde Actions.
+#
+# La primera vez pide el certificado HTTPS (en us-east-1, donde CloudFront lo exige) y muestra en el
+# resumen los registros que van en el DNS del dominio. Mientras se valida, el sitio ya se puede ver en
+# la dirección de CloudFront; cuando el certificado está emitido, se vuelve a correr y queda en
+# jcsystemhn.com y www.jcsystemhn.com.
+#
+# Variable opcional SITIO_DOMINIO (por defecto jcsystemhn.com).
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - sitio/**
+      - infra/sitio-web.yaml
+      - .github/workflows/sitio-web.yml
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: sitio-web
+  cancel-in-progress: false
+
+jobs:
+  publicar:
+    name: Publicar el sitio
+    runs-on: ubuntu-latest
+    # Usa el permiso de AWS del ambiente dev de GitHub (el sitio es uno solo).
+    environment: dev
+    timeout-minutes: 40
+    env:
+      DOMINIO: ${{ vars.SITIO_DOMINIO || 'jcsystemhn.com' }}
+      PILA: JcSystem-sitio
+      AWS_REGION: us-east-1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+          mask-aws-account-id: true
+
+      - name: Certificado HTTPS
+        run: |
+          set -euo pipefail
+          if ! [[ "$DOMINIO" =~ ^[a-z0-9.-]+$ ]]; then
+            echo "::error::SITIO_DOMINIO no es un dominio válido."
+            exit 1
+          fi
+          ARN=$(aws acm list-certificates --certificate-statuses ISSUED PENDING_VALIDATION \
+            --query "CertificateSummaryList[?DomainName=='$DOMINIO'].CertificateArn | [0]" --output text)
+          if [ "$ARN" = "None" ] || [ -z "$ARN" ]; then
+            ARN=$(aws acm request-certificate --domain-name "$DOMINIO" \
+              --subject-alternative-names "www.$DOMINIO" --validation-method DNS \
+              --idempotency-token sitiojcsystem --tags Key=proyecto,Value=sitio-jcsystem \
+              --query CertificateArn --output text)
+            echo "Certificado pedido para $DOMINIO y www.$DOMINIO."
+            # AWS tarda unos segundos en preparar los registros de validación.
+            for _ in $(seq 1 12); do
+              N=$(aws acm describe-certificate --certificate-arn "$ARN" \
+                --query "length(Certificate.DomainValidationOptions[?ResourceRecord])" --output text)
+              [ "$N" = "2" ] && break
+              sleep 5
+            done
+          fi
+          ESTADO=$(aws acm describe-certificate --certificate-arn "$ARN" --query Certificate.Status --output text)
+          echo "Estado del certificado: $ESTADO"
+          if [ "$ESTADO" = "ISSUED" ]; then
+            echo "CERTIFICADO=$ARN" >> "$GITHUB_ENV"
+          else
+            echo "CERTIFICADO=" >> "$GITHUB_ENV"
+            # Los registros de validación son públicos (van en el DNS): se muestran para copiarlos.
+            aws acm describe-certificate --certificate-arn "$ARN" \
+              --query "Certificate.DomainValidationOptions[].ResourceRecord.[Name,Value]" --output text \
+              | sort -u > validacion.txt
+          fi
+
+      - name: Bucket y CloudFront
+        run: |
+          set -euo pipefail
+          aws cloudformation deploy --stack-name "$PILA" --template-file infra/sitio-web.yaml \
+            --parameter-overrides "Dominio=$DOMINIO" "CertificadoArn=$CERTIFICADO" \
+            --tags proyecto=sitio-jcsystem --no-fail-on-empty-changeset
+          salida() {
+            aws cloudformation describe-stacks --stack-name "$PILA" \
+              --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text
+          }
+          {
+            echo "BUCKET=$(salida Bucket)"
+            echo "DISTRIBUCION=$(salida DistribucionId)"
+            echo "CLOUDFRONT=$(salida DominioCloudFront)"
+          } >> "$GITHUB_ENV"
+
+      - name: Subir los archivos
+        run: |
+          set -euo pipefail
+          # Imágenes, estilos y video: un día en caché. Las páginas: 5 minutos.
+          aws s3 sync sitio/ "s3://$BUCKET" --delete --exclude "*.html" \
+            --cache-control "public, max-age=86400"
+          aws s3 sync sitio/ "s3://$BUCKET" --exclude "*" --include "*.html" \
+            --cache-control "public, max-age=300" --content-type "text/html; charset=utf-8"
+          aws cloudfront create-invalidation --distribution-id "$DISTRIBUCION" --paths "/*" \
+            --query Invalidation.Id --output text
+
+      - name: Revisar que abra
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 20); do
+            CODIGO=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "https://$CLOUDFRONT/" || true)
+            [ "$CODIGO" = "200" ] && break
+            sleep 15
+          done
+          echo "https://$CLOUDFRONT/ responde $CODIGO"
+          [ "$CODIGO" = "200" ]
+          if [ -n "$CERTIFICADO" ]; then
+            CODIGO=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "https://$DOMINIO/" || true)
+            echo "https://$DOMINIO/ responde ${CODIGO} (si no es 200, falta el registro en el DNS o todavía se propaga)."
+          fi
+
+      - name: Qué sigue
+        if: always()
+        run: |
+          {
+            echo "## Sitio de Jc-System"
+            echo
+            if [ -n "${CLOUDFRONT:-}" ]; then
+              echo "Vista previa (ya funciona): https://$CLOUDFRONT"
+              echo
+            fi
+            if [ -s validacion.txt ]; then
+              echo "### 1. Validar el certificado HTTPS"
+              echo
+              echo "En el DNS del dominio (Spaceship → $DOMINIO → DNS → Agregar registro) crea estos **CNAME**."
+              echo "En «Host» va solo la parte antes de \`.$DOMINIO\`:"
+              echo
+              echo "| Tipo | Host | Valor |"
+              echo "| --- | --- | --- |"
+              while read -r NOMBRE VALOR; do
+                HOST=${NOMBRE%.}; HOST=${HOST%."$DOMINIO"}
+                echo "| CNAME | \`$HOST\` | \`$VALOR\` |"
+              done < validacion.txt
+              echo
+              echo "AWS lo valida solo (de minutos a unas horas). Después **vuelve a correr este flujo** y aquí saldrá el paso 2."
+            elif [ -n "${CERTIFICADO:-}" ] && [ -n "${CLOUDFRONT:-}" ]; then
+              echo "### Apuntar el dominio al sitio"
+              echo
+              echo "En el DNS del dominio (Spaceship → $DOMINIO → DNS) borra los registros **A** o de «parking» de \`@\` y de \`www\`, y crea:"
+              echo
+              echo "| Tipo | Host | Valor |"
+              echo "| --- | --- | --- |"
+              echo "| CNAME (Spaceship lo resuelve como ALIAS en @) | \`@\` | \`$CLOUDFRONT\` |"
+              echo "| CNAME | \`www\` | \`$CLOUDFRONT\` |"
+              echo
+              echo "No toques el registro de \`conecta\`: es la plataforma escolar."
+              echo
+              echo "Listo: https://$DOMINIO (www.$DOMINIO lleva al mismo sitio)."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

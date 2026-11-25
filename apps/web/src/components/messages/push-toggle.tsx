@@ -77,7 +77,11 @@ export async function forgetPushOnThisDevice(): Promise<void> {
   try {
     if (nativePushAvailable()) {
       const token = storedNativeToken();
-      if (token) await removeNativePushAction(token);
+      // Sin identificador guardado, este teléfono nunca activó los avisos: no hay nada que olvidar. Y no
+      // se debe tocar Firebase: en una app armada sin Firebase (sin google-services.json), «unregister»
+      // cierra la app de golpe y la sesión queda abierta.
+      if (!token) return;
+      await removeNativePushAction(token).catch(() => {});
       storeNativeToken(null);
       // Firebase olvida el identificador: si en este teléfono entra otra persona, recibe uno nuevo.
       await unregisterNativePush();
