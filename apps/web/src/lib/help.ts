@@ -384,6 +384,15 @@ export const HELP_GUIDES: HelpGuide[] = [
         ],
       },
       {
+        title: "Si alguien pide eliminar su cuenta",
+        steps: [
+          "Cualquier persona puede pedirlo (por un alumno, también su familia). Quítale el acceso ese mismo día:",
+          "Alumno: en su ficha, «Cuenta del aula virtual» → «Quitar cuenta». Familia: en la ficha del alumno, junto al responsable, «Quitar acceso». Personal: la dirección, en «Personal y usuarios», «Desactivar».",
+          "Después avisa a Jc-System con el nombre y el correo o la identidad con que entraba: el equipo de la plataforma elimina la cuenta en un máximo de 30 días.",
+        ],
+        tip: "Las notas, la asistencia y la ficha del alumno no se borran: son el registro escolar del centro.",
+      },
+      {
         title: "Traslados y avisos",
         steps: [
           "Si un alumno se va a otro centro del departamento: en su ficha, «Trasladar a otro centro».",
@@ -532,6 +541,30 @@ export const HELP_GUIDES: HelpGuide[] = [
           "Elige el distrito del piloto y las fechas. Cada meta dice si se cumple, y la tabla de abajo muestra cada centro.",
           "«Descargar Excel» en el tablero baja el resumen de cada centro y la matrícula de todos.",
         ],
+      },
+    ],
+  },
+  {
+    key: "plataforma",
+    title: "Equipo de la plataforma",
+    intro: "Lo que atiende Jc-System para todos los centros, desde «Departamentos».",
+    roles: ["superadmin"],
+    sections: [
+      {
+        title: "Restablecer la verificación en dos pasos",
+        steps: [
+          "Para quien perdió el teléfono y sus códigos de recuperación: en «Departamentos» → «Verificación en dos pasos», escribe su correo o identidad.",
+          "La persona vuelve a entrar solo con su contraseña y activa la verificación de nuevo.",
+        ],
+      },
+      {
+        title: "Eliminar una cuenta",
+        steps: [
+          "Cuando alguien lo pide (como explica la página pública «Eliminar una cuenta»), primero el centro le quita el acceso.",
+          "En «Departamentos» → «Eliminar una cuenta», escribe su correo o identidad y toca «Buscar la cuenta»: revisa que el nombre y los centros sean los de la persona.",
+          "Escribe ELIMINAR y toca «Eliminar la cuenta». Se borran su correo o identidad, su contraseña, la verificación, sus sesiones y los avisos del teléfono.",
+        ],
+        tip: "Hazlo dentro de los 30 días que promete la página. No se puede deshacer: si la persona vuelve, el centro le crea una cuenta nueva.",
       },
     ],
   },

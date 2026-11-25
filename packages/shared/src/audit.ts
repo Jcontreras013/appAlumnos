@@ -27,6 +27,7 @@ export const AUDIT_LABELS: Record<string, string> = {
   "account.updated": "Corrigió los datos de una cuenta",
   "account.password_reset": "Dio una contraseña temporal",
   "account.mfa_reset": "Restableció la verificación en dos pasos",
+  "account.erased": "Eliminó una cuenta a pedido de la persona",
   "user.created": "Creó una cuenta",
   "user.activated": "Reactivó una cuenta",
   "user.deactivated": "Desactivó una cuenta",

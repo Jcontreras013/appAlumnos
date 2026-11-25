@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { requireRole } from "@/lib/dal";
 import { identity } from "@/lib/identity";
-import { DepartmentForm, DistrictForm, RegionalUserForm, ResetMfaForm } from "./forms";
+import { DepartmentForm, DistrictForm, EraseAccountForm, RegionalUserForm, ResetMfaForm } from "./forms";
 
 export const metadata: Metadata = { title: "Departamentos" };
 
@@ -79,6 +79,17 @@ export default async function DepartmentsPage() {
           <div className="card p-5">
             <h2 className="mb-4 font-semibold text-slate-900">Verificación en dos pasos</h2>
             <ResetMfaForm />
+          </div>
+          <div className="card p-5">
+            <h2 className="mb-1 font-semibold text-slate-900">Eliminar una cuenta</h2>
+            <p className="mb-4 text-xs text-slate-500">
+              Cuando una persona (o la familia de un alumno) lo pide, como explica{" "}
+              <a href="/eliminar-cuenta" className="underline" target="_blank" rel="noreferrer">
+                /eliminar-cuenta
+              </a>
+              . Primero el centro le quita el acceso.
+            </p>
+            <EraseAccountForm />
           </div>
         </aside>
       </div>
