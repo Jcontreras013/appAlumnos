@@ -2,7 +2,8 @@
  * Datos del CENTRO DE DEMOSTRACIÓN («Centro Educativo Demostración CONECTA»): para enseñar CONECTA a
  * un colegio y para la revisión de Google Play. Todo es ficticio. Se carga A TRAVÉS DE LAS APIs, igual
  * que lo haría el panel, después de que el seed de identity (SEED_CENTRO_DEMO=true) creó el centro y
- * su personal. Las fechas son relativas a hoy. Si el centro ya tiene alumnos, no hace nada.
+ * su personal. Las fechas son relativas a hoy. Si ya se cargó completo, no hace nada; si una carga
+ * anterior se quedó a medias, sigue con lo que falta sin repetir lo que ya está.
  *
  * - Séptimo grado A (secundaria): alumnos con su cuenta del aula virtual; Matemáticas con temas,
  *   guía en PDF, avisos, clase en línea, una tarea calificada, otra abierta y un examen abierto.
@@ -13,21 +14,32 @@
  *   IDENTITY_URL=… ACADEMIC_URL=… SEED_DEMO_PASSWORD=… node dist/scripts/seed-centro-demo.js
  */
 
-import { randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import { optionalEnv, requireEnv } from "@escolar/service-kit";
 import {
+  type AnnouncementDto,
+  type AssignmentDto,
   type AttendanceSheetDto,
   type AttendanceStatus,
   addDays,
   CENTRO_DEMO,
   type ClassPostDto,
+  type ClassQuizDetailDto,
   type ClassQuizDto,
+  type ClassroomDto,
+  type ClassTaskDetailDto,
   type ClassTaskDto,
   type FamilyAccountDto,
+  type GradeDto,
+  type LibraryItemDto,
+  passwordSchema,
   type QuizQuestionDto,
+  type SchoolYearDto,
+  type SectionDto,
   type SectionStudentAccessDto,
   type StudentDetailDto,
   type StudentListItemDto,
+  type SubjectDto,
   todayInHonduras,
   type UserDto,
 } from "@escolar/shared";
@@ -95,8 +107,14 @@ async function settle(account: FamilyAccountDto): Promise<string> {
       await new Promise((r) => setTimeout(r, 10_000));
       continue;
     }
-    if (!res.ok)
-      throw new Error(`No se pudo poner la contraseña de la demo a ${account.login} (${res.status})`);
+    if (!res.ok) {
+      // El motivo que da identity (p. ej. por qué no sirve la contraseña); nunca la contraseña.
+      const reason = ((await res.json().catch(() => null)) as { error?: { message?: string } } | null)?.error
+        ?.message;
+      throw new Error(
+        `No se pudo poner la contraseña de la demo a ${account.login} (${res.status})${reason ? `: ${reason}` : ""}`,
+      );
+    }
     break;
   }
   return login(account.login, PASSWORD);
@@ -216,23 +234,86 @@ const FIRST: Array<[string, string, string]> = [
   ["Abigail", "Enamorado Sierra", "0801201900208"],
 ];
 
+/** Un id que siempre sale igual para la misma clave (así, volver a correr no duplica actividades). */
+function stableId(key: string): string {
+  const h = createHash("sha256").update(`centro-demo:${key}`).digest("hex");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-a${h.slice(17, 20)}-${h.slice(20, 32)}`;
+}
+
+const ANNOUNCEMENT = "Reunión de padres de familia";
+
 async function main() {
   console.log(`Cargando «${CENTRO_DEMO.name}»…`);
+  // La misma regla de las pantallas: si la contraseña no sirve, se avisa antes de tocar nada.
+  const weak = passwordSchema.safeParse(PASSWORD);
+  if (!weak.success) {
+    throw new Error(`La contraseña de la demo (DEMO_PASSWORD) no sirve: ${weak.error.issues[0]?.message}`);
+  }
   const [, , , [, , mathEmail], [, , spanishEmail], [, , primaryEmail]] = CENTRO_DEMO.staff;
   const director = await login(CENTRO_DEMO.staff[0][2], PASSWORD);
 
-  const existing = await ac<{ total: number }>(director, "/students?limit=1");
-  if (existing.total > 0) {
-    console.log("El centro de demostración ya tiene alumnos: no se carga otra vez.");
-    return;
+  const list = (sectionId: string) =>
+    ac<{ items: StudentListItemDto[] }>(director, `/students?sectionId=${sectionId}&limit=100`).then(
+      (r) => r.items,
+    );
+
+  /**
+   * Cuentas de la alumna (con su correo), de tres compañeros de 7.º y de la familia, con la contraseña
+   * de la demo. Se crean si faltan y siempre reciben la contraseña actual (por si cambió DEMO_PASSWORD).
+   */
+  async function accounts(seventhId: string, seventhStudents: StudentListItemDto[]) {
+    const valeria = seventhStudents.find((s) => s.firstNames === CENTRO_DEMO.student.firstNames);
+    if (!valeria) throw new Error("No se encontró a la alumna de la demo");
+    const secretary = await login(CENTRO_DEMO.staff[2][2], PASSWORD);
+    const studentToken = async (studentId: string, email?: string) => {
+      const detail = await ac<StudentDetailDto>(director, `/students/${studentId}`);
+      if (!detail.hasStudentAccess) {
+        await ac(secretary, `/students/${studentId}/student-access`, "POST", email ? { email } : {});
+      }
+      // Una contraseña temporal nueva (aunque ya tuviera cuenta), que enseguida pasa a la de la demo.
+      return settle(
+        await ac<FamilyAccountDto>(secretary, `/students/${studentId}/student-access/reset`, "POST"),
+      );
+    };
+    const valeriaToken = await studentToken(valeria.id, CENTRO_DEMO.student.email);
+    await ac<SectionStudentAccessDto>(secretary, `/sections/${seventhId}/student-access`, "POST");
+    const classmates: Record<string, string> = {};
+    for (const name of ["Diego Alejandro", "Sofía Isabel", "Carlos Eduardo"]) {
+      const student = seventhStudents.find((s) => s.firstNames === name);
+      if (student) classmates[name] = await studentToken(student.id);
+    }
+    const valeriaDetail = await ac<StudentDetailDto>(director, `/students/${valeria.id}`);
+    const mom = valeriaDetail.guardians.find((g) => g.fullName === CENTRO_DEMO.family.name);
+    if (!mom) throw new Error("No se encontró a la madre de la demo");
+    if (!mom.hasPortalAccess) {
+      await ac(secretary, `/guardians/${mom.id}/portal-access`, "POST", { email: CENTRO_DEMO.family.email });
+    }
+    await settle(await ac<FamilyAccountDto>(secretary, `/guardians/${mom.id}/portal-access/reset`, "POST"));
+    return { valeriaToken, classmates };
   }
 
+  // El aviso a las familias es lo último que se carga: si ya está, el centro está completo y solo se
+  // ponen al día las contraseñas de la alumna y la familia.
+  const announcements = await ac<AnnouncementDto[]>(director, "/announcements");
+  if (announcements.some((a) => a.title === ANNOUNCEMENT)) {
+    const seventh = (await ac<SectionDto[]>(director, "/sections")).find(
+      (s) => s.gradeName === "Séptimo grado" && s.name === "A",
+    );
+    if (seventh) await accounts(seventh.id, await list(seventh.id));
+    console.log("El centro de demostración ya está cargado: solo se pusieron al día las contraseñas.");
+    return;
+  }
+  // Si una carga anterior se quedó a medias, cada paso revisa lo que ya existe y sigue desde ahí.
+
   // ── Año lectivo y parciales: hoy va en el IV parcial, que cierra en dos meses ──
-  const year = await ac<{ id: string }>(director, "/school-years", "POST", {
-    name: today.slice(0, 4),
-    startsOn: addDays(today, -235),
-    endsOn: addDays(today, 60),
-  });
+  const years = await ac<SchoolYearDto[]>(director, "/school-years");
+  const year =
+    years[0] ??
+    (await ac<SchoolYearDto>(director, "/school-years", "POST", {
+      name: today.slice(0, 4),
+      startsOn: addDays(today, -235),
+      endsOn: addDays(today, 60),
+    }));
   const span = (name: string, from: number, to: number, close: number) => ({
     name,
     startsOn: addDays(today, from),
@@ -249,23 +330,36 @@ async function main() {
   });
   const periodId = (n: number) => periods.find((p) => p.number === n)?.id as string;
 
+  const subjects = await ac<SubjectDto[]>(director, "/subjects");
   const subjectIds: Record<string, string> = {};
   for (const name of ["Matemáticas", "Español", "Ciencias Naturales", "Ciencias Sociales", "Inglés"]) {
-    subjectIds[name] = (
-      await ac<{ id: string }>(director, "/subjects", "POST", {
-        name,
-        ...(name === "Inglés" ? { language: "en" } : {}),
-      })
-    ).id;
+    subjectIds[name] =
+      subjects.find((x) => x.name === name)?.id ??
+      (
+        await ac<SubjectDto>(director, "/subjects", "POST", {
+          name,
+          ...(name === "Inglés" ? { language: "en" } : {}),
+        })
+      ).id;
   }
+  const gradeList = await ac<GradeDto[]>(director, "/grades");
+  const sectionList = await ac<SectionDto[]>(director, "/sections");
   const section = async (gradeName: string, sortOrder: number) => {
-    const grade = await ac<{ id: string }>(director, "/grades", "POST", { name: gradeName, sortOrder });
-    return ac<{ id: string }>(director, "/sections", "POST", {
-      schoolYearId: year.id,
-      gradeId: grade.id,
-      name: "A",
-      capacity: 30,
-    });
+    const grade =
+      gradeList.find((g) => g.name === gradeName) ??
+      (await ac<GradeDto>(director, "/grades", "POST", { name: gradeName, sortOrder }));
+    const existing = sectionList.find(
+      (x) => x.schoolYearId === year.id && x.gradeId === grade.id && x.name === "A",
+    );
+    return (
+      existing ??
+      (await ac<SectionDto>(director, "/sections", "POST", {
+        schoolYearId: year.id,
+        gradeId: grade.id,
+        name: "A",
+        capacity: 30,
+      }))
+    );
   };
   const first = await section("Primer grado", 1);
   const seventh = await section("Séptimo grado", 7);
@@ -278,12 +372,14 @@ async function main() {
       throw new Error(`Falta la cuenta ${email}: corre primero el seed de identity (SEED_CENTRO_DEMO)`);
     return user.id;
   };
-  const assign = (sectionId: string, subject: string, email: string) =>
-    ac<{ id: string }>(director, "/assignments", "POST", {
+  const assignments = await ac<AssignmentDto[]>(director, "/assignments");
+  const assign = async (sectionId: string, subject: string, email: string): Promise<{ id: string }> =>
+    assignments.find((a) => a.sectionId === sectionId && a.subjectId === subjectIds[subject]) ??
+    (await ac<AssignmentDto>(director, "/assignments", "POST", {
       sectionId,
       subjectId: subjectIds[subject],
       teacherUserId: userId(email),
-    });
+    }));
   const math7 = await assign(seventh.id, "Matemáticas", mathEmail);
   const science7 = await assign(seventh.id, "Ciencias Naturales", mathEmail);
   const spanish7 = await assign(seventh.id, "Español", spanishEmail);
@@ -292,73 +388,45 @@ async function main() {
   const firstClasses: Record<string, { id: string }> = {};
   for (const subject of Object.keys(subjectIds))
     firstClasses[subject] = await assign(first.id, subject, primaryEmail);
-  console.log("  + año, parciales, grados, materias y maestros");
+  console.log("  ✓ año, parciales, grados, materias y maestros");
 
   // ── Alumnos y familias ──
-  const rows = [
-    ...SEVENTH.map(([nombres, apellidos, identidad]) => ({
-      nombres,
-      apellidos,
-      identidad,
-      grado: "Séptimo grado",
-    })),
-    ...FIRST.map(([nombres, apellidos, identidad]) => ({
-      nombres,
-      apellidos,
-      identidad,
-      grado: "Primer grado",
-    })),
-  ].map((r) => {
-    const gomez = r.apellidos === CENTRO_DEMO.student.lastNames;
-    return {
-      ...r,
-      seccion: "A",
-      responsable: gomez
-        ? CENTRO_DEMO.family.name
-        : `${["Carmen", "Rosa", "Marta", "José", "Juan"][rand(5)]} ${r.apellidos.split(" ")[0]}`,
-      parentesco: gomez ? "madre" : ["madre", "padre", "abuelo", "tutor"][rand(4)],
-      ...(gomez ? { identidad_responsable: MOM_ID, correo: CENTRO_DEMO.family.email } : {}),
-      telefono: `9${String(1000000 + rand(8999999)).slice(0, 7)}`,
-    };
-  });
-  await ac(director, "/students/import", "POST", { rows, dryRun: false });
-  const list = (sectionId: string) =>
-    ac<{ items: StudentListItemDto[] }>(director, `/students?sectionId=${sectionId}&limit=100`).then(
-      (r) => r.items,
-    );
-  const seventhStudents = await list(seventh.id);
-  const valeria = seventhStudents.find((s) => s.firstNames === CENTRO_DEMO.student.firstNames);
-  if (!valeria) throw new Error("No se encontró a la alumna de la demo");
-  console.log(`  + ${rows.length} alumnos en Primer grado A y Séptimo grado A`);
-
-  // ── Cuentas: la alumna (con su correo), el resto de 7.º y la familia ──
-  const secretary = await login(CENTRO_DEMO.staff[2][2], PASSWORD);
-  const valeriaAccount = await ac<FamilyAccountDto>(
-    secretary,
-    `/students/${valeria.id}/student-access`,
-    "POST",
-    {
-      email: CENTRO_DEMO.student.email,
-    },
-  );
-  const valeriaToken = await settle(valeriaAccount);
-  const bulk = await ac<SectionStudentAccessDto>(secretary, `/sections/${seventh.id}/student-access`, "POST");
-  const classmates: Record<string, string> = {};
-  for (const name of ["Diego Alejandro", "Sofía Isabel", "Carlos Eduardo"]) {
-    const account = bulk.created.find((c) => c.studentName.startsWith(name));
-    if (account) classmates[name] = await settle(account);
+  if ((await list(seventh.id)).length === 0 && (await list(first.id)).length === 0) {
+    const rows = [
+      ...SEVENTH.map(([nombres, apellidos, identidad]) => ({
+        nombres,
+        apellidos,
+        identidad,
+        grado: "Séptimo grado",
+      })),
+      ...FIRST.map(([nombres, apellidos, identidad]) => ({
+        nombres,
+        apellidos,
+        identidad,
+        grado: "Primer grado",
+      })),
+    ].map((r) => {
+      const gomez = r.apellidos === CENTRO_DEMO.student.lastNames;
+      return {
+        ...r,
+        seccion: "A",
+        responsable: gomez
+          ? CENTRO_DEMO.family.name
+          : `${["Carmen", "Rosa", "Marta", "José", "Juan"][rand(5)]} ${r.apellidos.split(" ")[0]}`,
+        parentesco: gomez ? "madre" : ["madre", "padre", "abuelo", "tutor"][rand(4)],
+        ...(gomez ? { identidad_responsable: MOM_ID, correo: CENTRO_DEMO.family.email } : {}),
+        telefono: `9${String(1000000 + rand(8999999)).slice(0, 7)}`,
+      };
+    });
+    await ac(director, "/students/import", "POST", { rows, dryRun: false });
   }
-  const detail = await ac<StudentDetailDto>(director, `/students/${valeria.id}`);
-  const mom = detail.guardians.find((g) => g.fullName === CENTRO_DEMO.family.name);
-  if (!mom) throw new Error("No se encontró a la madre de la demo");
-  const momToken = await settle(
-    await ac<FamilyAccountDto>(secretary, `/guardians/${mom.id}/portal-access`, "POST", {
-      email: CENTRO_DEMO.family.email,
-    }),
-  );
-  console.log("  + cuentas del aula virtual (alumna y 7.º grado) y de la familia");
+  const seventhStudents = await list(seventh.id);
+  console.log("  ✓ alumnos en Primer grado A y Séptimo grado A");
 
-  // ── Asistencia de las últimas tres semanas ──
+  const { valeriaToken, classmates } = await accounts(seventh.id, seventhStudents);
+  console.log("  ✓ cuentas del aula virtual (alumna y 7.º grado) y de la familia");
+
+  // ── Asistencia de las últimas tres semanas (guardarla otra vez solo la reemplaza) ──
   const schoolDays: string[] = [];
   for (let d = -21; d <= 0; d++) {
     const date = addDays(today, d);
@@ -381,7 +449,7 @@ async function main() {
       });
     }
   }
-  console.log("  + asistencia de las últimas tres semanas");
+  console.log("  ✓ asistencia de las últimas tres semanas");
 
   // ── Notas: los parciales I a III completos y el IV a medias (el resto lo ponen tareas y exámenes) ──
   const ability = new Map<string, number>();
@@ -398,7 +466,8 @@ async function main() {
     const roster = (await ac<AttendanceSheetDto>(director, `/attendance/${sectionId}?fecha=${today}`))
       .students;
     for (const [period, name, maxPoints, day] of plan) {
-      const activityId = randomUUID();
+      // El mismo id cada vez: guardarla otra vez actualiza la actividad en vez de crear otra.
+      const activityId = stableId(`${assignmentId}:${period}:${name}`);
       await ac(director, `/activities/${activityId}`, "PUT", {
         id: activityId,
         assignmentId,
@@ -428,54 +497,110 @@ async function main() {
   ];
   for (const a of [math7, science7, spanish7, social7, english7]) await grade(a.id, seventh.id, fullYear);
   for (const a of Object.values(firstClasses)) await grade(a.id, first.id, fullYear);
-  console.log("  + notas de los cuatro parciales");
+  console.log("  ✓ notas de los cuatro parciales");
 
   // ── Biblioteca ──
-  const libraryQuery = new URLSearchParams({ titulo: "Guía de fracciones · 7.º grado", para: "familias" });
-  const grades = await ac<Array<{ id: string; name: string }>>(director, "/grades");
-  const seventhGrade = grades.find((g) => g.name === "Séptimo grado");
-  if (seventhGrade) libraryQuery.set("grado", seventhGrade.id);
-  libraryQuery.set("materia", subjectIds.Matemáticas as string);
-  await upload(director, `/library/files?${libraryQuery}`, FRACTIONS_GUIDE, "Guía de fracciones 7.º.pdf");
+  const guideTitle = "Guía de fracciones · 7.º grado";
+  const library = await ac<LibraryItemDto[]>(director, "/library");
+  if (!library.some((item) => item.title === guideTitle)) {
+    const libraryQuery = new URLSearchParams({ titulo: guideTitle, para: "familias" });
+    const seventhGrade = (await ac<GradeDto[]>(director, "/grades")).find((g) => g.name === "Séptimo grado");
+    if (seventhGrade) libraryQuery.set("grado", seventhGrade.id);
+    libraryQuery.set("materia", subjectIds.Matemáticas as string);
+    await upload(director, `/library/files?${libraryQuery}`, FRACTIONS_GUIDE, "Guía de fracciones 7.º.pdf");
+  }
 
-  // ── Aula virtual: Matemáticas de 7.º ──
+  // ── Aula virtual: lo que ya está publicado no se repite ──
+  const roomOf = (token: string, classId: string) => ac<ClassroomDto>(token, `/classes/${classId}`);
+  const ensurePost = async (
+    token: string,
+    classId: string,
+    kind: "tema" | "aviso",
+    title: string,
+    body: string,
+  ) => {
+    const room = await roomOf(token, classId);
+    const existing = [...room.topics, ...room.announcements].find(
+      (p) => p.kind === kind && p.title === title,
+    );
+    return existing ?? ac<ClassPostDto>(token, `/classes/${classId}/posts`, "POST", { kind, title, body });
+  };
+  const ensureLink = async (token: string, post: ClassPostDto, title: string, url: string) => {
+    if (!post.materials.some((m) => m.title === title)) {
+      await ac(token, `/class-posts/${post.id}/links`, "POST", { title, url });
+    }
+  };
+  const ensureTask = async (
+    token: string,
+    classId: string,
+    input: { title: string } & Record<string, unknown>,
+  ) => {
+    const room = await roomOf(token, classId);
+    return (
+      room.tasks.find((t) => t.title === input.title) ??
+      ac<ClassTaskDto>(token, `/classes/${classId}/tasks`, "POST", input)
+    );
+  };
+  /** Entrega la tarea a nombre del alumno, si todavía no la entregó. */
+  const turnIn = async (token: string, taskId: string, text: string) => {
+    const detail = await ac<ClassTaskDetailDto>(token, `/class-tasks/${taskId}`);
+    if (detail.canSubmit && !detail.mine?.submittedAt) {
+      await ac(token, `/class-tasks/${taskId}/submission`, "PUT", { text, turnIn: true });
+    }
+  };
+
+  // Matemáticas de 7.º
   const lucia = await login(mathEmail, PASSWORD);
   await ac(lucia, `/classes/${math7.id}/settings`, "PUT", {
     meetingUrl: "https://meet.jit.si/ConectaDemoMatematicas7A",
     meetingNote: "Martes y jueves, 2:00 p. m.",
   });
-  await ac(lucia, `/classes/${math7.id}/posts`, "POST", {
-    kind: "aviso",
-    title: "¡Bienvenidos al aula virtual de Matemáticas!",
-    body: "Aquí van a encontrar los temas, las guías, las tareas y los exámenes. Si tienen dudas, pregúntenme en clase.",
-  });
-  const decimals = await ac<ClassPostDto>(lucia, `/classes/${math7.id}/posts`, "POST", {
-    kind: "tema",
-    title: "Unidad 2: Números decimales",
-    body: "Los números decimales tienen una parte entera y una parte decimal separadas por un punto.\n\nEjemplo: en 3.25, el 3 es la parte entera y el 25 son centésimos.",
-  });
-  await ac(lucia, `/class-posts/${decimals.id}/links`, "POST", {
-    title: "Práctica de decimales en Khan Academy",
-    url: "https://es.khanacademy.org/math/arithmetic-home/arith-review-decimals",
-  });
-  const fractions = await ac<ClassPostDto>(lucia, `/classes/${math7.id}/posts`, "POST", {
-    kind: "tema",
-    title: "Unidad 3: Fracciones equivalentes",
-    body: "Dos fracciones son equivalentes cuando representan la misma parte de un entero. Para encontrarlas, multiplicamos o dividimos el numerador y el denominador por el mismo número.\n\nEjemplo: 1/2 = 2/4 = 4/8.\n\nRevisa la guía y resuelve los ejercicios antes de la próxima clase.",
-  });
-  await upload(lucia, `/class-posts/${fractions.id}/files`, FRACTIONS_GUIDE, "Guía de fracciones.pdf");
-  await ac(lucia, `/class-posts/${fractions.id}/links`, "POST", {
-    title: "Fracciones equivalentes en Khan Academy",
-    url: "https://es.khanacademy.org/math/arithmetic/fraction-arithmetic",
-  });
-  await ac(lucia, `/classes/${math7.id}/posts`, "POST", {
-    kind: "aviso",
-    title: "El jueves repasamos fracciones",
-    body: "Traigan la guía resuelta. El examen en línea de fracciones ya está abierto.",
-  });
+  await ensurePost(
+    lucia,
+    math7.id,
+    "aviso",
+    "¡Bienvenidos al aula virtual de Matemáticas!",
+    "Aquí van a encontrar los temas, las guías, las tareas y los exámenes. Si tienen dudas, pregúntenme en clase.",
+  );
+  const decimals = await ensurePost(
+    lucia,
+    math7.id,
+    "tema",
+    "Unidad 2: Números decimales",
+    "Los números decimales tienen una parte entera y una parte decimal separadas por un punto.\n\nEjemplo: en 3.25, el 3 es la parte entera y el 25 son centésimos.",
+  );
+  await ensureLink(
+    lucia,
+    decimals,
+    "Práctica de decimales en Khan Academy",
+    "https://es.khanacademy.org/math/arithmetic-home/arith-review-decimals",
+  );
+  const fractions = await ensurePost(
+    lucia,
+    math7.id,
+    "tema",
+    "Unidad 3: Fracciones equivalentes",
+    "Dos fracciones son equivalentes cuando representan la misma parte de un entero. Para encontrarlas, multiplicamos o dividimos el numerador y el denominador por el mismo número.\n\nEjemplo: 1/2 = 2/4 = 4/8.\n\nRevisa la guía y resuelve los ejercicios antes de la próxima clase.",
+  );
+  if (!fractions.materials.some((m) => m.kind === "archivo")) {
+    await upload(lucia, `/class-posts/${fractions.id}/files`, FRACTIONS_GUIDE, "Guía de fracciones.pdf");
+  }
+  await ensureLink(
+    lucia,
+    fractions,
+    "Fracciones equivalentes en Khan Academy",
+    "https://es.khanacademy.org/math/arithmetic/fraction-arithmetic",
+  );
+  await ensurePost(
+    lucia,
+    math7.id,
+    "aviso",
+    "El jueves repasamos fracciones",
+    "Traigan la guía resuelta. El examen en línea de fracciones ya está abierto.",
+  );
 
   // Tarea ya calificada (venció hace 3 días)
-  const graded = await ac<ClassTaskDto>(lucia, `/classes/${math7.id}/tasks`, "POST", {
+  const graded = await ensureTask(lucia, math7.id, {
     title: "Ejercicios de fracciones equivalentes",
     instructions:
       "Resuelve los ejercicios 1 al 5 de la guía en tu cuaderno y sube una foto clara, o escribe tus respuestas.",
@@ -495,7 +620,7 @@ async function main() {
     name === CENTRO_DEMO.student.firstNames ? valeriaToken : classmates[name];
   for (const [name, text] of Object.entries(answers)) {
     const token = tokenOf(name);
-    if (token) await ac(token, `/class-tasks/${graded.id}/submission`, "PUT", { text, turnIn: true });
+    if (token) await turnIn(token, graded.id, text);
   }
   const feedback: Record<string, [number, string]> = {
     [CENTRO_DEMO.student.firstNames]: [10, "¡Excelente! Todo correcto y bien explicado."],
@@ -508,7 +633,7 @@ async function main() {
       await ac(lucia, `/class-tasks/${graded.id}/grades/${student.id}`, "PUT", { points, feedback: comment });
   }
   // Tarea abierta (vence en 5 días): Diego ya entregó; Valeria todavía no.
-  const open = await ac<ClassTaskDto>(lucia, `/classes/${math7.id}/tasks`, "POST", {
+  const open = await ensureTask(lucia, math7.id, {
     title: "Problemas con números decimales",
     instructions:
       "Resuelve los problemas de la página 52 (1 al 6). Puedes subir una foto de tu cuaderno o un documento.",
@@ -519,52 +644,60 @@ async function main() {
     periodId: periodId(4),
   });
   if (classmates["Diego Alejandro"]) {
-    await ac(classmates["Diego Alejandro"], `/class-tasks/${open.id}/submission`, "PUT", {
-      text: "1) 4.75  2) 12.3  3) 0.85  4) 7.2  5) 15.05  6) 3.4",
-      turnIn: true,
-    });
+    await turnIn(
+      classmates["Diego Alejandro"],
+      open.id,
+      "1) 4.75  2) 12.3  3) 0.85  4) 7.2  5) 15.05  6) 3.4",
+    );
   }
 
   // Examen abierto por dos semanas, 20 minutos: Diego y Sofía ya lo presentaron.
-  const quiz = await ac<ClassQuizDto>(lucia, `/classes/${math7.id}/quizzes`, "POST", {
-    title: "Prueba corta: fracciones equivalentes",
-    instructions: "Tienes 20 minutos. Lee bien cada pregunta antes de responder.",
-    opensDate: addDays(today, -1),
-    opensTime: "07:00",
-    closesDate: addDays(today, 14),
-    closesTime: "23:59",
-    timeLimitMinutes: 20,
-    shuffle: false,
-    points: 10,
-    periodId: periodId(4),
-  });
-  const ask = (body: object) =>
-    ac<QuizQuestionDto>(lucia, `/class-quizzes/${quiz.id}/questions`, "POST", body);
-  const q1 = await ask({
-    kind: "opcion",
-    prompt: "¿Cuál fracción es equivalente a 1/2?",
-    options: ["1/3", "2/4", "3/5", "2/3"],
-    correct: 1,
-    points: 3,
-  });
-  const q2 = await ask({
-    kind: "opcion",
-    prompt: "Simplifica 6/9.",
-    options: ["2/3", "3/6", "1/3", "6/3"],
-    correct: 0,
-    points: 3,
-  });
-  const q3 = await ask({
-    kind: "vf",
-    prompt: "4/8 y 1/2 son fracciones equivalentes.",
-    correct: true,
-    points: 2,
-  });
-  const q4 = await ask({
-    kind: "abierta",
-    prompt: "Explica con tus palabras cómo encuentras una fracción equivalente.",
-    points: 2,
-  });
+  const quizTitle = "Prueba corta: fracciones equivalentes";
+  const quiz =
+    (await roomOf(lucia, math7.id)).quizzes.find((q) => q.title === quizTitle) ??
+    (await ac<ClassQuizDto>(lucia, `/classes/${math7.id}/quizzes`, "POST", {
+      title: quizTitle,
+      instructions: "Tienes 20 minutos. Lee bien cada pregunta antes de responder.",
+      opensDate: addDays(today, -1),
+      opensTime: "07:00",
+      closesDate: addDays(today, 14),
+      closesTime: "23:59",
+      timeLimitMinutes: 20,
+      shuffle: false,
+      points: 10,
+      periodId: periodId(4),
+    }));
+  const questionInputs = [
+    {
+      kind: "opcion",
+      prompt: "¿Cuál fracción es equivalente a 1/2?",
+      options: ["1/3", "2/4", "3/5", "2/3"],
+      correct: 1,
+      points: 3,
+    },
+    {
+      kind: "opcion",
+      prompt: "Simplifica 6/9.",
+      options: ["2/3", "3/6", "1/3", "6/3"],
+      correct: 0,
+      points: 3,
+    },
+    { kind: "vf", prompt: "4/8 y 1/2 son fracciones equivalentes.", correct: true, points: 2 },
+    {
+      kind: "abierta",
+      prompt: "Explica con tus palabras cómo encuentras una fracción equivalente.",
+      points: 2,
+    },
+  ];
+  const have = (await ac<ClassQuizDetailDto>(lucia, `/class-quizzes/${quiz.id}`)).questions;
+  const questions: QuizQuestionDto[] = [];
+  for (const input of questionInputs) {
+    questions.push(
+      have.find((q) => q.prompt === input.prompt) ??
+        (await ac<QuizQuestionDto>(lucia, `/class-quizzes/${quiz.id}/questions`, "POST", input)),
+    );
+  }
+  const [q1, q2, q3, q4] = questions as [QuizQuestionDto, QuizQuestionDto, QuizQuestionDto, QuizQuestionDto];
   await ac(lucia, `/class-quizzes/${quiz.id}/publish`, "POST", { published: true });
   const takers: Array<[string, Record<string, number | boolean | string>]> = [
     [
@@ -584,30 +717,38 @@ async function main() {
   for (const [name, given] of takers) {
     const token = classmates[name];
     if (!token) continue;
-    await ac(token, `/class-quizzes/${quiz.id}/start`, "POST");
-    await ac(token, `/class-quizzes/${quiz.id}/answers`, "PUT", { answers: given, finish: true });
+    const status = (await ac<ClassQuizDetailDto>(token, `/class-quizzes/${quiz.id}`)).mine?.status;
+    if (status === "disponible") await ac(token, `/class-quizzes/${quiz.id}/start`, "POST");
+    if (status === "disponible" || status === "en_curso") {
+      await ac(token, `/class-quizzes/${quiz.id}/answers`, "PUT", { answers: given, finish: true });
+    }
   }
   const diego = seventhStudents.find((s) => s.firstNames === "Diego Alejandro");
-  if (diego)
+  if (diego) {
     await ac(lucia, `/class-quizzes/${quiz.id}/attempts/${diego.id}/review`, "PUT", {
       points: { [q4.id]: 2 },
     });
+  }
 
-  await ac(lucia, `/classes/${science7.id}/posts`, "POST", {
-    kind: "tema",
-    title: "Unidad 4: El sistema solar",
-    body: "El sistema solar está formado por el Sol y los cuerpos que giran a su alrededor: ocho planetas, sus lunas, asteroides y cometas.",
-  });
-  console.log("  + aula virtual de Matemáticas: temas, guía, avisos, clase en línea, tareas y examen");
+  await ensurePost(
+    lucia,
+    science7.id,
+    "tema",
+    "Unidad 4: El sistema solar",
+    "El sistema solar está formado por el Sol y los cuerpos que giran a su alrededor: ocho planetas, sus lunas, asteroides y cometas.",
+  );
+  console.log("  ✓ aula virtual de Matemáticas: temas, guía, avisos, clase en línea, tareas y examen");
 
   // ── Español de 7.º y Primer grado ──
   const andres = await login(spanishEmail, PASSWORD);
-  await ac(andres, `/classes/${spanish7.id}/posts`, "POST", {
-    kind: "tema",
-    title: "Lectura: cuentos de autores hondureños",
-    body: "Esta semana leemos «El cuento del Cadejo». Fíjate en los personajes, el lugar y el mensaje del cuento.",
-  });
-  await ac(andres, `/classes/${spanish7.id}/tasks`, "POST", {
+  await ensurePost(
+    andres,
+    spanish7.id,
+    "tema",
+    "Lectura: cuentos de autores hondureños",
+    "Esta semana leemos «El cuento del Cadejo». Fíjate en los personajes, el lugar y el mensaje del cuento.",
+  );
+  await ensureTask(andres, spanish7.id, {
     title: "Resumen del cuento",
     instructions: "Escribe un resumen de media página: personajes, lugar, qué pasa y qué mensaje deja.",
     dueDate: addDays(today, 7),
@@ -616,25 +757,25 @@ async function main() {
   });
   const rosa = await login(primaryEmail, PASSWORD);
   const sums = firstClasses.Matemáticas as { id: string };
-  await ac(rosa, `/classes/${sums.id}/posts`, "POST", {
-    kind: "tema",
-    title: "Sumas hasta 20",
-    body: "Practicamos sumas con objetos de la casa: frijoles, tapitas o palitos. Papás: acompáñenlos y anímenlos.",
-  });
-  const homework = await ac<ClassTaskDto>(rosa, `/classes/${sums.id}/tasks`, "POST", {
+  await ensurePost(
+    rosa,
+    sums.id,
+    "tema",
+    "Sumas hasta 20",
+    "Practicamos sumas con objetos de la casa: frijoles, tapitas o palitos. Papás: acompáñenlos y anímenlos.",
+  );
+  await ensureTask(rosa, sums.id, {
     title: "Sumas con tapitas",
     instructions: "Con ayuda de un adulto, resuelvan 10 sumas usando tapitas. Suban una foto del cuaderno.",
     dueDate: addDays(today, 4),
     dueTime: "23:59",
     allowLate: true,
   });
-  void homework;
-  void momToken;
-  console.log("  + aula virtual de Español y de Primer grado");
+  console.log("  ✓ aula virtual de Español y de Primer grado");
 
-  // ── Aviso del centro para las familias ──
+  // ── Al final, el aviso del centro para las familias (y marca que la carga terminó) ──
   await ac(director, "/announcements", "POST", {
-    title: "Reunión de padres de familia",
+    title: ANNOUNCEMENT,
     body: "Los esperamos el próximo viernes a las 5:00 p. m. para entregar las notas del IV parcial.",
     audience: "todos",
   });

@@ -9,11 +9,12 @@
  *   las familias, las notas y el aula virtual los carga después academic con `seed-centro-demo`.
  */
 import { databaseUrlFromEnv, optionalEnv, requireEnv } from "@escolar/service-kit";
-import { CENTRO_DEMO, type SchoolRole } from "@escolar/shared";
+import { CENTRO_DEMO, passwordSchema, type SchoolRole } from "@escolar/shared";
 import { eq } from "drizzle-orm";
 import { createDb } from "../db/client";
 import { conversationMembers, conversations, messages, schools, users } from "../db/schema";
 import { pairKeyOf } from "../lib/messages";
+import { hashPassword } from "../lib/passwords";
 import { type AccountInput, grantAccess } from "../lib/users";
 
 const { db, pool } = createDb(databaseUrlFromEnv());
@@ -129,6 +130,11 @@ try {
 
   if (optionalEnv("SEED_CENTRO_DEMO", "false") === "true") {
     const password = requireEnv("SEED_DEMO_PASSWORD");
+    // La misma regla que piden las pantallas: si no sirve, se avisa antes de crear nada.
+    const weak = passwordSchema.safeParse(password);
+    if (!weak.success) {
+      throw new Error(`La contraseña de la demo (DEMO_PASSWORD) no sirve: ${weak.error.issues[0]?.message}`);
+    }
     let [school] = await db.select().from(schools).where(eq(schools.slug, CENTRO_DEMO.slug));
     if (!school) {
       [school] = await db
@@ -142,6 +148,12 @@ try {
     const created = new Map<string, string>();
     for (const [role, name, email] of CENTRO_DEMO.staff) {
       const user = await ensureUser({ schoolId: school.id, name, email, password, role });
+      // Las cuentas de la demo siempre usan la contraseña de la demo (si se cambió DEMO_PASSWORD, se
+      // actualiza aquí; nadie más las usa).
+      await db
+        .update(users)
+        .set({ passwordHash: await hashPassword(password), mustChangePassword: false, updatedAt: new Date() })
+        .where(eq(users.id, user.id));
       created.set(email, user.id);
     }
     const director = created.get(CENTRO_DEMO.staff[0][2]);
