@@ -23,10 +23,17 @@ const PDF = at(0, ascii("%PDF"));
 const ZIP = at(0, Buffer.from([0x50, 0x4b, 0x03, 0x04]));
 const OLE = at(0, Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]));
 
+/**
+ * Una foto puede venir con la extensión de otro formato (una captura PNG guardada como .jpg, una WebP
+ * bajada de internet como .jpg): entre fotos se acepta cualquiera de los tres, porque el navegador
+ * las muestra igual. Lo que no sea foto sigue sin pasar.
+ */
+const PHOTO = (h: Buffer) => JPEG(h) || PNG(h) || WEBP(h);
+
 const SIGNATURES: Record<string, (head: Buffer) => boolean> = {
-  "image/jpeg": JPEG,
-  "image/png": PNG,
-  "image/webp": WEBP,
+  "image/jpeg": PHOTO,
+  "image/png": PHOTO,
+  "image/webp": PHOTO,
   "video/mp4": ISO_BOX(["ftyp"]),
   "video/3gpp": ISO_BOX(["ftyp"]),
   "video/quicktime": ISO_BOX(["ftyp", "moov", "wide", "mdat", "free", "skip"]),

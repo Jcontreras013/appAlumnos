@@ -1,0 +1,103 @@
+name: Buscar un error
+
+# Cuando CONECTA muestra «Ocurrió un error inesperado. Referencia: …», este flujo busca esa referencia
+# en los registros de identity y academic (CloudWatch, últimos 30 días) y muestra qué pasó: el
+# mensaje, el error y dónde ocurrió. Este registro es público: solo muestra lo técnico (nada del
+# cuerpo de las peticiones; correos y números de identidad salen tapados).
+
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: Ambiente
+        type: choice
+        options: [prod, dev]
+        default: prod
+      referencia:
+        description: La referencia del error (el código que sale después de «Referencia:»)
+        type: string
+        required: true
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  buscar:
+    name: Buscar el error
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.stage }}
+    timeout-minutes: 10
+    env:
+      STAGE: ${{ inputs.stage }}
+      REFERENCIA: ${{ inputs.referencia }}
+    steps:
+      - name: Revisar la referencia
+        run: |
+          set -euo pipefail
+          REF=$(printf '%s' "$REFERENCIA" | tr -d '[:space:].' | tr 'A-F' 'a-f')
+          if ! [[ "$REF" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
+            echo "::error::La referencia tiene esta forma: 5fe765bc-0650-43e1-94a1-31e56ff030ac. Cópiala completa del mensaje de error."
+            exit 1
+          fi
+          echo "REF=$REF" >> "$GITHUB_ENV"
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          mask-aws-account-id: true
+
+      - name: Buscar en los registros
+        run: |
+          set -euo pipefail
+          ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+          echo "::add-mask::$ACCOUNT"
+          salida() {
+            aws cloudformation describe-stacks --stack-name "Escolar-$STAGE" \
+              --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue | [0]" --output text
+          }
+          # Lo que se muestra: sin correos ni números de identidad, y sin los valores de las consultas.
+          tapar() {
+            sed -E -e 's/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/[correo]/g' \
+              -e 's/\b[0-9]{4}-?[0-9]{4}-?[0-9]{5}\b/[identidad]/g'
+          }
+          DESDE=$(( ($(date +%s) - 30 * 86400) * 1000 ))
+          ENCONTRADO=""
+          for servicio in Identity Academic; do
+            DEFINICION=$(salida "${servicio}TaskDefinition")
+            [ -z "$DEFINICION" ] || [ "$DEFINICION" = "None" ] && continue
+            GRUPO=$(aws ecs describe-task-definition --task-definition "$DEFINICION" \
+              --query "taskDefinition.containerDefinitions[0].logConfiguration.options.\"awslogs-group\"" --output text)
+            aws logs filter-log-events --log-group-name "$GRUPO" --start-time "$DESDE" \
+              --filter-pattern "\"$REF\"" --query "events[].message" --output json > lineas.json
+            [ "$(jq length lineas.json)" = "0" ] && continue
+            ENCONTRADO=1
+            echo "En ${servicio,,}:"
+            jq -r '.[] | fromjson? | [
+                "Hora: \((.time // 0) / 1000 | todate)",
+                "Nivel: \({"30": "información", "40": "aviso", "50": "error", "60": "grave"}[(.level | tostring)] // (.level | tostring))",
+                "Qué: \(.msg // "")",
+                (if .req then "Petición: \(.req.method // "") \((.req.url // "") | split("?")[0])" else empty end),
+                (if .res.statusCode then "Respuesta: \(.res.statusCode)" else empty end),
+                (if .reason then "Motivo: \(.reason)" else empty end),
+                (if .detail then "Detalle: \(.detail | tostring | .[0:500])" else empty end),
+                (if .err then (
+                  "Error: \(.err.type // "") \(.err.code // "") \(.err.statusCode // "")",
+                  "Mensaje: \((.err.message // "") | split("\nparams:")[0] | .[0:600])",
+                  "Dónde:",
+                  ((.err.stack // "") | split("\n") | map(select(test("^\\s+at "))) | .[0:8] | .[])
+                ) else empty end),
+                "---"
+              ] | .[]' lineas.json | tapar > "detalle-$servicio.txt"
+            cat "detalle-$servicio.txt"
+            {
+              echo "### En ${servicio,,}"
+              echo '```text'
+              cat "detalle-$servicio.txt"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          done
+          if [ -z "$ENCONTRADO" ]; then
+            echo "::warning::No encontré la referencia $REF en los registros de $STAGE de los últimos 30 días. Revisa que el ambiente sea el correcto."
+          fi
