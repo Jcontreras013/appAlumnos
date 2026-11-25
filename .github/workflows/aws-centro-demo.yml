@@ -118,11 +118,19 @@ jobs:
             servicio=$(salida "$1")
             tarea=$(aws ecs list-tasks --cluster "$CLUSTER" --service-name "$servicio" --desired-status RUNNING \
               --query "taskArns[0]" --output text)
+            # La tarea tiene varios adjuntos (la red y Service Connect): la IP está en el de la red.
             aws ecs describe-tasks --cluster "$CLUSTER" --tasks "$tarea" \
-              --query "tasks[0].attachments[0].details[?name=='privateIPv4Address'].value | [0]" --output text
+              --query "tasks[0].attachments[?type=='ElasticNetworkInterface'] | [0].details[?name=='privateIPv4Address'].value | [0]" \
+              --output text
           }
           IP_IDENTITY=$(ip_de IdentityServiceName)
           IP_ACADEMIC=$(ip_de AcademicServiceName)
+          for ip in "$IP_IDENTITY" "$IP_ACADEMIC"; do
+            if ! [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::No encontré identity o academic corriendo en AWS. Revisa que «Desplegar en AWS» haya terminado bien y vuelve a intentar."
+              exit 1
+            fi
+          done
 
           echo "2/2 · Alumnos, familias, notas y aula virtual (unos minutos)…"
           CAMBIOS=$(jq -cn --arg demo "$CLAVE_DEMO" --arg identity "http://$IP_IDENTITY:3001" \
