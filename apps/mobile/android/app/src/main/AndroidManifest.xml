@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <application
         android:allowBackup="false"
@@ -50,4 +51,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Android 13 o más nuevo: la app pide permiso para avisar solo cuando la persona activa los avisos. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Sin publicidad: si alguna librería agrega el permiso del ID de publicidad, se quita. Así la
+         declaración de Google Play («la app no usa ID de publicidad») siempre es cierta. -->
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID" tools:node="remove" />
 </manifest>

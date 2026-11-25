@@ -128,6 +128,13 @@ jobs:
           export ANDROID_KEY_PASSWORD=$CLAVE
           export ANDROID_KEY_ALIAS=$(jq -r .alias "$DIR/firma.json")
           ./gradlew bundleRelease --no-daemon --stacktrace
+          # Google Play pregunta si la app usa el ID de publicidad: tiene que decir que no.
+          if find app/build/intermediates -name AndroidManifest.xml -path "*merged_manifest*release*" -print0 \
+            | xargs -0 grep -l "permission.AD_ID" > /dev/null 2>&1; then
+            echo "::error::La app quedó con el permiso del ID de publicidad (AD_ID): revisa AndroidManifest.xml."
+            exit 1
+          fi
+          echo "Sin permiso del ID de publicidad."
           # La huella del certificado de la llave es pública: sirve si Google la pide.
           HUELLA=$(keytool -list -keystore "$DIR/conecta.keystore" -storepass:env ANDROID_KEYSTORE_PASSWORD \
             -alias "$ANDROID_KEY_ALIAS" -v | sed -n 's/.*SHA256: //p' | head -n1)
