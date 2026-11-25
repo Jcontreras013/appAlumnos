@@ -6,7 +6,7 @@ import { LoginForm } from "./login-form";
 export const metadata: Metadata = { title: "Iniciar sesión" };
 
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {
-  const { expirada } = await searchParams;
+  const { expirada, inactiva } = await searchParams;
 
   return (
     <main className="grid min-h-dvh lg:grid-cols-2">
@@ -31,7 +31,7 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
           </div>
           <h2 className="text-2xl font-semibold text-slate-900">Iniciar sesión</h2>
           <p className="mb-6 mt-1 text-sm text-slate-500">{APP_TAGLINE}</p>
-          <LoginForm expired={expirada === "1"} />
+          <LoginForm expired={expirada === "1"} idle={inactiva === "1"} />
           <p className="mt-8 text-center text-xs text-slate-400">
             <a href="/privacidad" className="hover:text-slate-600 hover:underline">
               Privacidad y datos personales

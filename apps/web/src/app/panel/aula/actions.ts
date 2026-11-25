@@ -98,7 +98,17 @@ export async function deleteClassMaterialAction(formData: FormData): Promise<voi
 
 // ───────────────────────────── Tareas ─────────────────────────────
 
-const TASK_FIELDS = ["title", "instructions", "dueDate", "dueTime", "points", "periodId"] as const;
+const TASK_FIELDS = [
+  "title",
+  "instructions",
+  "dueDate",
+  "dueTime",
+  "points",
+  "periodId",
+  "publish",
+  "publishDate",
+  "publishTime",
+] as const;
 
 /** Publicar una tarea nueva o corregir una (si viene taskId). */
 export async function saveTaskAction(_prev: FormState, formData: FormData): Promise<FormState> {
@@ -320,14 +330,21 @@ export async function reviewQuizAction(_prev: FormState, formData: FormData): Pr
   const quizId = z.uuid().parse(formData.get("quizId"));
   const studentId = z.uuid().parse(formData.get("studentId"));
   const points: Record<string, number> = {};
+  const comments: Record<string, string> = {};
   for (const [key, value] of formData.entries()) {
-    if (!key.startsWith("q-") || typeof value !== "string" || value.trim() === "") continue;
+    if (typeof value !== "string") continue;
+    if (key.startsWith("c-")) {
+      comments[key.slice(2)] = value.trim();
+      continue;
+    }
+    if (!key.startsWith("q-") || value.trim() === "") continue;
     const n = Number(value);
     if (!Number.isFinite(n) || n < 0) return { error: "Escribe puntos válidos" };
     points[key.slice(2)] = n;
   }
+  const feedback = String(formData.get("feedback") ?? "").trim();
   try {
-    await academic.reviewQuiz(accessToken, quizId, studentId, points);
+    await academic.reviewQuiz(accessToken, quizId, studentId, { points, comments, feedback });
   } catch (err) {
     return fromServiceError(err);
   }
@@ -373,4 +390,41 @@ export async function saveQuizAnswersAction(input: {
   } catch (err) {
     return { ok: false, error: fromServiceError(err).error };
   }
+}
+
+// ── Chat de la clase ──
+const chatter = () => requireRole("docente", "admin", "coordinador", "secretaria", "estudiante");
+
+/** Mandar un mensaje al chat de la clase. */
+export async function sendClassChatAction(assignmentId: string, body: string): Promise<FormState> {
+  const { accessToken } = await chatter();
+  try {
+    await academic.sendClassChat(accessToken, z.uuid().parse(assignmentId), body);
+    return { ok: true };
+  } catch (err) {
+    return fromServiceError(err);
+  }
+}
+
+/** Borrar un mensaje (el propio, o cualquiera si modera). */
+export async function deleteClassChatAction(messageId: string): Promise<FormState> {
+  const { accessToken } = await chatter();
+  try {
+    await academic.deleteClassChat(accessToken, z.uuid().parse(messageId));
+    return { ok: true };
+  } catch (err) {
+    return fromServiceError(err);
+  }
+}
+
+/** Abrir o cerrar el chat de la clase. */
+export async function setClassChatAction(assignmentId: string, enabled: boolean): Promise<FormState> {
+  const { accessToken } = await chatter();
+  try {
+    await academic.setClassChat(accessToken, z.uuid().parse(assignmentId), enabled);
+  } catch (err) {
+    return fromServiceError(err);
+  }
+  refresh(assignmentId);
+  return { ok: true };
 }

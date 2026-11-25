@@ -353,47 +353,78 @@ export function ReviewForm({
   assignmentId,
   quizId,
   attempt,
-  openQuestions,
+  questions,
 }: {
   assignmentId: string;
   quizId: string;
   attempt: QuizAttemptDto;
-  openQuestions: QuizQuestionDto[];
+  questions: QuizQuestionDto[];
 }) {
   const id = useId();
   const [state, action] = useActionState<FormState, FormData>(reviewQuizAction, {});
   return (
-    <form action={action} className="space-y-3">
+    <form action={action} className="space-y-3 rounded-xl border border-brand-100 bg-brand-50/40 p-3">
       <input type="hidden" name="assignmentId" value={assignmentId} />
       <input type="hidden" name="quizId" value={quizId} />
       <input type="hidden" name="studentId" value={attempt.studentId} />
+      <p className="text-sm font-semibold text-slate-800">Revisión y comentarios para el alumno</p>
       <FormAlert state={state} />
-      {openQuestions.map((q) => {
+      {questions.map((q, i) => {
         const answer = attempt.answers.find((a) => a.questionId === q.id);
         return (
-          <div key={q.id} className="space-y-1 rounded-lg border border-slate-200 p-3">
-            <p className="text-sm font-medium text-slate-900">{q.prompt}</p>
-            <p className="whitespace-pre-wrap rounded bg-slate-50 px-2 py-1 text-sm text-slate-800">
-              {typeof answer?.answer === "string" && answer.answer ? answer.answer : "(en blanco)"}
+          <div key={q.id} className="space-y-2 rounded-lg border border-slate-200 bg-white p-3">
+            <p className="text-sm font-medium text-slate-900">
+              {i + 1}. {q.prompt}
             </p>
-            <label htmlFor={`${id}-${q.id}`} className="label">
-              Puntos (de {q.points})
+            {q.kind === "abierta" && (
+              <>
+                <p className="whitespace-pre-wrap rounded bg-slate-50 px-2 py-1 text-sm text-slate-800">
+                  {typeof answer?.answer === "string" && answer.answer ? answer.answer : "(en blanco)"}
+                </p>
+                <label htmlFor={`${id}-${q.id}`} className="label">
+                  Puntos (de {q.points})
+                </label>
+                <input
+                  id={`${id}-${q.id}`}
+                  name={`q-${q.id}`}
+                  type="number"
+                  min={0}
+                  max={q.points}
+                  step="0.5"
+                  className="input w-32"
+                  defaultValue={
+                    answer?.points === null || answer?.points === undefined ? "" : String(answer.points)
+                  }
+                />
+              </>
+            )}
+            <label htmlFor={`${id}-c-${q.id}`} className="label">
+              Comentario en esta pregunta <span className="font-normal text-slate-400">(opcional)</span>
             </label>
-            <input
-              id={`${id}-${q.id}`}
-              name={`q-${q.id}`}
-              type="number"
-              min={0}
-              max={q.points}
-              step="0.5"
-              className="input w-32"
-              defaultValue={
-                answer?.points === null || answer?.points === undefined ? "" : String(answer.points)
-              }
+            <textarea
+              id={`${id}-c-${q.id}`}
+              name={`c-${q.id}`}
+              rows={2}
+              maxLength={500}
+              className="input"
+              placeholder="Por ejemplo: en qué falló o qué le faltó"
+              defaultValue={answer?.comment ?? ""}
             />
           </div>
         );
       })}
+      <label htmlFor={`${id}-feedback`} className="label">
+        Comentario general <span className="font-normal text-slate-400">(opcional)</span>
+      </label>
+      <textarea
+        id={`${id}-feedback`}
+        name="feedback"
+        rows={3}
+        maxLength={1000}
+        className="input"
+        placeholder="Lo que quieras decirle sobre todo el examen"
+        defaultValue={attempt.feedback ?? ""}
+      />
       <Submit pending="Guardando…">Guardar revisión</Submit>
     </form>
   );

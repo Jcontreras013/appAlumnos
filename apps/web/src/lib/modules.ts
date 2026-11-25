@@ -24,7 +24,7 @@ export const MODULES: ModuleInfo[] = [
   },
   {
     key: "cuaderno",
-    label: "Mi cuaderno",
+    label: "Asistencia y notas",
     description:
       "Asistencia diaria y notas por actividad durante el parcial, desde el teléfono y aun sin internet. Al cierre, las notas quedan listas para el SACE.",
     phase: 3,

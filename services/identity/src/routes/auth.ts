@@ -346,6 +346,14 @@ export async function authRoutes(app: FastifyInstance, { db, keys, tokens, setti
         });
         throw unauthorized();
       }
+      if (result.kind === "idle") {
+        await audit(db, request, {
+          action: "auth.session_idle",
+          schoolId: result.schoolId,
+          actorUserId: result.userId,
+        });
+        throw unauthorized("La sesión se cerró por inactividad. Vuelve a entrar.");
+      }
       if (result.kind === "invalid") throw unauthorized();
       return result.pair;
     },

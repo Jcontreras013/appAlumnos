@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { ACCESS_TOKEN_AUDIENCE, ACCESS_TOKEN_ISSUER, JWT_ALGORITHM } from "@escolar/service-kit";
 import type { TokenPairDto } from "@escolar/shared";
+import { PORTAL_ROLES } from "@escolar/shared";
 import { and, eq, isNull } from "drizzle-orm";
 import { SignJWT } from "jose";
 import type { TokenSettings } from "../config";
@@ -20,6 +21,8 @@ export interface SessionSubject {
 export type RotateResult =
   | { kind: "ok"; pair: TokenPairDto; user: User }
   | { kind: "invalid" }
+  /** El personal estuvo inactivo más de lo permitido: la sesión se cerró. */
+  | { kind: "idle"; userId: string; schoolId: string | null }
   | { kind: "reuse_detected"; userId: string; schoolId: string | null; familyId: string };
 
 export class TokenService {
@@ -132,6 +135,17 @@ export class TokenService {
       if (!membership) return { kind: "invalid" };
       const [resolved] = await resolveMemberships(tx, [membership]);
       if (!resolved?.usable) return { kind: "invalid" };
+      // El personal que dejó la sesión sin usar más del límite vuelve a entrar. El token vigente se
+      // emitió en la última renovación, así que su antigüedad es el tiempo sin actividad.
+      const idle = this.settings.idleTimeoutSeconds;
+      const portal = (PORTAL_ROLES as readonly string[]).includes(membership.role);
+      if (!row.revokedAt && idle > 0 && !portal && Date.now() - row.createdAt.getTime() > idle * 1000) {
+        await tx
+          .update(refreshTokens)
+          .set({ revokedAt: new Date() })
+          .where(and(eq(refreshTokens.familyId, row.familyId), isNull(refreshTokens.revokedAt)));
+        return { kind: "idle", userId: user.id, schoolId: membership.schoolId };
+      }
 
       const { refreshTokenId, ...pair } = await this.issuePair(tx, { user, membership }, row.familyId);
       if (!row.revokedAt) {

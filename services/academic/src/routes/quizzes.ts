@@ -312,14 +312,17 @@ export async function quizRoutes(app: FastifyInstance, { db, today }: AcademicDe
     return oneDto(row ?? quiz, access);
   });
 
-  /** El maestro revisa las respuestas abiertas de un alumno; con todo revisado, la nota va a la libreta. */
+  /**
+   * El maestro revisa un examen: puntos de las preguntas abiertas (con todo revisado, la nota va a la
+   * libreta), un comentario en cada pregunta y uno general. El alumno y su familia los ven.
+   */
   app.put(
     "/class-quizzes/:id/attempts/:studentId/review",
     readers,
     async (request): Promise<QuizAttemptDto> => {
       const { id, studentId } = parseOrThrow(reviewParams, request.params);
       const { quiz } = await editableQuiz(request, id);
-      const { points } = parseOrThrow(quizReviewInputSchema, request.body);
+      const { points, comments, feedback } = parseOrThrow(quizReviewInputSchema, request.body);
       const questions = await questionsOf(db, id);
       const [attempt] = await db
         .select()
@@ -335,12 +338,30 @@ export async function quizRoutes(app: FastifyInstance, { db, today }: AcademicDe
         if (value > q.points) throw badRequest(`Esa pregunta vale ${q.points} puntos`);
       }
       const reviewed = { ...attempt.reviewed, ...points };
+      const notes = { ...attempt.comments };
+      for (const [questionId, text] of Object.entries(comments ?? {})) {
+        if (!questions.some((x) => x.id === questionId))
+          throw badRequest("Esa pregunta no es de este examen");
+        if (text) notes[questionId] = text;
+        else delete notes[questionId];
+      }
+      const overall = feedback === undefined ? attempt.feedback : feedback || null;
       const settled = await db.transaction(async (tx) => {
-        await tx.update(quizAttempts).set({ reviewed }).where(eq(quizAttempts.id, attempt.id));
-        return settleAttempt(tx, quiz, questions, { ...attempt, reviewed }, now, {
-          userId: request.auth.userId,
-          name: request.auth.name,
-        });
+        await tx
+          .update(quizAttempts)
+          .set({ reviewed, comments: notes, feedback: overall })
+          .where(eq(quizAttempts.id, attempt.id));
+        return settleAttempt(
+          tx,
+          quiz,
+          questions,
+          { ...attempt, reviewed, comments: notes, feedback: overall },
+          now,
+          {
+            userId: request.auth.userId,
+            name: request.auth.name,
+          },
+        );
       });
       const [student] = await db
         .select({ firstNames: students.firstNames, lastNames: students.lastNames })

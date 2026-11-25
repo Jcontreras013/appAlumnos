@@ -16,7 +16,7 @@ import {
   YearForm,
 } from "./forms";
 
-export const metadata: Metadata = { title: "Estructura académica" };
+export const metadata: Metadata = { title: "Año, grados y materias" };
 
 export default async function StructurePage() {
   const session = await requireRole("admin", "coordinador", "secretaria");
@@ -40,7 +40,7 @@ export default async function StructurePage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Estructura académica</h1>
+        <h1 className="text-2xl font-semibold text-slate-900">Año, grados y materias</h1>
         <p className="mt-1 text-sm text-slate-500">
           {current
             ? `Año lectivo vigente: ${current.name}. Las secciones y docentes de abajo son de ese año.`

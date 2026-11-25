@@ -169,6 +169,43 @@ export interface ClassroomDto {
   tasks: ClassTaskDto[];
   /** Exámenes (el alumno solo ve los publicados). */
   quizzes: ClassQuizDto[];
+  /** El maestro abrió el chat de la clase. */
+  chatEnabled: boolean;
+}
+
+// ───────────────────────────── Chat de la clase ─────────────────────────────
+
+export const CLASS_CHAT_MAX_LENGTH = 1000;
+
+export const classChatInputSchema = z.object({
+  body: z
+    .string({ error: "Escribe un mensaje" })
+    .trim()
+    .min(1, { error: "Escribe un mensaje" })
+    .max(CLASS_CHAT_MAX_LENGTH, { error: `Un mensaje lleva hasta ${CLASS_CHAT_MAX_LENGTH} caracteres` }),
+});
+
+export const classChatStatusSchema = z.object({ enabled: z.boolean() });
+
+export interface ClassChatMessageDto {
+  id: string;
+  authorName: string;
+  authorRole: "maestro" | "alumno";
+  /** Lo escribió quien mira. */
+  mine: boolean;
+  /** null si se borró. */
+  body: string | null;
+  createdAt: string;
+}
+
+export interface ClassChatDto {
+  enabled: boolean;
+  /** Puede escribir (el chat está abierto y es el maestro o un alumno de la sección). */
+  canWrite: boolean;
+  /** Puede borrar cualquier mensaje y abrir o cerrar el chat (el maestro, la dirección, la coordinación). */
+  canModerate: boolean;
+  /** Del más viejo al más nuevo. */
+  messages: ClassChatMessageDto[];
 }
 
 // ───────────────────────────── Tareas con entrega ─────────────────────────────
@@ -181,6 +218,12 @@ export const SUBMISSION_FILES_MAX = 10;
 export function hondurasInstant(date: string, time: string): Date {
   return new Date(`${date}T${time}:00-06:00`);
 }
+
+/** Cuándo ven los alumnos una tarea: ya, nunca hasta que el maestro la publique, o en una fecha. */
+export const TASK_PUBLISH_MODES = ["ahora", "borrador", "programar"] as const;
+export type TaskPublishMode = (typeof TASK_PUBLISH_MODES)[number];
+/** publicada: la ven los alumnos; programada: la verán en `publishAt`; borrador: solo el maestro. */
+export type TaskVisibility = "publicada" | "programada" | "borrador";
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, { error: "Elige la fecha de entrega" });
 const hhmm = z.preprocess(
@@ -216,11 +259,36 @@ export const classTaskInputSchema = z
     allowLate: z.preprocess((v) => v === true || v === "on" || v === "true", z.boolean()),
     points: optionalPoints,
     periodId: z.preprocess((v) => (v === "" || v === null ? undefined : v), z.uuid().optional()),
+    /** Publicarla ya, guardarla sin publicar o programar cuándo la ven los alumnos. */
+    publish: z.preprocess(
+      (v) => (v === undefined || v === null || v === "" ? "ahora" : v),
+      z.enum(TASK_PUBLISH_MODES, { error: "Elige cuándo se publica" }),
+    ),
+    publishDate: z.preprocess((v) => (v === "" || v === null ? undefined : v), z.string().optional()),
+    publishTime: z.preprocess((v) => (v === "" || v === null ? undefined : v), z.string().optional()),
   })
   .refine((v) => v.points === undefined || v.periodId, {
     error: "Elige en qué parcial cuenta",
     path: ["periodId"],
-  });
+  })
+  .refine((v) => v.publish !== "programar" || (v.publishDate && /^\d{4}-\d{2}-\d{2}$/.test(v.publishDate)), {
+    error: "Elige la fecha de publicación",
+    path: ["publishDate"],
+  })
+  .refine(
+    (v) => v.publish !== "programar" || !v.publishTime || /^([01]\d|2[0-3]):[0-5]\d$/.test(v.publishTime),
+    {
+      error: "Hora inválida",
+      path: ["publishTime"],
+    },
+  )
+  .refine(
+    (v) =>
+      v.publish !== "programar" ||
+      !v.publishDate ||
+      `${v.publishDate}T${v.publishTime ?? "07:00"}` <= `${v.dueDate}T${v.dueTime}`,
+    { error: "Se publicaría después de la fecha de entrega", path: ["publishDate"] },
+  );
 export type ClassTaskInput = z.infer<typeof classTaskInputSchema>;
 
 export const taskSubmissionInputSchema = z.object({
@@ -278,6 +346,11 @@ export interface ClassTaskDto {
   periodName: string | null;
   attachments: TaskFileDto[];
   createdAt: string;
+  /** Cuándo la ven los alumnos (null: borrador). Fecha y hora en Honduras, para los formularios. */
+  publishAt: string | null;
+  publishDate: string | null;
+  publishTime: string | null;
+  visibility: TaskVisibility;
   /** Para quien da la clase: cuántos entregaron y cuántos ya tienen nota. */
   stats: { total: number; submitted: number; graded: number } | null;
   /** Para el alumno o su familia: cómo va su entrega. */
@@ -415,7 +488,14 @@ export type QuizAnswersInput = z.input<typeof quizAnswersInputSchema>;
 
 /** Puntos que el maestro le da a cada respuesta abierta. */
 export const quizReviewInputSchema = z.object({
-  points: z.record(z.uuid(), z.number().min(0).max(100)),
+  /** Puntos de las preguntas abiertas. */
+  points: z.record(z.uuid(), z.number().min(0).max(100)).default({}),
+  /** Comentario por pregunta (vacío lo quita). */
+  comments: z
+    .record(z.uuid(), z.string().trim().max(500, { error: "Un comentario lleva hasta 500 caracteres" }))
+    .optional(),
+  /** Comentario general (vacío lo quita). */
+  feedback: z.string().trim().max(1000, { error: "El comentario lleva hasta 1000 caracteres" }).optional(),
 });
 
 export type QuizStatus = "proximo" | "disponible" | "en_curso" | "entregado" | "calificado" | "cerrado";
@@ -471,6 +551,8 @@ export interface QuizAnswerReviewDto {
   answer: number | boolean | string | null;
   /** null: abierta todavía sin revisar. */
   points: number | null;
+  /** Lo que el maestro comentó en esta pregunta. */
+  comment: string | null;
 }
 
 export interface QuizAttemptDto {
@@ -487,6 +569,8 @@ export interface QuizAttemptDto {
   score: number | null;
   /** Faltan preguntas abiertas por revisar. */
   pendingReview: boolean;
+  /** Comentario general del maestro. */
+  feedback: string | null;
   status: QuizStatus;
 }
 

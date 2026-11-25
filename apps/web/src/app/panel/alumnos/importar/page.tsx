@@ -32,7 +32,7 @@ export default async function ImportPage() {
         <div className="card p-5 text-sm text-slate-700">
           Antes de importar, crea el año lectivo vigente y sus secciones en{" "}
           <Link href="/panel/estructura" className="font-semibold text-brand-700 hover:underline">
-            Estructura académica
+            Año, grados y materias
           </Link>
           .
         </div>

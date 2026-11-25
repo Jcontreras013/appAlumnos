@@ -4,7 +4,7 @@ import type { UnreadMessagesDto } from "@escolar/shared";
 import type { Route } from "next";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { fetchPanelJson, usePoll } from "@/components/messages/use-poll";
 
 export interface NavItem {
@@ -12,6 +12,8 @@ export interface NavItem {
   label: string;
   /** Muestra el contador de conversaciones sin leer (se actualiza solo). */
   unreadBadge?: boolean;
+  /** Título de la sección del menú (Mis clases, Alumnos, Personal, El centro). */
+  group?: string;
 }
 
 /** Contador de mensajes sin leer: se consulta cada medio minuto mientras el panel está a la vista. */
@@ -53,25 +55,34 @@ export function Nav({
     .sort((a, b) => b.length - a.length)[0];
   return (
     <nav aria-label="Principal" className="flex gap-1 overflow-x-auto md:flex-col md:overflow-visible">
-      {items.map((item) => {
+      {items.map((item, i) => {
         const active = item.href === activeHref;
+        const heading = item.group && item.group !== items[i - 1]?.group ? item.group : null;
         return (
-          <Link
-            key={item.href}
-            href={item.href}
-            aria-current={active ? "page" : undefined}
-            className={`flex items-center justify-between gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition ${
-              active ? "bg-brand-50 text-brand-700" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-            }`}
-          >
-            {item.label}
-            {item.unreadBadge && unread > 0 && (
-              <span className="grid h-5 min-w-5 place-items-center rounded-full bg-brand-600 px-1.5 text-xs font-semibold text-white">
-                {unread > 99 ? "99+" : unread}
-                <span className="sr-only"> conversaciones sin leer</span>
-              </span>
+          <Fragment key={item.href}>
+            {heading && (
+              <p className="hidden px-3 pb-1 pt-4 text-xs font-semibold uppercase tracking-wide text-slate-400 md:block">
+                {heading}
+              </p>
             )}
-          </Link>
+            <Link
+              href={item.href}
+              aria-current={active ? "page" : undefined}
+              className={`flex items-center justify-between gap-2 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition ${
+                active
+                  ? "bg-brand-50 text-brand-700"
+                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+              }`}
+            >
+              {item.label}
+              {item.unreadBadge && unread > 0 && (
+                <span className="grid h-5 min-w-5 place-items-center rounded-full bg-brand-600 px-1.5 text-xs font-semibold text-white">
+                  {unread > 99 ? "99+" : unread}
+                  <span className="sr-only"> conversaciones sin leer</span>
+                </span>
+              )}
+            </Link>
+          </Fragment>
         );
       })}
       {upcoming.length > 0 && (

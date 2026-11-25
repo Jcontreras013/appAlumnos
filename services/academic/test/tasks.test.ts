@@ -312,6 +312,74 @@ describe("tareas con entrega", () => {
     expect(row).toMatchObject({ submittedByOther: true, submittedByName: "María López" });
   });
 
+  it("una tarea en borrador o programada no la ven el alumno ni su familia hasta que se publique", async () => {
+    const base = { instructions: "", dueDate: "2030-02-10", dueTime: "18:00", allowLate: true };
+    const draft = await ctx.call<ClassTaskDto>(ana, "POST", `/classes/${math1A.id}/tasks`, {
+      ...base,
+      title: "Borrador de repaso",
+      publish: "borrador",
+    });
+    expect(draft.status).toBe(201);
+    expect(draft.body).toMatchObject({ visibility: "borrador", publishAt: null });
+    const later = await ctx.call<ClassTaskDto>(ana, "POST", `/classes/${math1A.id}/tasks`, {
+      ...base,
+      title: "Para la otra semana",
+      publish: "programar",
+      publishDate: "2030-02-01",
+      publishTime: "07:00",
+    });
+    expect(later.body).toMatchObject({
+      visibility: "programada",
+      publishDate: "2030-02-01",
+      publishTime: "07:00",
+    });
+    // Publicarla después de la entrega no tiene sentido.
+    const wrong = await ctx.call(ana, "POST", `/classes/${math1A.id}/tasks`, {
+      ...base,
+      title: "Al revés",
+      publish: "programar",
+      publishDate: "2030-03-01",
+    });
+    expect(wrong.status).toBe(400);
+
+    // La maestra las ve todas; el alumno y su familia, no.
+    const teacherRoom = await ctx.call<ClassroomDto>(ana, "GET", `/classes/${math1A.id}`);
+    expect(teacherRoom.body.tasks.map((t) => t.title)).toEqual(
+      expect.arrayContaining(["Borrador de repaso", "Para la otra semana"]),
+    );
+    for (const who of [luisUser, mother]) {
+      const room = await ctx.call<ClassroomDto>(who, "GET", `/classes/${math1A.id}`);
+      expect(room.body.tasks.map((t) => t.title)).not.toContain("Borrador de repaso");
+      expect(room.body.tasks.map((t) => t.title)).not.toContain("Para la otra semana");
+      expect((await ctx.call(who, "GET", `/class-tasks/${draft.body.id}`)).status).toBe(404);
+    }
+    expect(
+      (
+        await ctx.call(luisUser, "PUT", `/class-tasks/${draft.body.id}/submission`, {
+          text: "x",
+          turnIn: true,
+        })
+      ).status,
+    ).toBe(404);
+
+    // Al publicarla, el alumno ya la ve.
+    const published = await ctx.call<ClassTaskDto>(ana, "PUT", `/class-tasks/${draft.body.id}`, {
+      ...base,
+      title: "Borrador de repaso",
+      publish: "ahora",
+    });
+    expect(published.body.visibility).toBe("publicada");
+    expect((await ctx.call(luisUser, "GET", `/class-tasks/${draft.body.id}`)).status).toBe(200);
+    // Corregir una ya publicada no le cambia la fecha de publicación.
+    const edited = await ctx.call<ClassTaskDto>(ana, "PUT", `/class-tasks/${draft.body.id}`, {
+      ...base,
+      title: "Repaso (corregido)",
+      publish: "ahora",
+    });
+    expect(edited.body.publishAt).toBe(published.body.publishAt);
+    for (const t of [draft.body, later.body]) await ctx.call(ana, "DELETE", `/class-tasks/${t.id}`);
+  });
+
   it("borrar la tarea borra su columna de la libreta y sus archivos", async () => {
     expect((await ctx.call(ana, "DELETE", `/class-tasks/${task.id}`)).status).toBe(204);
     const iv = periods[3] as GradingPeriodDto;

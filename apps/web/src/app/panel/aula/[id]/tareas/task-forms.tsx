@@ -6,7 +6,7 @@ import {
   SUBMISSION_FILE_MAX_BYTES,
   type TaskSubmissionDto,
 } from "@escolar/shared";
-import { useActionState, useEffect, useId, useRef } from "react";
+import { useActionState, useEffect, useId, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { Field, FormAlert, SelectField, TextAreaField } from "@/components/form-controls";
 import type { FormState } from "@/lib/form-state";
@@ -118,8 +118,80 @@ export function TaskForm({
           options={periods.map((p) => ({ value: p.id, label: p.name }))}
         />
       </div>
-      <Submit pending="Guardando…">{task ? "Guardar cambios" : "Publicar tarea"}</Submit>
+      <PublishChoice idPrefix={id} task={task} state={state} />
+      <Submit pending="Guardando…">{task ? "Guardar cambios" : "Guardar tarea"}</Submit>
     </form>
+  );
+}
+
+/** Cuándo ven la tarea los alumnos: ya, más adelante (fecha y hora) o cuando el maestro decida. */
+function PublishChoice({
+  idPrefix,
+  task,
+  state,
+}: {
+  idPrefix: string;
+  task?: ClassTaskDto;
+  state: FormState;
+}) {
+  const v = state.values;
+  const initial =
+    (v?.publish as "ahora" | "programar" | "borrador" | undefined) ??
+    (task?.visibility === "borrador"
+      ? "borrador"
+      : task?.visibility === "programada"
+        ? "programar"
+        : "ahora");
+  const [mode, setMode] = useState(initial);
+  const options = [
+    ["ahora", task?.visibility === "publicada" ? "Publicada" : "Publicar ahora"],
+    ["programar", "Programar fecha y hora"],
+    ["borrador", "Guardar sin publicar"],
+  ] as const;
+  return (
+    <fieldset className="space-y-2 rounded-lg border border-slate-200 p-3">
+      <legend className="px-1 text-sm font-medium text-slate-700">¿Cuándo la ven los alumnos?</legend>
+      <div className="flex flex-wrap gap-x-5 gap-y-2">
+        {options.map(([value, label]) => (
+          <label key={value} className="flex items-center gap-2 text-sm text-slate-700">
+            <input
+              type="radio"
+              name="publish"
+              value={value}
+              checked={mode === value}
+              onChange={() => setMode(value)}
+              className="size-4 border-slate-300"
+            />
+            {label}
+          </label>
+        ))}
+      </div>
+      {mode === "programar" && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field
+            idPrefix={idPrefix}
+            name="publishDate"
+            label="Fecha de publicación"
+            type="date"
+            defaultValue={v?.publishDate ?? task?.publishDate ?? ""}
+            state={state}
+          />
+          <Field
+            idPrefix={idPrefix}
+            name="publishTime"
+            label="Hora"
+            type="time"
+            defaultValue={v?.publishTime ?? task?.publishTime ?? "07:00"}
+            state={state}
+          />
+        </div>
+      )}
+      {mode === "borrador" && (
+        <p className="text-xs text-slate-500">
+          Queda guardada solo para ti. Cuando esté lista, edítala y elige «Publicar ahora».
+        </p>
+      )}
+    </fieldset>
   );
 }
 

@@ -27,7 +27,7 @@ const FIRST_LOGIN: HelpSection = {
     "La plataforma te pide elegir una contraseña nueva de al menos 10 caracteres (no sirven las más usadas, como «Honduras2026», ni solo números). Desde ahí entras siempre con ella.",
     "Si olvidas la contraseña, pide a quien te dio el acceso una «Nueva contraseña temporal».",
   ],
-  tip: "Tras 5 intentos fallidos la cuenta se bloquea 15 minutos. Es para proteger los datos de los alumnos.",
+  tip: "Tras 5 intentos fallidos la cuenta se bloquea 15 minutos. Si el personal deja la sesión sin usar 30 minutos, se cierra sola (avisa 2 minutos antes). Es para proteger los datos de los alumnos.",
 };
 
 const CALENDAR: HelpSection = {
@@ -72,9 +72,11 @@ const CLASSROOM: HelpSection = {
     "En «Aula virtual» toca una de tus clases: es su página, la que ven tus alumnos y sus familias.",
     "«Nuevo tema»: escribe la explicación y después «Agregar video, enlace o archivo»: un video de YouTube se ve ahí mismo; también guías en PDF, Word, PowerPoint o fotos de la pizarra. Con las flechas ordenas los temas.",
     "«Clase en línea»: pega el enlace de Meet, Zoom o Jitsi y cuándo es; tus alumnos entran con «Entrar a la clase».",
-    "«Nueva tarea»: instrucciones, fecha de entrega y, si lleva nota, su valor y el parcial. Se crea sola su columna en tu cuaderno. Al abrirla ves quién entregó, abres lo que mandaron y pones la nota con un comentario: cae en la libreta.",
+    "«Nueva tarea»: instrucciones, fecha de entrega y, si lleva nota, su valor y el parcial. Se crea sola su columna en tu cuaderno. Elige cuándo la ven los alumnos: «Publicar ahora», «Programar fecha y hora» o «Guardar sin publicar» (la publicas después editándola).",
+    "Al abrir una tarea ves primero a quienes entregaron (marcados «Entregó»); «Toda la sección» muestra también a quienes faltan. Abre lo que mandaron y pon la nota con un comentario: cae en la libreta.",
     "«Nuevo examen»: elige cuándo abre y cierra, el tiempo para resolverlo y su valor. Agrega preguntas de selección múltiple, verdadero o falso (se califican solas) o abiertas (las revisas tú) y toca «Publicar examen».",
-    "En los resultados del examen, «Revisar respuestas abiertas» y pon los puntos: con todo revisado, la nota va a la libreta.",
+    "En los resultados del examen, abre las respuestas de cada alumno: pon los puntos de las abiertas y, si quieres, un comentario en cada pregunta (en qué falló) y uno general. Con todo revisado, la nota va a la libreta; el alumno y su familia ven tus comentarios.",
+    "«Chat de la clase»: toca «Abrir el chat» para conversar con toda la sección en un solo lugar. Puedes borrar cualquier mensaje y cerrarlo cuando quieras; las familias no lo ven.",
   ],
   tip: "Los videos van por enlace de YouTube (súbelos como «no listado»): así no gastan espacio del centro. Una tarea sin valor es solo para entregar. Cuando un alumno ya empezó un examen, sus preguntas no se pueden cambiar.",
 };
@@ -103,7 +105,7 @@ export const HELP_GUIDES: HelpGuide[] = [
       {
         title: "Usar el cuaderno sin internet",
         steps: [
-          "Entra a «Mi cuaderno» una vez con internet. Cuando diga «Listo para usar sin internet en este dispositivo», ya puedes trabajar sin señal.",
+          "Entra a «Asistencia y notas» una vez con internet. Cuando diga «Listo para usar sin internet en este dispositivo», ya puedes trabajar sin señal.",
           "Sin internet verás «Sin conexión». Todo lo que registres se guarda en el teléfono.",
           "Cuando vuelve la señal se envía solo y aparece «Todo guardado».",
         ],
@@ -112,7 +114,7 @@ export const HELP_GUIDES: HelpGuide[] = [
       {
         title: "Pasar asistencia",
         steps: [
-          "En «Mi cuaderno», toca «Tomar asistencia de hoy» en tu sección.",
+          "En «Asistencia y notas», toca «Tomar asistencia de hoy» en tu sección.",
           "Marca a cada alumno: presente, ausente, tarde o justificada. «Todos presentes» marca a todos de una vez y luego corriges a quien faltó.",
           "Para corregir otro día, usa «Día anterior» o «Día siguiente».",
         ],
@@ -120,7 +122,7 @@ export const HELP_GUIDES: HelpGuide[] = [
       {
         title: "Registrar notas",
         steps: [
-          "En «Mi cuaderno», toca «Notas →» en la clase.",
+          "En «Asistencia y notas», toca «Notas →» en la clase.",
           "«Agregar actividad»: escribe el nombre (por ejemplo, «Tarea 1»), la fecha y cuánto «Vale (puntos)». Cada parcial reparte 100 puntos.",
           "Escribe los puntos de cada alumno. La columna de la derecha muestra cómo va: la «Proyección en base 100 con lo evaluado hasta ahora».",
           "Cuando la clase llega a «Parcial completo (100 puntos)» y todos tienen nota, la nota del parcial queda lista.",
@@ -171,7 +173,7 @@ export const HELP_GUIDES: HelpGuide[] = [
       {
         title: "Cuando cubres a un compañero",
         steps: [
-          "Si la dirección te asigna como sustituto, la clase aparece en «Mi cuaderno» mientras dura la licencia.",
+          "Si la dirección te asigna como sustituto, la clase aparece en «Asistencia y notas» mientras dura la licencia.",
           "Pasas asistencia y registras notas igual que en tus clases. Al terminar la licencia, la clase vuelve sola a su titular.",
         ],
       },
@@ -198,7 +200,7 @@ export const HELP_GUIDES: HelpGuide[] = [
       {
         title: "Organizar el año",
         steps: [
-          "En «Estructura académica»: crea el año lectivo, ajusta las fechas de los parciales y la nota mínima.",
+          "En «Año, grados y materias»: crea el año lectivo, ajusta las fechas de los parciales y la nota mínima.",
           "Agrega los grados, las secciones (con su cupo) y las materias. En los colegios bilingües, marca en cada materia si «se imparte en» español o inglés: el asistente de planificación escribe en ese idioma.",
           "Asigna qué docente da cada materia en cada sección.",
           "Si un docente se va, usa «Cambiar docente»: la clase pasa a la persona nueva con sus notas y planificaciones.",
@@ -216,7 +218,7 @@ export const HELP_GUIDES: HelpGuide[] = [
       {
         title: "Seguimiento diario",
         steps: [
-          "En «Seguimiento» ves el avance de notas de cada clase, la asistencia y los alumnos en riesgo por faltas o por notas bajas.",
+          "En «Seguimiento del centro» ves el avance de notas de cada clase, la asistencia y los alumnos en riesgo por faltas o por notas bajas.",
           "Cuando faltan 7 días o menos para el cierre de notas, aparece un aviso con las clases atrasadas.",
           "Al cierre del parcial, descarga el «Cuadro de calificaciones para el SACE» de cada sección: un Excel con la identidad y la nota de cada alumno por materia.",
           "En «Planificación» revisas las planificaciones de la semana: «Aprobar» o «Devolver con observaciones».",
@@ -225,7 +227,7 @@ export const HELP_GUIDES: HelpGuide[] = [
       {
         title: "Alumnos en riesgo: seguimiento",
         steps: [
-          "En «Seguimiento», cada alumno en riesgo dice si ya tiene seguimiento.",
+          "En «Seguimiento del centro», cada alumno en riesgo dice si ya tiene seguimiento.",
           "«Registrar seguimiento»: anota qué se hizo (llamada, reunión, visita, referido a orientación…) y qué se acordó.",
           "Todo queda en la ficha del alumno, con la fecha y quién lo registró.",
         ],
@@ -269,10 +271,10 @@ export const HELP_GUIDES: HelpGuide[] = [
       {
         title: "Cierre del año y paso de grado",
         steps: [
-          "Crea en «Estructura académica» el año lectivo siguiente. En «Cierre del año» puedes crear de una vez las mismas secciones.",
+          "Crea en «Año, grados y materias» el año lectivo siguiente. En «Cierre del año» puedes crear de una vez las mismas secciones.",
           "«Cierre del año» muestra cada sección: quiénes pasan de grado y quiénes repiten, según las notas finales y las recuperaciones.",
           "Decide los casos pendientes alumno por alumno, toca «Revisar» y luego «Matricular» en el año siguiente.",
-          "Al final, marca el año nuevo como vigente en «Estructura académica».",
+          "Al final, marca el año nuevo como vigente en «Año, grados y materias».",
         ],
       },
       {
@@ -319,7 +321,7 @@ export const HELP_GUIDES: HelpGuide[] = [
       {
         title: "Notas y alumnos en riesgo",
         steps: [
-          "En «Seguimiento» revisa qué clases van atrasadas con las notas y qué alumnos están en riesgo.",
+          "En «Seguimiento del centro» revisa qué clases van atrasadas con las notas y qué alumnos están en riesgo.",
           "Habla con el docente a tiempo: la alerta aparece antes del cierre del parcial, cuando todavía se puede ayudar al alumno.",
         ],
       },
@@ -346,7 +348,7 @@ export const HELP_GUIDES: HelpGuide[] = [
       {
         title: "Matrícula",
         steps: [
-          "Para muchos alumnos a la vez: en «Alumnos», «Importar alumnos desde Excel». Revisa la vista previa y confirma.",
+          "Para muchos alumnos a la vez: en «Alumnos y familias», «Importar alumnos desde Excel». Revisa la vista previa y confirma.",
           "Para un alumno: «Nuevo alumno», con su responsable principal y la sección.",
           "En la ficha del alumno puedes «Cambiar de sección», «Registrar retiro» o volver a «Matricular».",
         ],
@@ -379,7 +381,7 @@ export const HELP_GUIDES: HelpGuide[] = [
         steps: [
           "Con su cuenta, el alumno ve sus clases, entrega tareas y presenta exámenes. Recomendado desde 7.º grado; en primaria la familia entrega por ellos.",
           "Uno por uno: en la ficha del alumno, «Cuenta del aula virtual» → «Darle su cuenta». Entra con su identidad (o su correo, si no la tiene).",
-          "Toda una sección: en «Alumnos», filtra por la sección y toca «Dar cuentas a la sección». Imprime la hoja de accesos y recorta una tira para cada alumno.",
+          "Toda una sección: en «Alumnos y familias», filtra por la sección y toca «Dar cuentas a la sección». Imprime la hoja de accesos y recorta una tira para cada alumno.",
           "Las contraseñas temporales solo se muestran una vez. Si un alumno la olvida, en su ficha: «Nueva contraseña temporal».",
         ],
       },
@@ -422,6 +424,7 @@ export const HELP_GUIDES: HelpGuide[] = [
         steps: [
           "En «Mis clases» está cada materia con su página: los temas con la explicación del maestro, videos, guías y avisos.",
           "Si tu maestro da clases en línea, toca «Entrar a la clase» a la hora indicada.",
+          "Si tu maestro abrió el «Chat de la clase», puedes escribirle a él y a tus compañeros. Sé respetuoso: el maestro lo ve todo y puede borrar mensajes.",
         ],
       },
       {
@@ -440,7 +443,7 @@ export const HELP_GUIDES: HelpGuide[] = [
           "En «Exámenes» abre el que diga «Disponible» y toca «Comenzar examen». Se presenta una sola vez.",
           "Arriba ves el tiempo que te queda. Tus respuestas se guardan solas mientras respondes.",
           "Al terminar, «Entregar examen». Si se acaba el tiempo, se entrega solo con lo que respondiste.",
-          "Las preguntas de selección y verdadero o falso se califican al momento; las abiertas, cuando tu maestro las revise.",
+          "Las preguntas de selección y verdadero o falso se califican al momento; las abiertas, cuando tu maestro las revise. Si te deja comentarios, los ves junto a cada respuesta.",
         ],
       },
       {

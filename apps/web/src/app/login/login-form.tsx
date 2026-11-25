@@ -6,9 +6,14 @@ import { Field, FormAlert, SubmitButton } from "@/components/form-controls";
 import { initialFormState } from "@/lib/form-state";
 import { loginAction } from "./actions";
 
-export function LoginForm({ expired }: { expired: boolean }) {
+export function LoginForm({ expired, idle = false }: { expired: boolean; idle?: boolean }) {
   const [state, action] = useActionState(loginAction, initialFormState);
-  const shown = !state.error && expired ? { error: "Tu sesión expiró. Vuelve a iniciar sesión." } : state;
+  const shown =
+    !state.error && idle
+      ? { error: "Por seguridad, tu sesión se cerró por inactividad. Vuelve a iniciar sesión." }
+      : !state.error && expired
+        ? { error: "Tu sesión expiró. Vuelve a iniciar sesión." }
+        : state;
 
   return (
     <form action={action} className="space-y-4" noValidate>

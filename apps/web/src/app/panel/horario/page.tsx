@@ -50,7 +50,7 @@ export default async function SchedulePage({ searchParams }: PageProps<"/panel/h
         <p className="card p-6 text-sm text-slate-500">
           Primero crea las secciones y asigna los docentes en{" "}
           <Link href="/panel/estructura" className="text-brand-700 hover:underline">
-            Estructura académica
+            Año, grados y materias
           </Link>
           .
         </p>

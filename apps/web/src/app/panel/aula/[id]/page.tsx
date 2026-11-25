@@ -14,7 +14,8 @@ import { academic } from "@/lib/academic";
 import { ServiceError } from "@/lib/api";
 import { requireRole } from "@/lib/dal";
 import { deleteClassMaterialAction, deleteClassPostAction, moveTopicAction } from "../actions";
-import { StatusBadge } from "../status-badge";
+import { PublishBadge, StatusBadge } from "../status-badge";
+import { ClassChat } from "./class-chat";
 import { AddMaterial, ConfirmButton, EditPost, MeetingForm, NewPost } from "./class-editor";
 import { NewQuiz } from "./examenes/quiz-forms";
 import { MaterialView } from "./material-view";
@@ -47,6 +48,9 @@ export default async function ClassPage({ params }: PageProps<"/panel/aula/[id]"
   const periods = edit ? (await academic.periods(session.accessToken)).periods : [];
   const current = currentPeriod(periods, todayInHonduras());
   const now = new Date();
+  // Chat de la clase: el maestro, los alumnos y la dirección (las familias no lo ven).
+  const chat =
+    room.viewer === "familia" ? null : await academic.classChat(session.accessToken, id).catch(() => null);
 
   return (
     <div className="space-y-6">
@@ -87,7 +91,10 @@ export default async function ClassPage({ params }: PageProps<"/panel/aula/[id]"
                     className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 hover:bg-slate-50"
                   >
                     <span className="min-w-0">
-                      <span className="block font-medium text-slate-900">{t.title}</span>
+                      <span className="flex flex-wrap items-center gap-2 font-medium text-slate-900">
+                        {t.title}
+                        <PublishBadge task={t} />
+                      </span>
                       <span className={`block text-xs ${overdue ? "text-slate-500" : "text-brand-700"}`}>
                         {overdue ? "Venció" : "Entrega"} {when(t.dueAt)}
                         {t.points !== null && ` · ${t.points} pts`}
@@ -202,6 +209,8 @@ export default async function ClassPage({ params }: PageProps<"/panel/aula/[id]"
           </ul>
         )}
       </Card>
+
+      {chat && <ClassChat assignmentId={room.assignmentId} initial={chat} />}
 
       <Card title="Temas" action={edit ? <NewPost assignmentId={room.assignmentId} kind="tema" /> : null}>
         {room.topics.length === 0 ? (

@@ -151,6 +151,7 @@ export function attemptDto(
         questionId: q.id,
         answer: attempt.answers[q.id] ?? null,
         points: attempt.submittedAt || now > attempt.deadline ? answerPoints(q, attempt) : null,
+        comment: attempt.comments?.[q.id] ?? null,
       }))
     : [];
   return {
@@ -164,6 +165,7 @@ export function attemptDto(
     rawScore: attempt?.rawScore ?? null,
     score: attempt?.score ?? null,
     pendingReview: Boolean(attempt?.submittedAt && !attempt.gradedAt),
+    feedback: attempt?.feedback ?? null,
     status: quizStatus(quiz, attempt, now),
   };
 }

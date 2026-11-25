@@ -30,6 +30,14 @@ export async function logoutAction() {
   redirect("/login");
 }
 
+/** Se cerró sola por inactividad (personal): la pantalla de entrada lo explica. */
+export async function idleLogoutAction() {
+  const refreshToken = (await cookies()).get(REFRESH_COOKIE)?.value;
+  if (refreshToken) await identity.logout(refreshToken).catch(() => {});
+  await clearSessionCookies();
+  redirect("/login?inactiva=1");
+}
+
 /** Cambiar de centro (o de rol) sin volver a escribir la contraseña. */
 export async function switchMembershipAction(formData: FormData) {
   const { accessToken } = await getSession();
