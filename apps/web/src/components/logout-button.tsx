@@ -18,7 +18,9 @@ export function LogoutButton({ action }: { action: () => Promise<void> }) {
         const form = e.currentTarget;
         await Promise.race([forgetPushOnThisDevice(), new Promise((resolve) => setTimeout(resolve, 2_000))]);
         ready.current = true;
-        form.requestSubmit();
+        // En otra vuelta: si lo de los avisos terminó al instante (sin avisos en este teléfono), el
+        // navegador todavía está enviando el formulario y ignoraría este segundo envío.
+        setTimeout(() => form.requestSubmit(), 0);
       }}
     >
       <button type="submit" className="btn-secondary px-3 py-1.5">
