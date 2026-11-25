@@ -102,6 +102,10 @@ registros; las llaves se crean y se guardan directo en AWS Secrets Manager.
 Para actualizar CONECTA más adelante, solo se repite el paso 6. Al terminar, el flujo revisa que el
 panel llegue a identity y academic (y los reinicia solo si hace falta).
 
+**Actions → «Buscar un error»** (un minuto): cuando CONECTA muestra «Ocurrió un error inesperado.
+Referencia: …», se copia esa referencia en el flujo y muestra qué pasó (el error y dónde), sacado de
+los registros de AWS. Solo lo técnico: el registro de GitHub es público.
+
 **Actions → «Reiniciar los servicios»** (unos 4 minutos, sin cortar el servicio): si al entrar dice
 «No se pudo conectar con el servidor», o después de cambiar el valor de una llave en Secrets
 Manager (las tareas leen las llaves al arrancar).

@@ -1,0 +1,154 @@
+name: App Android para Play Store
+
+# Arma la versión de la app que se sube a Google Play (archivo .aab, firmado) y la deja para
+# descargar en el resumen de este flujo.
+#
+# La llave de firma («upload key») se crea sola la primera vez y queda guardada en AWS Secrets Manager
+# (escolar/android/firma); las siguientes versiones usan la misma. Nunca está en el repositorio ni en
+# este registro. Con «Firma de apps de Play» (la opción que Google propone al crear la app), si un día
+# esta llave se pierde, Google permite cambiarla: la llave con que llega la app a los teléfonos la
+# guarda Google.
+#
+# La app abre la dirección de CONECTA del ambiente (variable DOMINIO, o CONECTA_URL si está).
+# Opcional: secreto GOOGLE_SERVICES_JSON (Firebase) para los avisos del teléfono.
+
+on:
+  workflow_dispatch:
+    inputs:
+      stage:
+        description: Ambiente (la dirección de CONECTA que abre la app)
+        type: choice
+        options: [prod, dev]
+        default: prod
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: android-play
+  cancel-in-progress: false
+
+jobs:
+  aab:
+    name: Versión para Play Store
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.stage }}
+    timeout-minutes: 30
+    env:
+      STAGE: ${{ inputs.stage }}
+      CONECTA_APP_ID: ${{ vars.CONECTA_APP_ID }}
+      # Play Store pide que el número de versión siempre suba: se usa el número de esta compilación.
+      CONECTA_VERSION_CODE: ${{ github.run_number }}
+    steps:
+      - name: Dirección de CONECTA
+        env:
+          URL_VARIABLE: ${{ vars.CONECTA_URL }}
+          DOMINIO: ${{ vars.DOMINIO }}
+        run: |
+          set -euo pipefail
+          URL=${URL_VARIABLE:-${DOMINIO:+https://$DOMINIO}}
+          URL=${URL%/}
+          if ! [[ "$URL" =~ ^https://[a-z0-9.-]+$ ]]; then
+            echo "::error::Falta la dirección de CONECTA: la variable DOMINIO del ambiente $STAGE (por ejemplo conecta.jcsystemhn.com)."
+            exit 1
+          fi
+          # Antes de armar la app, que la dirección responda (la app no sirve si no abre).
+          CODIGO=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "$URL/login" || true)
+          if [ "$CODIGO" != "200" ]; then
+            echo "::error::$URL/login no responde (código $CODIGO). Revisa que CONECTA esté desplegada en $STAGE."
+            exit 1
+          fi
+          echo "La app va a abrir $URL."
+          echo "CONECTA_URL=$URL" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - run: pnpm install --frozen-lockfile
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+          mask-aws-account-id: true
+
+      - name: Archivo de Firebase (avisos del teléfono)
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            printf '%s' "$GOOGLE_SERVICES_JSON" > apps/mobile/android/app/google-services.json
+            echo "Con avisos del teléfono (Firebase)."
+          else
+            echo "::notice::Sin GOOGLE_SERVICES_JSON: la app funciona, pero sin avisos del teléfono."
+          fi
+
+      - name: Preparar la app (Capacitor)
+        run: pnpm --filter @escolar/mobile sync
+
+      - name: Llave de firma y versión para Play Store
+        working-directory: apps/mobile/android
+        run: |
+          set -euo pipefail
+          umask 077
+          DIR=$(mktemp -d)
+          trap 'rm -rf "$DIR"' EXIT
+          SECRETO="escolar/android/firma"
+          if aws secretsmanager describe-secret --secret-id "$SECRETO" > /dev/null 2>&1; then
+            aws secretsmanager get-secret-value --secret-id "$SECRETO" --query SecretString --output text > "$DIR/firma.json"
+            echo "Se usa la llave de firma guardada en AWS."
+          else
+            # Primera vez: una llave nueva, con una contraseña al azar que nadie tiene que recordar.
+            CLAVE=$(openssl rand -hex 24)
+            echo "::add-mask::$CLAVE"
+            export CLAVE_NUEVA=$CLAVE
+            keytool -genkeypair -noprompt -keystore "$DIR/nueva.keystore" -storetype PKCS12 \
+              -alias conecta -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=CONECTA, O=Jc-System, C=HN" -storepass:env CLAVE_NUEVA -keypass:env CLAVE_NUEVA
+            jq -n --rawfile llave <(base64 -w0 "$DIR/nueva.keystore") --arg clave "$CLAVE" \
+              '{keystore: $llave, password: $clave, alias: "conecta"}' > "$DIR/firma.json"
+            aws secretsmanager create-secret --name "$SECRETO" \
+              --description "Llave de firma (upload key) de la app de CONECTA para Google Play" \
+              --secret-string "file://$DIR/firma.json" > /dev/null
+            echo "Llave de firma nueva, guardada en AWS ($SECRETO)."
+          fi
+          CLAVE=$(jq -r .password "$DIR/firma.json")
+          echo "::add-mask::$CLAVE"
+          jq -r .keystore "$DIR/firma.json" | base64 -d > "$DIR/conecta.keystore"
+          export ANDROID_KEYSTORE_FILE="$DIR/conecta.keystore"
+          export ANDROID_KEYSTORE_PASSWORD=$CLAVE
+          export ANDROID_KEY_PASSWORD=$CLAVE
+          export ANDROID_KEY_ALIAS=$(jq -r .alias "$DIR/firma.json")
+          ./gradlew bundleRelease --no-daemon --stacktrace
+          # La huella del certificado de la llave es pública: sirve si Google la pide.
+          HUELLA=$(keytool -list -keystore "$DIR/conecta.keystore" -storepass:env ANDROID_KEYSTORE_PASSWORD \
+            -alias "$ANDROID_KEY_ALIAS" -v | sed -n 's/.*SHA256: //p' | head -n1)
+          echo "HUELLA=$HUELLA" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: conecta-play-store-${{ github.run_number }}
+          path: apps/mobile/android/app/build/outputs/bundle/release/app-release.aab
+          retention-days: 30
+
+      - name: Qué sigue
+        run: |
+          {
+            echo "## Versión para Play Store lista (número $CONECTA_VERSION_CODE)"
+            echo
+            echo "La app abre **$CONECTA_URL**."
+            echo
+            echo "1. Baja el archivo en **Artifacts** (abajo en esta página): \`conecta-play-store-$CONECTA_VERSION_CODE\`. Viene en un .zip: adentro está \`app-release.aab\`."
+            echo "2. En Play Console → tu app → **Prueba → Prueba interna** (la primera vez) o **Producción** → **Crear versión** → sube \`app-release.aab\`."
+            echo "3. Si Play Console pregunta por la firma, deja **«Firma de apps de Play»** (la recomendada)."
+            echo
+            echo "Huella SHA-256 de la llave de subida (pública): \`$HUELLA\`"
+          } >> "$GITHUB_STEP_SUMMARY"

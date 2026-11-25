@@ -1,7 +1,7 @@
 import { createReadStream, createWriteStream } from "node:fs";
 import { mkdir, rename, rm, stat } from "node:fs/promises";
 import { dirname, join, resolve, sep } from "node:path";
-import { Readable } from "node:stream";
+import { PassThrough, Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { DeleteObjectCommand, GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
@@ -54,15 +54,46 @@ export function localFileStore(root: string): FileStore {
 export function s3FileStore(bucket: string, client = new S3Client({})): FileStore {
   return {
     async put(key, body, size, contentType) {
-      await client.send(
-        new PutObjectCommand({
-          Bucket: bucket,
-          Key: key,
-          Body: body,
-          ContentLength: size,
-          ContentType: contentType,
-        }),
-      );
+      // El archivo se revisa mientras llega (que sea lo que dice ser, que llegue completo). Si la
+      // revisión falla, S3 se quedaría esperando los bytes que faltan hasta cortar por tiempo y el
+      // usuario vería «error inesperado»: se corta la subida enseguida y se devuelve el motivo real.
+      // A S3 va una copia: el error de la revisión no le llega al SDK (lo dejaría suelto y tumbaría
+      // el servicio); se corta la subida con la señal y aquí se devuelve el motivo.
+      const abort = new AbortController();
+      const copy = new PassThrough();
+      let reason: unknown = null;
+      const settled = new Promise<void>((resolve) => {
+        body.once("error", (err) => {
+          reason ??= err;
+          abort.abort();
+          body.unpipe(copy);
+          copy.destroy();
+          resolve();
+        });
+        body.once("end", () => resolve());
+        body.once("close", () => resolve());
+      });
+      body.pipe(copy);
+      try {
+        await client.send(
+          new PutObjectCommand({
+            Bucket: bucket,
+            Key: key,
+            Body: copy,
+            ContentLength: size,
+            ContentType: contentType,
+          }),
+          { abortSignal: abort.signal },
+        );
+      } catch (err) {
+        throw reason ?? err;
+      }
+      // La última revisión (al terminar de llegar) puede fallar cuando S3 ya tiene todo: se borra.
+      await Promise.race([settled, new Promise((resolve) => setTimeout(resolve, 5000).unref())]);
+      if (reason) {
+        await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key })).catch(() => {});
+        throw reason;
+      }
     },
     async get(key, range) {
       const res = await client.send(
