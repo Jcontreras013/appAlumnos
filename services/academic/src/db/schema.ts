@@ -923,6 +923,8 @@ export const virtualClasses = pgTable(
     meetingUrl: text("meeting_url"),
     /** «Martes y jueves, 3:00 p. m.» */
     meetingNote: text("meeting_note"),
+    /** El maestro abrió el chat de la clase (viene cerrado). */
+    chatEnabled: boolean("chat_enabled").notNull().default(false),
     updatedByUserId: uuid("updated_by_user_id").notNull(),
     updatedAt: updatedAt(),
   },
@@ -935,6 +937,37 @@ export const virtualClasses = pgTable(
     }).onDelete("cascade"),
   ],
 );
+
+/**
+ * Chat de toda la clase: el maestro y los alumnos de la sección. Un mensaje borrado (por su autor o
+ * por quien modera) deja la fila sin el texto: «Mensaje borrado».
+ */
+export const classChatMessages = pgTable(
+  "class_chat_messages",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    schoolId: schoolId(),
+    assignmentId: uuid("assignment_id").notNull(),
+    authorUserId: uuid("author_user_id").notNull(),
+    authorName: text("author_name").notNull(),
+    /** maestro o alumno */
+    authorRole: text("author_role").notNull(),
+    body: text("body"),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    deletedByUserId: uuid("deleted_by_user_id"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("class_chat_messages_class_idx").on(t.assignmentId, t.createdAt),
+    check("class_chat_messages_role", sql`${t.authorRole} in ('maestro', 'alumno')`),
+    foreignKey({
+      name: "class_chat_messages_assignment_fk",
+      columns: [t.schoolId, t.assignmentId],
+      foreignColumns: [teachingAssignments.schoolId, teachingAssignments.id],
+    }).onDelete("cascade"),
+  ],
+);
+export type ClassChatMessage = typeof classChatMessages.$inferSelect;
 
 /** Temas (con su explicación, en el orden del maestro) y avisos de una clase. */
 export const classPosts = pgTable(
@@ -1012,6 +1045,8 @@ export const classTasks = pgTable(
     instructions: text("instructions").notNull().default(""),
     dueAt: timestamp("due_at", { withTimezone: true }).notNull(),
     allowLate: boolean("allow_late").notNull().default(true),
+    /** Desde cuándo la ven los alumnos y las familias. null: borrador (solo el maestro). */
+    publishAt: timestamp("publish_at", { withTimezone: true }),
     createdByUserId: uuid("created_by_user_id").notNull(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -1165,6 +1200,10 @@ export const quizAttempts = pgTable(
     answers: jsonb("answers").$type<Record<string, number | boolean | string>>().notNull().default({}),
     /** Puntos que el maestro dio a cada respuesta abierta. */
     reviewed: jsonb("reviewed").$type<Record<string, number>>().notNull().default({}),
+    /** Comentario del maestro en cada pregunta (en qué falló, qué le faltó). */
+    comments: jsonb("comments").$type<Record<string, string>>().notNull().default({}),
+    /** Comentario general del maestro sobre el examen. */
+    feedback: text("feedback"),
     submittedAt: timestamp("submitted_at", { withTimezone: true }),
     submittedByUserId: uuid("submitted_by_user_id"),
     submittedByName: text("submitted_by_name"),

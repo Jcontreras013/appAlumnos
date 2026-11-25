@@ -11,7 +11,7 @@ import { PrecacheClasses, SyncStatus } from "@/components/offline";
 import { academic } from "@/lib/academic";
 import { requireRole } from "@/lib/dal";
 
-export const metadata: Metadata = { title: "Mi cuaderno" };
+export const metadata: Metadata = { title: "Asistencia y notas" };
 
 const daysBetween = (from: string, to: string) =>
   Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
@@ -60,7 +60,7 @@ export default async function NotebookPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Mi cuaderno</h1>
+          <h1 className="text-2xl font-semibold text-slate-900">Asistencia y notas</h1>
           <p className="mt-1 text-sm text-slate-500">
             Hoy, {formatDay(today)}
             {period && (
@@ -95,8 +95,8 @@ export default async function NotebookPage() {
 
       {classes.length === 0 ? (
         <div className="card p-8 text-center text-sm text-slate-500">
-          No tienes clases asignadas en el año lectivo vigente. La dirección asigna las materias en
-          «Estructura académica».
+          No tienes clases asignadas en el año lectivo vigente. La dirección asigna las materias en «Año,
+          grados y materias».
         </div>
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">

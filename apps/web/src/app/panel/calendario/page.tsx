@@ -61,7 +61,7 @@ export default async function CalendarPage() {
 
       {!schoolYear ? (
         <p className="card p-6 text-center text-sm text-slate-500">
-          Primero hay que configurar el año lectivo en «Estructura académica».
+          Primero hay que configurar el año lectivo en «Año, grados y materias».
         </p>
       ) : (
         <div className={`grid gap-6 ${canEdit ? "lg:grid-cols-[1fr_22rem]" : ""}`}>

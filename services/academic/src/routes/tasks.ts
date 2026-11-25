@@ -40,7 +40,14 @@ import type { AcademicDeps } from "../deps";
 import { audit } from "../lib/audit";
 import { type ClassAccess, classAccess } from "../lib/classroom";
 import { rosterOf, saveActivity } from "../lib/evaluation";
-import { pointsFor, submissionDto, submittedFiles, taskDtos } from "../lib/tasks";
+import {
+  pointsFor,
+  publishAtFor,
+  submissionDto,
+  submittedFiles,
+  taskDtos,
+  taskVisibility,
+} from "../lib/tasks";
 import { storeUpload } from "../lib/uploads";
 
 const idParams = z.object({ id: z.uuid() });
@@ -74,6 +81,9 @@ export async function taskRoutes(app: FastifyInstance, { db, files, today }: Aca
       .where(and(eq(classTasks.schoolId, tenantOf(request)), eq(classTasks.id, id)));
     if (!task) throw notFound("Tarea no encontrada");
     const access = await classAccess(db, request.auth, task.assignmentId, today());
+    // Alumnos y familias no ven los borradores ni las programadas antes de tiempo.
+    const portal = access.viewer === "alumno" || access.viewer === "familia";
+    if (portal && taskVisibility(task, new Date()) !== "publicada") throw notFound("Tarea no encontrada");
     return { task, access };
   }
 
@@ -146,6 +156,7 @@ export async function taskRoutes(app: FastifyInstance, { db, files, today }: Aca
           instructions: input.instructions,
           dueAt: hondurasInstant(input.dueDate, input.dueTime),
           allowLate: input.allowLate,
+          publishAt: publishAtFor(input, null, new Date()),
           createdByUserId: request.auth.userId,
         })
         .returning();
@@ -195,6 +206,7 @@ export async function taskRoutes(app: FastifyInstance, { db, files, today }: Aca
           instructions: input.instructions,
           dueAt: hondurasInstant(input.dueDate, input.dueTime),
           allowLate: input.allowLate,
+          publishAt: publishAtFor(input, task.publishAt, new Date()),
           updatedAt: new Date(),
         })
         .where(eq(classTasks.id, id))
@@ -578,11 +590,13 @@ export async function classTasksFor(
   schoolId: string,
   access: ClassAccess,
 ): Promise<ClassTaskDto[]> {
-  const rows = await db.select().from(classTasks).where(eq(classTasks.assignmentId, access.assignment.id));
   const now = new Date();
+  const portal = access.viewer === "alumno" || access.viewer === "familia";
+  const rows = (
+    await db.select().from(classTasks).where(eq(classTasks.assignmentId, access.assignment.id))
+  ).filter((t) => !portal || taskVisibility(t, now) === "publicada");
   const upcoming = rows.filter((t) => t.dueAt >= now).sort((a, b) => a.dueAt.getTime() - b.dueAt.getTime());
   const past = rows.filter((t) => t.dueAt < now).sort((a, b) => b.dueAt.getTime() - a.dueAt.getTime());
-  const portal = access.viewer === "alumno" || access.viewer === "familia";
   return taskDtos(db, [...upcoming, ...past], {
     now,
     rosterSize: portal ? undefined : (await rosterOf(db, schoolId, [access.assignment.sectionId])).length,

@@ -34,7 +34,7 @@ export default async function GradebookPage({
     <div className="space-y-5">
       <div>
         <a href={back} className="text-sm text-slate-500 hover:text-slate-900">
-          ← {back === "/panel/cuaderno" ? "Mi cuaderno" : "Seguimiento"}
+          ← {back === "/panel/cuaderno" ? "Asistencia y notas" : "Seguimiento"}
         </a>
         <h1 className="mt-2 text-2xl font-semibold text-slate-900">
           {assignment.subjectName} · {assignment.sectionLabel}

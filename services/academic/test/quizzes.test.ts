@@ -230,6 +230,44 @@ describe("exámenes en línea", () => {
     expect((await ctx.call(pedroUser, "GET", `/class-quizzes/${quiz.id}`)).status).toBe(404);
   });
 
+  it("la maestra comenta en qué falló cada pregunta y deja un comentario general; el alumno lo ve", async () => {
+    const res = await ctx.call<QuizAttemptDto>(
+      ana,
+      "PUT",
+      `/class-quizzes/${quiz.id}/attempts/${luis.id}/review`,
+      {
+        comments: { [trueFalse.id]: "Revisa: 2/4 y 1/2 sí son equivalentes.", [multiple.id]: "" },
+        feedback: "Buen trabajo, Luis. Repasa la simplificación.",
+      },
+    );
+    expect(res.status).toBe(200);
+    // Sin puntos nuevos, la nota no cambia.
+    expect(res.body).toMatchObject({ score: 14, feedback: "Buen trabajo, Luis. Repasa la simplificación." });
+    expect(res.body.answers.find((a) => a.questionId === trueFalse.id)?.comment).toBe(
+      "Revisa: 2/4 y 1/2 sí son equivalentes.",
+    );
+    const seen = await ctx.call<ClassQuizDetailDto>(luisUser, "GET", `/class-quizzes/${quiz.id}`);
+    expect(seen.body.mine?.feedback).toBe("Buen trabajo, Luis. Repasa la simplificación.");
+    expect(seen.body.mine?.answers.find((a) => a.questionId === trueFalse.id)?.comment).toContain(
+      "equivalentes",
+    );
+    // Un comentario vacío lo quita; una pregunta de otro examen no se acepta.
+    const cleared = await ctx.call<QuizAttemptDto>(
+      ana,
+      "PUT",
+      `/class-quizzes/${quiz.id}/attempts/${luis.id}/review`,
+      {
+        comments: { [trueFalse.id]: "" },
+      },
+    );
+    expect(cleared.body.answers.find((a) => a.questionId === trueFalse.id)?.comment).toBeNull();
+    expect(cleared.body.feedback).toBe("Buen trabajo, Luis. Repasa la simplificación.");
+    const foreign = await ctx.call(ana, "PUT", `/class-quizzes/${quiz.id}/attempts/${luis.id}/review`, {
+      comments: { "00000000-0000-4000-8000-000000000000": "x" },
+    });
+    expect(foreign.status).toBe(400);
+  });
+
   it("si se acaba el tiempo, el examen se entrega solo con lo que alcanzó a responder", async () => {
     await ctx.call(sofiaUser, "POST", `/class-quizzes/${quiz.id}/start`);
     await ctx.call(sofiaUser, "PUT", `/class-quizzes/${quiz.id}/answers`, {

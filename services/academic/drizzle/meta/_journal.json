@@ -134,6 +134,27 @@
       "when": 1795564342062,
       "tag": "0018_aula_examenes",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1795642860924,
+      "tag": "0019_examenes_comentarios",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1795643014040,
+      "tag": "0020_tareas_publicacion",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1795643280431,
+      "tag": "0021_chat_de_la_clase",
+      "breakpoints": true
     }
   ]
 }

@@ -1,7 +1,8 @@
-import { isRegionalRole, MESSAGING_ROLES, ROLE_LABELS, type Role } from "@escolar/shared";
+import { isPortalRole, isRegionalRole, MESSAGING_ROLES, ROLE_LABELS, type Role } from "@escolar/shared";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { ChangePasswordForm } from "@/components/change-password-form";
+import { IdleLogout } from "@/components/idle-logout";
 import { LogoutButton } from "@/components/logout-button";
 import { MfaSetup } from "@/components/mfa-setup";
 import { NativeAppBridge } from "@/components/native-app-bridge";
@@ -52,41 +53,38 @@ export default async function PanelLayout({ children }: { children: ReactNode })
     items.push({ href: "/panel/colegios", label: "Centros educativos" });
     items.push({ href: "/panel/departamentos", label: "Departamentos" });
   }
-  // En escuelas pequeñas la directora también da clases: también tiene su cuaderno.
-  if (is("docente", "admin", "coordinador")) items.push({ href: "/panel/cuaderno", label: "Mi cuaderno" });
+  // Agrupado por tema para que cada cosa se encuentre sin adivinar. En escuelas pequeñas la
+  // directora también da clases: también tiene su cuaderno de asistencia y notas.
+  const add = (group: string, href: NavItem["href"], label: string) => items.push({ href, label, group });
+  if (is("docente", "admin", "coordinador")) add("Mis clases", "/panel/cuaderno", "Asistencia y notas");
   if (is("docente", "admin", "coordinador", "secretaria")) {
-    items.push({ href: "/panel/aula", label: "Aula virtual" });
-  }
-  if (is("docente", "admin", "coordinador", "secretaria")) {
-    items.push({ href: "/panel/planificacion", label: "Planificación" });
-  }
-  if (is("admin", "coordinador", "secretaria")) {
-    items.push({ href: "/panel/seguimiento", label: "Seguimiento" });
+    add("Mis clases", "/panel/aula", "Aula virtual");
+    add("Mis clases", "/panel/planificacion", "Planificación");
   }
   if (is("admin", "coordinador", "secretaria", "docente")) {
-    items.push({ href: "/panel/conducta", label: "Conducta" });
+    add("Mis clases", "/panel/horario", "Horario");
+    add("Mis clases", "/panel/conducta", "Conducta");
   }
-  if (is("admin", "secretaria", "coordinador")) items.push({ href: "/panel/alumnos", label: "Alumnos" });
-  if (is("admin", "secretaria")) items.push({ href: "/panel/traslados", label: "Traslados" });
-  if (is("admin", "coordinador", "secretaria")) {
-    items.push({ href: "/panel/licencias", label: "Licencias y sustitutos" });
-    items.push({ href: "/panel/estructura", label: "Estructura académica" });
-  }
+  if (is("admin", "secretaria", "coordinador")) add("Alumnos", "/panel/alumnos", "Alumnos y familias");
+  if (is("admin", "secretaria")) add("Alumnos", "/panel/traslados", "Traslados");
+  if (is("admin", "coordinador", "secretaria"))
+    add("Alumnos", "/panel/seguimiento", "Seguimiento del centro");
+  if (is("admin", "coordinador", "secretaria")) add("Personal", "/panel/licencias", "Licencias y sustitutos");
+  if (is("admin")) add("Personal", "/panel/usuarios", "Personal y usuarios");
   if (is("admin", "coordinador", "secretaria", "docente")) {
-    items.push({ href: "/panel/horario", label: "Horario" });
-    items.push({ href: "/panel/calendario", label: "Calendario escolar" });
-    items.push({ href: "/panel/avisos", label: "Avisos" });
-    items.push({ href: "/panel/documentos", label: "Documentos" });
-    items.push({ href: "/panel/biblioteca", label: "Biblioteca" });
+    add("El centro", "/panel/avisos", "Avisos");
+    add("El centro", "/panel/calendario", "Calendario escolar");
+    add("El centro", "/panel/documentos", "Documentos");
+    add("El centro", "/panel/biblioteca", "Biblioteca");
   }
   if (is("admin", "coordinador", "secretaria")) {
-    items.push({ href: "/panel/exportar", label: "Exportar datos" });
+    add("El centro", "/panel/estructura", "Año, grados y materias");
+    add("El centro", "/panel/exportar", "Exportar datos");
   }
   if (is("admin")) {
-    items.push({ href: "/panel/usuarios", label: "Personal y usuarios" });
-    items.push({ href: "/panel/cierre", label: "Cierre del año" });
-    items.push({ href: "/panel/bitacora", label: "Bitácora" });
-    items.push({ href: "/panel/colegio", label: "Mi centro" });
+    add("El centro", "/panel/cierre", "Cierre del año");
+    add("El centro", "/panel/bitacora", "Bitácora");
+    add("El centro", "/panel/colegio", "Datos del centro");
   }
   items.push({ href: "/panel/ayuda", label: "Ayuda" });
   const upcoming = MODULES.filter((m) => !m.href && m.roles.includes(user.role)).map((m) => ({
@@ -98,6 +96,10 @@ export default async function PanelLayout({ children }: { children: ReactNode })
   return (
     <div className="min-h-dvh md:grid md:grid-cols-[15rem_1fr] print:block">
       <OfflineAgent owner={current.id} />
+      {/* El personal maneja datos de los alumnos: la sesión se cierra si queda sin usar. */}
+      {!isPortalRole(user.role) && (
+        <IdleLogout minutes={Number(process.env.SESSION_IDLE_MINUTES ?? 30) || 30} />
+      )}
       <NativeAppBridge messaging={messaging} />
       <aside className="border-b border-slate-200 bg-white px-4 py-4 md:min-h-dvh md:border-b-0 md:border-r md:py-6 print:hidden">
         <div className="mb-4 flex items-center gap-2 px-1 font-semibold md:mb-8">

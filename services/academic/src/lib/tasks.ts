@@ -1,4 +1,12 @@
-import type { ClassTaskDto, TaskFileDto, TaskStatus, TaskSubmissionDto } from "@escolar/shared";
+import {
+  type ClassTaskDto,
+  hondurasInstant,
+  type TaskFileDto,
+  type TaskPublishMode,
+  type TaskStatus,
+  type TaskSubmissionDto,
+  type TaskVisibility,
+} from "@escolar/shared";
 import { and, asc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import type { DbOrTx } from "../db/client";
 import {
@@ -64,6 +72,25 @@ export async function pointsFor(
   };
 }
 
+/** Si los alumnos ya ven la tarea, la verán más adelante o es un borrador del maestro. */
+export function taskVisibility(task: { publishAt: Date | null }, now: Date): TaskVisibility {
+  if (!task.publishAt) return "borrador";
+  return task.publishAt <= now ? "publicada" : "programada";
+}
+
+/** Cuándo publicar según lo que eligió el maestro (al editar, una ya publicada sigue igual). */
+export function publishAtFor(
+  input: { publish: TaskPublishMode; publishDate?: string; publishTime?: string },
+  current: Date | null,
+  now: Date,
+): Date | null {
+  if (input.publish === "borrador") return null;
+  if (input.publish === "programar" && input.publishDate) {
+    return hondurasInstant(input.publishDate, input.publishTime ?? "07:00");
+  }
+  return current && current <= now ? current : now;
+}
+
 /**
  * Las tareas de una clase listas para mostrar. Para quien da la clase, cuántos entregaron; para el
  * alumno o su familia (studentId), cómo va su entrega y su nota.
@@ -127,6 +154,10 @@ export async function taskDtos(
       periodName: activity?.periodName ?? null,
       attachments: attachments.filter((f) => f.taskId === t.id).map(toFileDto),
       createdAt: t.createdAt.toISOString(),
+      publishAt: t.publishAt?.toISOString() ?? null,
+      publishDate: t.publishAt ? hondurasParts(t.publishAt).date : null,
+      publishTime: t.publishAt ? hondurasParts(t.publishAt).time : null,
+      visibility: taskVisibility(t, options.now),
       stats:
         options.rosterSize === undefined
           ? null

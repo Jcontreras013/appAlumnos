@@ -41,7 +41,7 @@ export default async function FollowUpPage({ searchParams }: PageProps<"/panel/s
       <div className="space-y-4">
         <Title subtitle="Sin año lectivo vigente" />
         <div className="card p-8 text-center text-sm text-slate-500">
-          Configura el año lectivo en «Estructura académica» para ver el avance de notas y la asistencia.
+          Configura el año lectivo en «Año, grados y materias» para ver el avance de notas y la asistencia.
         </div>
       </div>
     );
@@ -95,7 +95,9 @@ export default async function FollowUpPage({ searchParams }: PageProps<"/panel/s
               : "Ya pasó el cierre de notas"}{" "}
             y {pending} {pending === 1 ? "clase no tiene" : "clases no tienen"} las notas completas.
           </p>
-          <p className="mt-1">Los maestros pueden completarlas desde «Mi cuaderno», aun sin internet.</p>
+          <p className="mt-1">
+            Los maestros pueden completarlas desde «Asistencia y notas», aun sin internet.
+          </p>
         </section>
       )}
 

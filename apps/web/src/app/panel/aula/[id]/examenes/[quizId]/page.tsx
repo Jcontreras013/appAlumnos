@@ -140,7 +140,6 @@ export default async function QuizPage({
 function TeacherView({ detail, assignmentId }: { detail: ClassQuizDetailDto; assignmentId: string }) {
   const { quiz } = detail;
   const started = (detail.attempts ?? []).some((a) => a.startedAt);
-  const openQuestions = detail.questions.filter((q) => q.kind === "abierta");
   return (
     <>
       {detail.canEdit && (
@@ -216,16 +215,17 @@ function TeacherView({ detail, assignmentId }: { detail: ClassQuizDetailDto; ass
                 {a.submittedAt && (
                   <details>
                     <summary className="cursor-pointer text-xs font-semibold text-brand-700 hover:underline">
-                      {a.pendingReview ? "Revisar respuestas abiertas" : "Ver respuestas"}
+                      {a.pendingReview ? "Revisar respuestas abiertas" : "Ver respuestas y comentar"}
                     </summary>
                     <div className="mt-3 space-y-3">
                       <AnswersView detail={detail} answers={a.answers} />
-                      {detail.canEdit && openQuestions.length > 0 && (
+                      {a.feedback && <FeedbackNote text={a.feedback} />}
+                      {detail.canEdit && (
                         <ReviewForm
                           assignmentId={assignmentId}
                           quizId={quiz.id}
                           attempt={a}
-                          openQuestions={openQuestions}
+                          questions={detail.questions}
                         />
                       )}
                     </div>
@@ -317,6 +317,7 @@ function StudentView({
               termine.
             </p>
           )}
+          {mine.feedback && <FeedbackNote text={mine.feedback} />}
           {detail.questions.length > 0 && <AnswersView detail={detail} answers={mine.answers} />}
           {new Date(quiz.closesAt) > new Date() && (
             <p className="text-xs text-slate-500">Las respuestas correctas se ven cuando el examen cierre.</p>
@@ -368,7 +369,12 @@ function AnswersView({
   answers,
 }: {
   detail: ClassQuizDetailDto;
-  answers: Array<{ questionId: string; answer: number | boolean | string | null; points: number | null }>;
+  answers: Array<{
+    questionId: string;
+    answer: number | boolean | string | null;
+    points: number | null;
+    comment: string | null;
+  }>;
 }) {
   return (
     <ol className="space-y-2">
@@ -406,10 +412,25 @@ function AnswersView({
                 ? "Sin revisar"
                 : `${a.points} de ${q.points} pts`}
             </p>
+            {a?.comment && (
+              <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                <span className="font-semibold">Comentario del maestro:</span> {a.comment}
+              </p>
+            )}
           </li>
         );
       })}
     </ol>
+  );
+}
+
+/** El comentario general del maestro sobre el examen. */
+function FeedbackNote({ text }: { text: string }) {
+  return (
+    <div className="rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm text-sky-900">
+      <p className="font-semibold">Comentario del maestro</p>
+      <p className="mt-1 whitespace-pre-wrap">{text}</p>
+    </div>
   );
 }
 

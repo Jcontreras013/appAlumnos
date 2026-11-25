@@ -31,7 +31,7 @@ export default async function YearClosePage({ searchParams }: PageProps<"/panel/
         <p className="card p-6 text-sm text-slate-700">
           Para pasar a los alumnos al año siguiente, primero crea el año lectivo siguiente y sus secciones en{" "}
           <Link href="/panel/estructura" className="font-semibold text-brand-700 hover:underline">
-            Estructura académica
+            Año, grados y materias
           </Link>
           . Mientras tanto, los docentes ya pueden registrar las recuperaciones desde «Notas finales y
           recuperación» en el cuaderno de cada clase.
@@ -70,7 +70,7 @@ export default async function YearClosePage({ searchParams }: PageProps<"/panel/
         <p className="mt-1 max-w-3xl text-sm text-slate-500">
           Según las notas finales y las recuperaciones, cada alumno queda promovido o repite el grado. Revisa,
           decide los casos pendientes y confirma: los alumnos quedan matriculados en {next.name}. El año
-          vigente se cambia después en Estructura académica.
+          vigente se cambia después en «Año, grados y materias».
         </p>
         {candidates.length > 1 && (
           <nav className="mt-3 flex gap-2 text-sm">
@@ -98,7 +98,7 @@ export default async function YearClosePage({ searchParams }: PageProps<"/panel/
             </button>
           </form>
           <p className="text-xs text-slate-500">
-            Después puedes agregar o corregir secciones en Estructura académica.
+            Después puedes agregar o corregir secciones en «Año, grados y materias».
           </p>
         </div>
       ) : (

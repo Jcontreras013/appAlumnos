@@ -8,6 +8,8 @@ import type {
   AttendanceInput,
   AttendanceSheetDto,
   AuditEventDto,
+  ClassChatDto,
+  ClassChatMessageDto,
   ClassLinkInput,
   ClassMaterialDto,
   ClassPostDto,
@@ -434,11 +436,30 @@ export const academic = {
       token,
       body: input,
     }),
-  reviewQuiz: (token: string, quizId: string, studentId: string, points: Record<string, number>) =>
+  // Chat de la clase
+  classChat: (token: string, assignmentId: string) =>
+    call<ClassChatDto>(`/classes/${assignmentId}/chat`, { token }),
+  sendClassChat: (token: string, assignmentId: string, body: string) =>
+    call<ClassChatMessageDto>(`/classes/${assignmentId}/chat`, { method: "POST", token, body: { body } }),
+  deleteClassChat: (token: string, messageId: string) =>
+    call<void>(`/class-chat/${messageId}`, { method: "DELETE", token }),
+  setClassChat: (token: string, assignmentId: string, enabled: boolean) =>
+    call<{ enabled: boolean }>(`/classes/${assignmentId}/chat/estado`, {
+      method: "PUT",
+      token,
+      body: { enabled },
+    }),
+
+  reviewQuiz: (
+    token: string,
+    quizId: string,
+    studentId: string,
+    review: { points: Record<string, number>; comments: Record<string, string>; feedback: string },
+  ) =>
     call<QuizAttemptDto>(`/class-quizzes/${quizId}/attempts/${studentId}/review`, {
       method: "PUT",
       token,
-      body: { points },
+      body: review,
     }),
 
   // Cuentas de los alumnos (aula virtual)

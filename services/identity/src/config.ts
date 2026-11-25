@@ -10,6 +10,12 @@ export interface TokenSettings {
    * un token rotado se trata como robo y se revoca toda la sesión.
    */
   refreshReuseGraceSeconds: number;
+  /**
+   * Inactividad máxima del personal: si su sesión no se renovó en este tiempo (pestaña cerrada,
+   * computadora apagada), hay que volver a entrar. 0 = sin límite. Las familias y los alumnos no
+   * tienen este límite (usan la app en su propio teléfono).
+   */
+  idleTimeoutSeconds: number;
 }
 
 export interface IdentityConfig extends TokenSettings {
@@ -37,6 +43,7 @@ export const DEFAULT_TOKEN_SETTINGS: TokenSettings = {
   accessTokenTtlSeconds: 15 * 60,
   refreshTokenTtlSeconds: 30 * 24 * 60 * 60,
   refreshReuseGraceSeconds: 30,
+  idleTimeoutSeconds: 30 * 60,
 };
 
 export function loadConfig(): IdentityConfig {
@@ -55,6 +62,7 @@ export function loadConfig(): IdentityConfig {
       "REFRESH_REUSE_GRACE_SECONDS",
       DEFAULT_TOKEN_SETTINGS.refreshReuseGraceSeconds,
     ),
+    idleTimeoutSeconds: intEnv("SESSION_IDLE_MINUTES", DEFAULT_TOKEN_SETTINGS.idleTimeoutSeconds / 60) * 60,
     jwtKeyId: optionalEnv("JWT_KEY_ID", "identity-1"),
     jwtPrivateKeyPem: pemEnv("JWT_PRIVATE_KEY"),
     jwtPublicKeyPem: pemEnv("JWT_PUBLIC_KEY"),

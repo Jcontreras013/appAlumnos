@@ -210,6 +210,7 @@ export async function classroomRoutes(app: FastifyInstance, { db, files, today }
       announcements: await postDtos(db, announcements),
       tasks: await classTasksFor(db, tenantOf(request), access),
       quizzes: await classQuizzesFor(db, tenantOf(request), access),
+      chatEnabled: settings?.chatEnabled ?? false,
     };
   });
 
