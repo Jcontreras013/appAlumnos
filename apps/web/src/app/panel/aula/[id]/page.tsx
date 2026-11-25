@@ -1,4 +1,10 @@
-import { type ClassPostDto, type ClassroomDto, currentPeriod, todayInHonduras } from "@escolar/shared";
+import {
+  type ClassPostDto,
+  type ClassroomDto,
+  currentPeriod,
+  QUIZ_STATUS_LABELS,
+  todayInHonduras,
+} from "@escolar/shared";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -10,6 +16,7 @@ import { requireRole } from "@/lib/dal";
 import { deleteClassMaterialAction, deleteClassPostAction, moveTopicAction } from "../actions";
 import { StatusBadge } from "../status-badge";
 import { AddMaterial, ConfirmButton, EditPost, MeetingForm, NewPost } from "./class-editor";
+import { NewQuiz } from "./examenes/quiz-forms";
 import { MaterialView } from "./material-view";
 import { NewTask } from "./tareas/task-forms";
 
@@ -107,6 +114,67 @@ export default async function ClassPage({ params }: PageProps<"/panel/aula/[id]"
                 </li>
               );
             })}
+          </ul>
+        )}
+      </Card>
+
+      <Card
+        title="Exámenes"
+        action={
+          edit ? (
+            <NewQuiz
+              assignmentId={room.assignmentId}
+              periods={periods}
+              currentPeriodId={current?.id ?? null}
+            />
+          ) : null
+        }
+      >
+        {room.quizzes.length === 0 ? (
+          <Empty>
+            {edit ? "Arma un examen: se califica solo y la nota va a la libreta." : "Sin exámenes por ahora."}
+          </Empty>
+        ) : (
+          <ul className="divide-y divide-slate-100">
+            {room.quizzes.map((q) => (
+              <li key={q.id}>
+                <Link
+                  href={`/panel/aula/${room.assignmentId}/examenes/${q.id}`}
+                  className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 hover:bg-slate-50"
+                >
+                  <span className="min-w-0">
+                    <span className="block font-medium text-slate-900">
+                      {q.title}
+                      {!q.published && (
+                        <span className="ml-2 text-xs font-semibold text-amber-700">borrador</span>
+                      )}
+                    </span>
+                    <span className="block text-xs text-slate-500">
+                      Abre {when(q.opensAt)} · cierra {when(q.closesAt)}
+                      {q.timeLimitMinutes && ` · ${q.timeLimitMinutes} min`}
+                      {q.points !== null && ` · ${q.points} pts`}
+                    </span>
+                  </span>
+                  {q.stats ? (
+                    <span className="text-xs text-slate-500">
+                      {q.stats.submitted} de {q.stats.total} lo presentaron · {q.stats.graded} calificados
+                    </span>
+                  ) : q.status ? (
+                    <span className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+                      {q.myScore !== null && (
+                        <span className="text-sm text-slate-900">
+                          {q.myScore}
+                          {q.points !== null && (
+                            <span className="font-normal text-slate-500"> / {q.points}</span>
+                          )}
+                        </span>
+                      )}
+                      {QUIZ_STATUS_LABELS[q.status]}
+                    </span>
+                  ) : null}
+                </Link>
+              </li>
+            ))}
           </ul>
         )}
       </Card>

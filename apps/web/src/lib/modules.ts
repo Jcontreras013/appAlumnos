@@ -50,6 +50,15 @@ export const MODULES: ModuleInfo[] = [
     href: "/panel/planificacion",
   },
   {
+    key: "aula",
+    label: "Aula virtual",
+    description:
+      "Cada clase con su página: temas con explicación, videos y guías, avisos, clase en línea, tareas con entrega y exámenes que se califican solos. La nota cae en la libreta.",
+    phase: 4,
+    roles: ["docente", "admin", "coordinador", "secretaria"],
+    href: "/panel/aula",
+  },
+  {
     key: "mis-hijos",
     label: "Mis hijos",
     description: "Notas por materia y parcial, asistencia, tareas de la semana y la boleta de cada hijo.",

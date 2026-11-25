@@ -27,6 +27,7 @@ import { followUpRoutes } from "./routes/followups";
 import { importRoutes } from "./routes/import";
 import { libraryRoutes } from "./routes/library";
 import { planRoutes } from "./routes/plans";
+import { quizRoutes } from "./routes/quizzes";
 import { regionalRoutes } from "./routes/regional";
 import { scheduleRoutes } from "./routes/schedule";
 import { staffRoutes } from "./routes/staff";
@@ -81,6 +82,7 @@ export async function buildApp(options: BuildAppOptions) {
     await studentAccessRoutes(scope, deps);
     await classroomRoutes(scope, deps);
     await taskRoutes(scope, deps);
+    await quizRoutes(scope, deps);
     await exportRoutes(scope, deps);
     await followUpRoutes(scope, deps);
     await announcementRoutes(scope, deps);

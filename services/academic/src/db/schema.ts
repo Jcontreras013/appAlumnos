@@ -18,6 +18,7 @@ import {
   PLAN_STATUSES,
   type PlanContent,
   type PlanField,
+  type QuestionKind,
   type SubjectLanguage,
   type TransferSnapshot,
 } from "@escolar/shared";
@@ -1093,6 +1094,101 @@ export const taskFiles = pgTable(
   ],
 );
 
+/** Exámenes en línea. Como las tareas, si llevan nota tienen su actividad en la libreta. */
+export const classQuizzes = pgTable(
+  "class_quizzes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    schoolId: schoolId(),
+    assignmentId: uuid("assignment_id").notNull(),
+    activityId: uuid("activity_id").references(() => activities.id, { onDelete: "set null" }),
+    title: text("title").notNull(),
+    instructions: text("instructions").notNull().default(""),
+    opensAt: timestamp("opens_at", { withTimezone: true }).notNull(),
+    closesAt: timestamp("closes_at", { withTimezone: true }).notNull(),
+    timeLimitMinutes: integer("time_limit_minutes"),
+    shuffle: boolean("shuffle").notNull().default(false),
+    /** Mientras no se publica, el maestro arma las preguntas y los alumnos no lo ven. */
+    published: boolean("published").notNull().default(false),
+    createdByUserId: uuid("created_by_user_id").notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique("class_quizzes_tenant_key").on(t.schoolId, t.id),
+    index("class_quizzes_assignment_idx").on(t.assignmentId, t.opensAt),
+    check("class_quizzes_window", sql`${t.closesAt} > ${t.opensAt}`),
+    foreignKey({
+      name: "class_quizzes_assignment_fk",
+      columns: [t.schoolId, t.assignmentId],
+      foreignColumns: [teachingAssignments.schoolId, teachingAssignments.id],
+    }).onDelete("cascade"),
+  ],
+);
+
+export const quizQuestions = pgTable(
+  "quiz_questions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    schoolId: schoolId(),
+    quizId: uuid("quiz_id").notNull(),
+    position: integer("position").notNull(),
+    kind: text("kind").$type<QuestionKind>().notNull(),
+    prompt: text("prompt").notNull(),
+    options: jsonb("options").$type<string[]>().notNull().default([]),
+    /** Opción correcta (número), verdadero/falso, o null en las abiertas. */
+    correct: jsonb("correct").$type<number | boolean | null>(),
+    points: numeric("points", { precision: 5, scale: 2, mode: "number" }).notNull(),
+  },
+  (t) => [
+    index("quiz_questions_quiz_idx").on(t.quizId, t.position),
+    check("quiz_questions_kind", sql`${t.kind} in ('opcion', 'vf', 'abierta')`),
+    foreignKey({
+      name: "quiz_questions_quiz_fk",
+      columns: [t.schoolId, t.quizId],
+      foreignColumns: [classQuizzes.schoolId, classQuizzes.id],
+    }).onDelete("cascade"),
+  ],
+);
+
+/** El intento de un alumno: uno por examen. */
+export const quizAttempts = pgTable(
+  "quiz_attempts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    schoolId: schoolId(),
+    quizId: uuid("quiz_id").notNull(),
+    studentId: uuid("student_id").notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    /** Hasta cuándo puede responder: el tiempo límite o el cierre, lo que llegue primero. */
+    deadline: timestamp("deadline", { withTimezone: true }).notNull(),
+    answers: jsonb("answers").$type<Record<string, number | boolean | string>>().notNull().default({}),
+    /** Puntos que el maestro dio a cada respuesta abierta. */
+    reviewed: jsonb("reviewed").$type<Record<string, number>>().notNull().default({}),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+    submittedByUserId: uuid("submitted_by_user_id"),
+    submittedByName: text("submitted_by_name"),
+    rawScore: numeric("raw_score", { precision: 6, scale: 2, mode: "number" }),
+    score: numeric("score", { precision: 5, scale: 2, mode: "number" }),
+    gradedAt: timestamp("graded_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique("quiz_attempts_one_per_student").on(t.quizId, t.studentId),
+    foreignKey({
+      name: "quiz_attempts_quiz_fk",
+      columns: [t.schoolId, t.quizId],
+      foreignColumns: [classQuizzes.schoolId, classQuizzes.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "quiz_attempts_student_fk",
+      columns: [t.schoolId, t.studentId],
+      foreignColumns: [students.schoolId, students.id],
+    }).onDelete("cascade"),
+  ],
+);
+
 export type SchoolYear = typeof schoolYears.$inferSelect;
 export type Grade = typeof grades.$inferSelect;
 export type Section = typeof sections.$inferSelect;
@@ -1117,3 +1213,6 @@ export type ClassMaterial = typeof classMaterials.$inferSelect;
 export type ClassTask = typeof classTasks.$inferSelect;
 export type TaskSubmission = typeof taskSubmissions.$inferSelect;
 export type TaskFile = typeof taskFiles.$inferSelect;
+export type ClassQuiz = typeof classQuizzes.$inferSelect;
+export type QuizQuestion = typeof quizQuestions.$inferSelect;
+export type QuizAttempt = typeof quizAttempts.$inferSelect;

@@ -167,6 +167,8 @@ export interface ClassroomDto {
   announcements: ClassPostDto[];
   /** De la más próxima a vencer a la más vieja. */
   tasks: ClassTaskDto[];
+  /** Exámenes (el alumno solo ve los publicados). */
+  quizzes: ClassQuizDto[];
 }
 
 // ───────────────────────────── Tareas con entrega ─────────────────────────────
@@ -313,5 +315,192 @@ export interface ClassTaskDetailDto {
   /** Para el alumno o su familia: todavía puede cambiar su entrega. */
   canSubmit: boolean;
   /** Familia con más de un hijo en la sección. */
+  students: Array<{ id: string; name: string }>;
+}
+
+// ───────────────────────────── Exámenes en línea ─────────────────────────────
+
+export const QUESTION_KINDS = ["opcion", "vf", "abierta"] as const;
+export type QuestionKind = (typeof QUESTION_KINDS)[number];
+export const QUESTION_KIND_LABELS: Record<QuestionKind, string> = {
+  opcion: "Selección múltiple",
+  vf: "Verdadero o falso",
+  abierta: "Respuesta abierta (la revisa el maestro)",
+};
+
+const timeOfDay = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, { error: "Hora inválida" });
+
+/** Un examen: cuándo abre y cierra, cuánto tiempo hay para resolverlo y su valor en la libreta. */
+export const classQuizInputSchema = z
+  .object({
+    title: z
+      .string({ error: "Escribe el título" })
+      .trim()
+      .min(2, { error: "Escribe el título" })
+      .max(150, { error: "Máximo 150 caracteres" }),
+    instructions: z.preprocess(
+      (v) => (v === undefined || v === null ? "" : v),
+      z.string().trim().max(4000, { error: "Máximo 4,000 caracteres" }),
+    ),
+    opensDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, { error: "Elige cuándo abre" }),
+    opensTime: timeOfDay,
+    closesDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, { error: "Elige cuándo cierra" }),
+    closesTime: timeOfDay,
+    timeLimitMinutes: z.preprocess(
+      (v) => (v === "" || v === null || v === undefined ? undefined : typeof v === "string" ? Number(v) : v),
+      z
+        .number({ error: "Escribe los minutos" })
+        .int({ error: "Minutos enteros" })
+        .min(1, { error: "Al menos 1 minuto" })
+        .max(600, { error: "Máximo 10 horas" })
+        .optional(),
+    ),
+    shuffle: z.preprocess((v) => v === true || v === "on" || v === "true", z.boolean()),
+    points: optionalPoints,
+    periodId: z.preprocess((v) => (v === "" || v === null ? undefined : v), z.uuid().optional()),
+  })
+  .refine((v) => v.points === undefined || v.periodId, {
+    error: "Elige en qué parcial cuenta",
+    path: ["periodId"],
+  })
+  .refine((v) => `${v.closesDate}T${v.closesTime}` > `${v.opensDate}T${v.opensTime}`, {
+    error: "Tiene que cerrar después de abrir",
+    path: ["closesDate"],
+  });
+export type ClassQuizInput = z.infer<typeof classQuizInputSchema>;
+
+/** Una pregunta. En selección múltiple, `correct` es el número de la opción buena (desde 0). */
+export const quizQuestionInputSchema = z
+  .object({
+    kind: z.enum(QUESTION_KINDS, { error: "Elige el tipo de pregunta" }),
+    prompt: z
+      .string({ error: "Escribe la pregunta" })
+      .trim()
+      .min(2, { error: "Escribe la pregunta" })
+      .max(2000, { error: "Máximo 2,000 caracteres" }),
+    options: z
+      .array(z.string().trim().max(500, { error: "Máximo 500 caracteres por opción" }))
+      .max(8, { error: "Máximo 8 opciones" })
+      .default([]),
+    correct: z.union([z.number().int().min(0), z.boolean(), z.null()]).default(null),
+    points: z.preprocess(
+      (v) => (typeof v === "string" ? Number(v) : v),
+      z.number({ error: "Escribe el valor" }).positive({ error: "Debe valer más de 0" }).max(100),
+    ),
+  })
+  .transform((q) => ({
+    ...q,
+    options: q.kind === "opcion" ? q.options.filter((o) => o.length > 0) : [],
+  }))
+  .refine((q) => q.kind !== "opcion" || q.options.length >= 2, {
+    error: "Escribe al menos dos opciones",
+    path: ["options"],
+  })
+  .refine(
+    (q) =>
+      q.kind === "abierta" ||
+      (q.kind === "vf" && typeof q.correct === "boolean") ||
+      (q.kind === "opcion" && typeof q.correct === "number" && q.correct < q.options.length),
+    { error: "Marca la respuesta correcta", path: ["correct"] },
+  );
+export type QuizQuestionInput = z.input<typeof quizQuestionInputSchema>;
+
+/** Respuestas del alumno: por pregunta, el número de opción, verdadero/falso o el texto. */
+export const quizAnswersInputSchema = z.object({
+  answers: z.record(z.uuid(), z.union([z.number().int().min(0), z.boolean(), z.string().max(8000)])),
+  /** true = entregar el examen. */
+  finish: z.boolean().default(false),
+});
+export type QuizAnswersInput = z.input<typeof quizAnswersInputSchema>;
+
+/** Puntos que el maestro le da a cada respuesta abierta. */
+export const quizReviewInputSchema = z.object({
+  points: z.record(z.uuid(), z.number().min(0).max(100)),
+});
+
+export type QuizStatus = "proximo" | "disponible" | "en_curso" | "entregado" | "calificado" | "cerrado";
+export const QUIZ_STATUS_LABELS: Record<QuizStatus, string> = {
+  proximo: "Todavía no abre",
+  disponible: "Disponible",
+  en_curso: "Lo estás resolviendo",
+  entregado: "Entregado (falta revisar)",
+  calificado: "Calificado",
+  cerrado: "No lo presentó",
+};
+
+export interface QuizQuestionDto {
+  id: string;
+  kind: QuestionKind;
+  prompt: string;
+  options: string[];
+  points: number;
+  /** Solo para el maestro, o para el alumno cuando el examen ya cerró. */
+  correct: number | boolean | null;
+}
+
+export interface ClassQuizDto {
+  id: string;
+  assignmentId: string;
+  title: string;
+  instructions: string;
+  opensAt: string;
+  closesAt: string;
+  opensDate: string;
+  opensTime: string;
+  closesDate: string;
+  closesTime: string;
+  timeLimitMinutes: number | null;
+  shuffle: boolean;
+  published: boolean;
+  /** Valor en la libreta (null: sin nota). */
+  points: number | null;
+  periodId: string | null;
+  periodName: string | null;
+  questionCount: number;
+  /** Suma de los puntos de las preguntas (la nota se lleva a `points`). */
+  rawPoints: number;
+  /** Para quien da la clase. */
+  stats: { total: number; submitted: number; graded: number } | null;
+  /** Para el alumno o su familia. */
+  status: QuizStatus | null;
+  myScore: number | null;
+}
+
+export interface QuizAnswerReviewDto {
+  questionId: string;
+  answer: number | boolean | string | null;
+  /** null: abierta todavía sin revisar. */
+  points: number | null;
+}
+
+export interface QuizAttemptDto {
+  studentId: string;
+  studentName: string;
+  startedAt: string | null;
+  /** Hasta cuándo puede responder (el tiempo límite o el cierre del examen). */
+  deadline: string | null;
+  submittedAt: string | null;
+  submittedByName: string | null;
+  answers: QuizAnswerReviewDto[];
+  /** Puntos sobre `rawPoints` y la nota llevada al valor de la libreta. */
+  rawScore: number | null;
+  score: number | null;
+  /** Faltan preguntas abiertas por revisar. */
+  pendingReview: boolean;
+  status: QuizStatus;
+}
+
+export interface ClassQuizDetailDto {
+  quiz: ClassQuizDto;
+  subjectName: string;
+  sectionLabel: string;
+  viewer: ClassViewer;
+  canEdit: boolean;
+  /** El maestro ve las respuestas correctas; el alumno, cuando ya cerró. */
+  questions: QuizQuestionDto[];
+  /** Para quien da la clase: un renglón por alumno. */
+  attempts: QuizAttemptDto[] | null;
+  /** Para el alumno o su familia. */
+  mine: QuizAttemptDto | null;
   students: Array<{ id: string; name: string }>;
 }

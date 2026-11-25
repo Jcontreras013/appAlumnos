@@ -69,6 +69,7 @@ export const AUDIT_LABELS: Record<string, string> = {
   "student.account_revoked": "Quitó la cuenta del aula virtual a un alumno",
   "class_post.deleted": "Borró un tema o aviso del aula virtual",
   "class_task.deleted": "Borró una tarea del aula virtual",
+  "class_quiz.deleted": "Borró un examen del aula virtual",
   "student.follow_up_added": "Registró un seguimiento",
   "student.follow_up_deleted": "Borró un seguimiento",
   "student.expelled": "Expulsó a un alumno (matrícula retirada)",

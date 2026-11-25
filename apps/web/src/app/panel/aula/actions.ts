@@ -3,8 +3,11 @@
 import {
   classLinkInputSchema,
   classPostInputSchema,
+  classQuizInputSchema,
   classSettingsInputSchema,
   classTaskInputSchema,
+  type QuizAttemptDto,
+  quizQuestionInputSchema,
   taskGradeInputSchema,
   taskSubmissionInputSchema,
 } from "@escolar/shared";
@@ -186,4 +189,188 @@ export async function deleteTaskFileAction(formData: FormData): Promise<void> {
   const taskId = z.uuid().parse(formData.get("taskId"));
   await academic.deleteTaskFile(accessToken, z.uuid().parse(formData.get("fileId")));
   revalidatePath(`/panel/aula/${assignmentId}/tareas/${taskId}`);
+}
+
+// ───────────────────────────── Exámenes ─────────────────────────────
+
+const QUIZ_FIELDS = [
+  "title",
+  "instructions",
+  "opensDate",
+  "opensTime",
+  "closesDate",
+  "closesTime",
+  "timeLimitMinutes",
+  "points",
+  "periodId",
+] as const;
+const quizPath = (assignmentId: string, quizId: string) =>
+  `/panel/aula/${assignmentId}/examenes/${quizId}` as const;
+
+/** Crear un examen (queda en borrador para agregarle preguntas) o corregir sus datos. */
+export async function saveQuizAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const { accessToken } = await editor();
+  const assignmentId = classId(formData);
+  const quizId = String(formData.get("quizId") ?? "");
+  const values = formValues(formData, QUIZ_FIELDS);
+  const shuffle = formData.get("shuffle") === "on";
+  const parsed = classQuizInputSchema.safeParse({ ...values, shuffle });
+  const keep = { ...values, shuffle: shuffle ? "on" : "" };
+  if (!parsed.success) return { ...fromZodError(parsed.error), values: keep };
+  let created: string | null = null;
+  try {
+    if (quizId) await academic.updateQuiz(accessToken, z.uuid().parse(quizId), parsed.data);
+    else created = (await academic.createQuiz(accessToken, assignmentId, parsed.data)).id;
+  } catch (err) {
+    return { ...fromServiceError(err), values: keep };
+  }
+  refresh(assignmentId);
+  if (created) redirect(quizPath(assignmentId, created));
+  revalidatePath(quizPath(assignmentId, quizId));
+  return { ok: true, message: "Cambios guardados." };
+}
+
+export async function deleteQuizAction(formData: FormData): Promise<void> {
+  const { accessToken } = await editor();
+  const assignmentId = classId(formData);
+  await academic.deleteQuiz(accessToken, z.uuid().parse(formData.get("quizId")));
+  refresh(assignmentId);
+  redirect(`/panel/aula/${assignmentId}`);
+}
+
+export async function publishQuizAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const { accessToken } = await editor();
+  const assignmentId = classId(formData);
+  const quizId = z.uuid().parse(formData.get("quizId"));
+  const published = formData.get("published") === "1";
+  try {
+    await academic.publishQuiz(accessToken, quizId, published);
+  } catch (err) {
+    return fromServiceError(err);
+  }
+  refresh(assignmentId);
+  revalidatePath(quizPath(assignmentId, quizId));
+  return { ok: true, message: published ? "Publicado: los alumnos ya lo ven." : "Volvió a borrador." };
+}
+
+/** Agregar o corregir una pregunta. Las opciones llegan como option0…option7 y la correcta como `correct`. */
+export async function saveQuestionAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const { accessToken } = await editor();
+  const assignmentId = classId(formData);
+  const quizId = z.uuid().parse(formData.get("quizId"));
+  const questionId = String(formData.get("questionId") ?? "");
+  const values = formValues(formData, [
+    "kind",
+    "prompt",
+    "points",
+    "correct",
+    ...Array.from({ length: 8 }, (_, i) => `option${i}`),
+  ]);
+  const kind = values.kind;
+  const correctRaw = values.correct ?? "";
+  const correct =
+    kind === "vf"
+      ? correctRaw === "true"
+        ? true
+        : correctRaw === "false"
+          ? false
+          : null
+      : kind === "opcion" && correctRaw !== ""
+        ? Number(correctRaw)
+        : null;
+  // Las opciones vacías se quitan; la correcta se vuelve a contar entre las que quedan.
+  const raw = Array.from({ length: 8 }, (_, i) => (values[`option${i}`] ?? "").trim());
+  const options = raw.filter((o) => o.length > 0);
+  const correctIndex =
+    kind === "opcion" && typeof correct === "number" && raw[correct]
+      ? raw.slice(0, correct).filter((o) => o.length > 0).length
+      : correct;
+  const parsed = quizQuestionInputSchema.safeParse({
+    kind,
+    prompt: values.prompt,
+    points: values.points,
+    options,
+    correct:
+      kind === "opcion" ? (typeof correct === "number" && raw[correct] ? correctIndex : null) : correct,
+  });
+  if (!parsed.success) return { ...fromZodError(parsed.error), values };
+  try {
+    if (questionId) await academic.updateQuizQuestion(accessToken, z.uuid().parse(questionId), parsed.data);
+    else await academic.addQuizQuestion(accessToken, quizId, parsed.data);
+  } catch (err) {
+    return { ...fromServiceError(err), values };
+  }
+  revalidatePath(quizPath(assignmentId, quizId));
+  refresh(assignmentId);
+  return { ok: true, message: questionId ? "Pregunta guardada." : "Pregunta agregada." };
+}
+
+export async function deleteQuestionAction(formData: FormData): Promise<void> {
+  const { accessToken } = await editor();
+  const assignmentId = classId(formData);
+  const quizId = z.uuid().parse(formData.get("quizId"));
+  await academic.deleteQuizQuestion(accessToken, z.uuid().parse(formData.get("questionId")));
+  revalidatePath(quizPath(assignmentId, quizId));
+}
+
+/** Puntos de las respuestas abiertas de un alumno (campos q-<id de la pregunta>). */
+export async function reviewQuizAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const { accessToken } = await editor();
+  const assignmentId = classId(formData);
+  const quizId = z.uuid().parse(formData.get("quizId"));
+  const studentId = z.uuid().parse(formData.get("studentId"));
+  const points: Record<string, number> = {};
+  for (const [key, value] of formData.entries()) {
+    if (!key.startsWith("q-") || typeof value !== "string" || value.trim() === "") continue;
+    const n = Number(value);
+    if (!Number.isFinite(n) || n < 0) return { error: "Escribe puntos válidos" };
+    points[key.slice(2)] = n;
+  }
+  try {
+    await academic.reviewQuiz(accessToken, quizId, studentId, points);
+  } catch (err) {
+    return fromServiceError(err);
+  }
+  revalidatePath(quizPath(assignmentId, quizId));
+  refresh(assignmentId);
+  return { ok: true, message: "Revisión guardada." };
+}
+
+export async function startQuizAction(formData: FormData): Promise<void> {
+  const { accessToken } = await requireRole("estudiante", "padre");
+  const assignmentId = classId(formData);
+  const quizId = z.uuid().parse(formData.get("quizId"));
+  const alumno = String(formData.get("alumno") ?? "") || undefined;
+  await academic.startQuiz(accessToken, quizId, alumno);
+  revalidatePath(quizPath(assignmentId, quizId));
+  const target = quizPath(assignmentId, quizId);
+  redirect(alumno ? (`${target}?alumno=${alumno}` as typeof target) : target);
+}
+
+/** Guardar respuestas mientras resuelve (y entregar con finish). Lo llama el examen en pantalla. */
+export async function saveQuizAnswersAction(input: {
+  assignmentId: string;
+  quizId: string;
+  alumno: string | null;
+  answers: Record<string, number | boolean | string>;
+  finish: boolean;
+}): Promise<{ ok: boolean; error?: string; attempt?: QuizAttemptDto }> {
+  const { accessToken } = await requireRole("estudiante", "padre");
+  const assignmentId = z.uuid().parse(input.assignmentId);
+  const quizId = z.uuid().parse(input.quizId);
+  try {
+    const attempt = await academic.saveQuizAnswers(
+      accessToken,
+      quizId,
+      { answers: input.answers, finish: input.finish },
+      input.alumno ?? undefined,
+    );
+    if (input.finish) {
+      revalidatePath(quizPath(assignmentId, quizId));
+      refresh(assignmentId);
+    }
+    return { ok: true, attempt };
+  } catch (err) {
+    return { ok: false, error: fromServiceError(err).error };
+  }
 }

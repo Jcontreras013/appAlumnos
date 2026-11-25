@@ -12,6 +12,9 @@ import type {
   ClassMaterialDto,
   ClassPostDto,
   ClassPostInput,
+  ClassQuizDetailDto,
+  ClassQuizDto,
+  ClassQuizInput,
   ClassroomDto,
   ClassSettingsInput,
   ClassSummaryDto,
@@ -61,6 +64,10 @@ import type {
   PortalAccessInput,
   PromotionInput,
   PromotionSummaryDto,
+  QuizAnswersInput,
+  QuizAttemptDto,
+  QuizQuestionDto,
+  QuizQuestionInput,
   RecoveriesInput,
   RegionalExportDto,
   RegionalOverviewDto,
@@ -398,6 +405,41 @@ export const academic = {
     }),
   deleteTaskFile: (token: string, fileId: string) =>
     call<void>(`/task-files/${fileId}`, { method: "DELETE", token }),
+
+  // Aula virtual: exámenes
+  createQuiz: (token: string, assignmentId: string, input: ClassQuizInput) =>
+    call<ClassQuizDto>(`/classes/${assignmentId}/quizzes`, { method: "POST", token, body: input }),
+  updateQuiz: (token: string, quizId: string, input: ClassQuizInput) =>
+    call<ClassQuizDto>(`/class-quizzes/${quizId}`, { method: "PUT", token, body: input }),
+  deleteQuiz: (token: string, quizId: string) =>
+    call<void>(`/class-quizzes/${quizId}`, { method: "DELETE", token }),
+  publishQuiz: (token: string, quizId: string, published: boolean) =>
+    call<ClassQuizDto>(`/class-quizzes/${quizId}/publish`, { method: "POST", token, body: { published } }),
+  addQuizQuestion: (token: string, quizId: string, input: QuizQuestionInput) =>
+    call<QuizQuestionDto>(`/class-quizzes/${quizId}/questions`, { method: "POST", token, body: input }),
+  updateQuizQuestion: (token: string, questionId: string, input: QuizQuestionInput) =>
+    call<QuizQuestionDto>(`/quiz-questions/${questionId}`, { method: "PUT", token, body: input }),
+  deleteQuizQuestion: (token: string, questionId: string) =>
+    call<void>(`/quiz-questions/${questionId}`, { method: "DELETE", token }),
+  quiz: (token: string, quizId: string, alumno?: string) =>
+    call<ClassQuizDetailDto>(`/class-quizzes/${quizId}${alumno ? `?alumno=${alumno}` : ""}`, { token }),
+  startQuiz: (token: string, quizId: string, alumno?: string) =>
+    call<{ started: boolean }>(`/class-quizzes/${quizId}/start${alumno ? `?alumno=${alumno}` : ""}`, {
+      method: "POST",
+      token,
+    }),
+  saveQuizAnswers: (token: string, quizId: string, input: QuizAnswersInput, alumno?: string) =>
+    call<QuizAttemptDto>(`/class-quizzes/${quizId}/answers${alumno ? `?alumno=${alumno}` : ""}`, {
+      method: "PUT",
+      token,
+      body: input,
+    }),
+  reviewQuiz: (token: string, quizId: string, studentId: string, points: Record<string, number>) =>
+    call<QuizAttemptDto>(`/class-quizzes/${quizId}/attempts/${studentId}/review`, {
+      method: "PUT",
+      token,
+      body: { points },
+    }),
 
   // Cuentas de los alumnos (aula virtual)
   grantStudentAccess: (token: string, studentId: string, input: PortalAccessInput) =>

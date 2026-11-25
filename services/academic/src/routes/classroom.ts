@@ -39,6 +39,7 @@ import { classAccess, classesOfStudent } from "../lib/classroom";
 import { teacherClasses } from "../lib/evaluation";
 import { childrenOf, studentOf } from "../lib/family";
 import { findCurrentYear, listAssignments } from "../lib/queries";
+import { classQuizzesFor } from "./quizzes";
 import { classTasksFor } from "./tasks";
 
 const idParams = z.object({ id: z.uuid() });
@@ -208,6 +209,7 @@ export async function classroomRoutes(app: FastifyInstance, { db, files, today }
       topics: await postDtos(db, topics),
       announcements: await postDtos(db, announcements),
       tasks: await classTasksFor(db, tenantOf(request), access),
+      quizzes: await classQuizzesFor(db, tenantOf(request), access),
     };
   });
 
