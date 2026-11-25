@@ -74,9 +74,15 @@ registros; las llaves se crean y se guardan directo en AWS Secrets Manager.
 7. **Actions → «Crear la cuenta del equipo de la plataforma» → Run workflow** (`prod`). Entrar en
    `https://<dominio>/login`, configurar la verificación en dos pasos y seguir con el paso 7 de abajo
    (puesta en marcha).
-8. **Asistente de planificación (opcional):** en AWS **Secrets Manager → Guardar un secreto nuevo →
-   Otro tipo de secreto → Texto sin formato**, con la llave de Groq, Gemini o Claude como valor y el
-   nombre `escolar/prod/groq` (o `/gemini`, `/anthropic`). Volver a correr «Desplegar en AWS».
+8. **Asistente de planificación (opcional):** la llave como secreto del ambiente en GitHub
+   (**Settings → Environments → prod → Add environment secret**): `GEMINI_API_KEY` (gratis en
+   aistudio.google.com → «Get API key»), `GROQ_API_KEY` (gratis en console.groq.com → «API Keys») o
+   `ANTHROPIC_API_KEY`. Con dos, la segunda queda de respaldo. Volver a correr «Desplegar en AWS»: el
+   flujo prueba la llave con su proveedor (si no sirve, lo dice y no despliega), la guarda en AWS
+   Secrets Manager (`escolar/prod/gemini`, `/groq` o `/anthropic`) y el resumen dice si el asistente
+   quedó encendido. Para cambiar la llave, se cambia el secreto y se despliega otra vez (academic se
+   reinicia solo para tomarla). También sirve crear a mano el secreto en Secrets Manager con ese
+   nombre (**Otro tipo de secreto → Texto sin formato**, solo la llave, en la región de CONECTA).
 9. **Avisos en la app de Android (opcional):** un secreto `escolar/prod/fcm` con la clave
    `FCM_SERVICE_ACCOUNT` y el JSON de la cuenta de servicio de Firebase (ver
    [`apps/mobile/README.md`](../apps/mobile/README.md)). Volver a desplegar.
