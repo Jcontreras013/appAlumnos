@@ -384,10 +384,13 @@ reintenta con otro. `PLAN_ASSISTANT_FALLBACK=off` usa solo el principal.
   definidas en la ventana de PowerShell (`$env:...`) ganan sobre el `.env`. Para ver que la tomó:
   `docker logs escolar-demo-academic-1 2>&1 | Select-String "Asistente"` debe mostrar
   «Asistente de planificación activo» con el proveedor.
-- En AWS, guarda la llave como secreto (el valor del secreto es la llave) y despliega con
-  `-c geminiSecretArn=arn:aws:secretsmanager:...` (o `-c groqSecretArn=...`, con `-c groqModel=...`
-  si hace falta, o `-c anthropicSecretArn=...`). El balanceador y Service Connect esperan hasta 3
-  minutos, porque un borrador tarda de 20 a 60 s.
+- En AWS, con GitHub Actions: la llave como secreto del ambiente (`GEMINI_API_KEY`, `GROQ_API_KEY`
+  o `ANTHROPIC_API_KEY`) y «Desplegar en AWS». El flujo la prueba, la guarda en Secrets Manager y
+  confirma en el resumen que el asistente quedó encendido (ver el paso 8 de
+  [`docs/despliegue.md`](docs/despliegue.md)). A mano: el secreto en Secrets Manager (el valor es la
+  llave) y `-c geminiSecretArn=arn:aws:secretsmanager:...` (o `-c groqSecretArn=...`, con
+  `-c groqModel=...` si hace falta, o `-c anthropicSecretArn=...`). El balanceador y Service Connect
+  esperan hasta 3 minutos, porque un borrador tarda de 20 a 60 s.
 - Si un borrador falla, el docente ve un mensaje sencillo; el motivo exacto (lo que respondió el
   proveedor) queda en los registros de `academic`.
 

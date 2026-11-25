@@ -3,8 +3,11 @@
 # el flujo «Preparar AWS (una vez)». Este flujo encuentra solo, por su nombre en AWS, las llaves que
 # creó «Preparar AWS» y el certificado del dominio (variable DOMINIO); producción no se despliega sin
 # certificado validado.
+# Asistente de planificación con IA (opcional): la llave como secreto del ambiente en GitHub
+# (GEMINI_API_KEY, GROQ_API_KEY o ANTHROPIC_API_KEY). El flujo la prueba con su proveedor, la guarda
+# en AWS Secrets Manager (escolar/<ambiente>/gemini, /groq o /anthropic) y al final confirma que el
+# asistente quedó encendido. También sirve un secreto creado a mano en Secrets Manager con ese nombre.
 # Opcionales, también por su nombre en Secrets Manager (o con su ARN en una variable):
-#   escolar/<ambiente>/anthropic, /gemini o /groq  llave del asistente de planificación (el valor es la llave)
 #   escolar/<ambiente>/fcm                         cuenta de servicio de Firebase (clave FCM_SERVICE_ACCOUNT)
 # Variables: AWS_REGION, DOMINIO, GEMINI_MODEL, GROQ_MODEL. Secreto ALERT_EMAIL: correo de las alarmas.
 # Ver docs/despliegue.md. El registro es público: aquí no se imprime ninguna llave ni correo.
@@ -63,6 +66,104 @@ jobs:
             echo "Rol de ECS creado; esperando que AWS lo active..."
             sleep 30
           fi
+
+      - name: Llaves del asistente de IA
+        env:
+          LLAVE_GEMINI: ${{ secrets.GEMINI_API_KEY }}
+          LLAVE_GROQ: ${{ secrets.GROQ_API_KEY }}
+          LLAVE_ANTHROPIC: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
+          GROQ_MODEL: ${{ vars.GROQ_MODEL }}
+        run: |
+          set -euo pipefail
+          # Cada llave que esté como secreto de GitHub se prueba con su proveedor (un pedido mínimo, sin
+          # costo en la capa gratuita) y se guarda en Secrets Manager, de donde la lee academic. La llave
+          # nunca va en la línea de comandos: viaja en archivos temporales que solo lee este paso.
+          umask 077
+          DIR=$(mktemp -d)
+          trap 'rm -rf "$DIR"' EXIT
+          GUARDADAS=""
+          for proveedor in gemini groq anthropic; do
+            case "$proveedor" in
+              gemini) LLAVE=$LLAVE_GEMINI; NOMBRE="Gemini"; VARIABLE=GEMINI_API_KEY ;;
+              groq) LLAVE=$LLAVE_GROQ; NOMBRE="Groq"; VARIABLE=GROQ_API_KEY ;;
+              anthropic) LLAVE=$LLAVE_ANTHROPIC; NOMBRE="Claude"; VARIABLE=ANTHROPIC_API_KEY ;;
+            esac
+            # Sin espacios, saltos de línea ni comillas de más (pasa al copiar y pegar).
+            LLAVE=$(printf '%s' "$LLAVE" | tr -d '[:space:]"'"'")
+            LLAVE=${LLAVE#"$VARIABLE="}
+            [ -z "$LLAVE" ] && continue
+            echo "::add-mask::$LLAVE"
+            printf '%s' "$LLAVE" > "$DIR/llave"
+            case "$proveedor" in
+              gemini)
+                MODELO=${GEMINI_MODEL:-gemini-flash-latest}
+                printf 'x-goog-api-key: %s\n' "$LLAVE" > "$DIR/cabecera"
+                URL="https://generativelanguage.googleapis.com/v1beta/models/$MODELO:generateContent"
+                CUERPO='{"contents":[{"parts":[{"text":"Responde solo: listo"}]}],"generationConfig":{"maxOutputTokens":16}}'
+                ;;
+              groq)
+                MODELO=${GROQ_MODEL:-openai/gpt-oss-120b}
+                printf 'Authorization: Bearer %s\n' "$LLAVE" > "$DIR/cabecera"
+                URL="https://api.groq.com/openai/v1/chat/completions"
+                CUERPO=$(jq -cn --arg m "$MODELO" '{model: $m, messages: [{role: "user", content: "Responde solo: listo"}], max_completion_tokens: 64}')
+                ;;
+              anthropic)
+                MODELO=""
+                printf 'x-api-key: %s\nanthropic-version: 2023-06-01\n' "$LLAVE" > "$DIR/cabecera"
+                URL="https://api.anthropic.com/v1/models"
+                CUERPO=""
+                ;;
+            esac
+            if [ -n "$CUERPO" ]; then
+              CODIGO=$(curl -s -o "$DIR/respuesta" -w "%{http_code}" --max-time 60 -H @"$DIR/cabecera" \
+                -H "content-type: application/json" -d "$CUERPO" "$URL" || true)
+            else
+              CODIGO=$(curl -s -o "$DIR/respuesta" -w "%{http_code}" --max-time 60 -H @"$DIR/cabecera" "$URL" || true)
+            fi
+            # Lo que contestó el proveedor (nunca trae la llave).
+            MOTIVO=$(jq -r '(.error.message // .error // empty) | tostring' "$DIR/respuesta" 2>/dev/null | head -c 300 || true)
+            case "$CODIGO" in
+              200) echo "La llave de $NOMBRE funciona${MODELO:+ (modelo $MODELO)}." ;;
+              429) echo "::warning::La llave de $NOMBRE es válida, pero ahora mismo está en su límite de uso; se guarda igual." ;;
+              401 | 403)
+                echo "::error::La llave de $NOMBRE no sirve ($CODIGO: $MOTIVO). Revisa que la copiaste completa en el secreto $VARIABLE (Settings → Environments → $STAGE) o saca una nueva."
+                exit 1 ;;
+              402)
+                echo "::error::$NOMBRE no responde con esa llave porque su proyecto tiene facturación sin saldo ($MOTIVO). Saca la llave de un proyecto sin facturación (ver «Asistente de planificación con IA» en el README)."
+                exit 1 ;;
+              404)
+                echo "::error::$NOMBRE no tiene el modelo $MODELO ($MOTIVO). Quita o cambia la variable ${VARIABLE%_API_KEY}_MODEL (Settings → Environments → $STAGE)."
+                exit 1 ;;
+              400)
+                if grep -q "API_KEY_INVALID\|API key not valid" "$DIR/respuesta" 2>/dev/null; then
+                  echo "::error::La llave de $NOMBRE no sirve ($MOTIVO). Revisa que la copiaste completa en el secreto $VARIABLE (Settings → Environments → $STAGE) o saca una nueva."
+                  exit 1
+                fi
+                echo "::warning::$NOMBRE contestó 400 a la prueba ($MOTIVO); se guarda la llave igual." ;;
+              *) echo "::warning::No se pudo probar la llave de $NOMBRE (código $CODIGO); se guarda igual." ;;
+            esac
+            SECRETO="escolar/$STAGE/$proveedor"
+            if aws secretsmanager describe-secret --secret-id "$SECRETO" > /dev/null 2>&1; then
+              ACTUAL=$(aws secretsmanager get-secret-value --secret-id "$SECRETO" --query SecretString --output text)
+              if [ "$ACTUAL" = "$LLAVE" ]; then
+                echo "La llave de $NOMBRE ya estaba guardada en AWS."
+              else
+                aws secretsmanager put-secret-value --secret-id "$SECRETO" --secret-string "file://$DIR/llave" > /dev/null
+                echo "Llave de $NOMBRE actualizada en AWS."
+                # academic lee las llaves al arrancar: hay que reiniciarlo después del despliegue.
+                echo "IA_LLAVE_ACTUALIZADA=1" >> "$GITHUB_ENV"
+              fi
+            else
+              aws secretsmanager create-secret --name "$SECRETO" \
+                --description "Llave de $NOMBRE para el asistente de planificación de CONECTA ($STAGE)" \
+                --secret-string "file://$DIR/llave" > /dev/null
+              echo "Llave de $NOMBRE guardada en AWS."
+            fi
+            GUARDADAS="$GUARDADAS $NOMBRE"
+          done
+          [ -z "$GUARDADAS" ] && echo "Sin llaves del asistente de IA en GitHub (si hay alguna en Secrets Manager, se usa esa)."
+          true
 
       - name: Buscar las llaves y el certificado en AWS
         env:
@@ -181,6 +282,46 @@ jobs:
             exit 1
           fi
 
+      - name: Reiniciar academic para que tome la llave nueva de la IA
+        if: env.IA_LLAVE_ACTUALIZADA == '1'
+        run: |
+          set -euo pipefail
+          CLUSTER=$(jq -r '.[] | .NombreCluster // empty' "$RUNNER_TEMP/salidas.json" | head -n1)
+          SERVICIO=$(jq -r '.[] | .AcademicServiceName // empty' "$RUNNER_TEMP/salidas.json" | head -n1)
+          aws ecs update-service --cluster "$CLUSTER" --service "$SERVICIO" --force-new-deployment > /dev/null
+          for intento in 1 2 3; do
+            aws ecs wait services-stable --cluster "$CLUSTER" --services "$SERVICIO" && break
+            [ "$intento" = 3 ] && { echo "::error::academic no quedó estable en 30 minutos."; exit 1; }
+          done
+          echo "academic reiniciado con la llave nueva."
+
+      - name: Revisar el asistente de IA
+        # Solo informa: si no se puede leer el registro, el despliegue ya quedó bien igual.
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          # Lo que dijo academic al arrancar: qué proveedor usa (y cuáles de respaldo), o por qué no.
+          CLUSTER=$(jq -r '.[] | .NombreCluster // empty' "$RUNNER_TEMP/salidas.json" | head -n1)
+          SERVICIO=$(jq -r '.[] | .AcademicServiceName // empty' "$RUNNER_TEMP/salidas.json" | head -n1)
+          TAREA=$(aws ecs list-tasks --cluster "$CLUSTER" --service-name "$SERVICIO" --desired-status RUNNING \
+            --query "taskArns[0]" --output text)
+          DEFINICION=$(aws ecs describe-tasks --cluster "$CLUSTER" --tasks "$TAREA" \
+            --query "tasks[0].taskDefinitionArn" --output text)
+          GRUPO=$(aws ecs describe-task-definition --task-definition "$DEFINICION" \
+            --query "taskDefinition.containerDefinitions[0].logConfiguration.options.\"awslogs-group\"" --output text)
+          aws logs get-log-events --log-group-name "$GRUPO" --log-stream-name "academic/academic/${TAREA##*/}" \
+            --start-from-head --limit 200 --query "events[].message" --output json 2>/dev/null \
+            | jq -r '.[]' > "$RUNNER_TEMP/academic.log" || true
+          ESTADO=$(jq -Rr 'fromjson? | select(.msg == "Asistente de planificación activo")
+            | "encendido con \(.provider)\(if .model then " (\(.model))" else "" end)\(if (.backups // []) | length > 0 then ", respaldo: \(.backups | join(", "))" else "" end)"' \
+            "$RUNNER_TEMP/academic.log" | head -n1)
+          if [ -z "$ESTADO" ]; then
+            AVISO=$(jq -Rr 'fromjson? | select(.msg | test("el asistente queda apagado")) | .msg' "$RUNNER_TEMP/academic.log" | head -n1)
+            ESTADO="apagado${AVISO:+ ($AVISO)}"
+          fi
+          echo "Asistente de planificación: $ESTADO."
+          echo "ESTADO_IA=$ESTADO" >> "$GITHUB_ENV"
+
       - name: Qué sigue
         run: |
           set -euo pipefail
@@ -200,5 +341,10 @@ jobs:
               echo "2. Abre https://$DOMINIO/login. Si es la primera vez, corre «Crear la cuenta del equipo de la plataforma»."
             else
               echo "Panel (sin dominio, solo para probar): $URL"
+            fi
+            echo
+            echo "**Asistente de planificación con IA:** ${ESTADO_IA:-sin revisar}."
+            if [[ "${ESTADO_IA:-}" == apagado* ]]; then
+              echo "Para encenderlo: un secreto \`GEMINI_API_KEY\` (o \`GROQ_API_KEY\`) en Settings → Environments → $STAGE y volver a desplegar."
             fi
           } >> "$GITHUB_STEP_SUMMARY"

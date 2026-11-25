@@ -361,7 +361,8 @@ export class EscolarStack extends Stack {
       // El asistente de IA tarda cerca de un minuto, y un libro de la biblioteca puede tardar varios
       // minutos en subir o bajar con una conexión lenta: Service Connect no lo corta.
       requestTimeout: Duration.minutes(10),
-      // Libros y documentos de la biblioteca: el mismo bucket privado, bajo «biblioteca/».
+      // Libros de la biblioteca y archivos del aula virtual (materiales, tareas y entregas): el
+      // mismo bucket privado, bajo «biblioteca/» y «aula/».
       environment: {
         ...assistant.environment,
         FILES_BUCKET: attachmentsBucket.bucketName,
@@ -369,8 +370,10 @@ export class EscolarStack extends Stack {
       },
       ...(assistant.secrets ? { secrets: assistant.secrets } : {}),
     });
-    // academic solo puede leer y escribir en la carpeta de la biblioteca, no en los adjuntos de los mensajes.
+    // academic solo puede leer y escribir en sus carpetas (biblioteca y aula virtual), no en los
+    // adjuntos de los mensajes.
     attachmentsBucket.grantReadWrite(academic.task.taskRole, "biblioteca/*");
+    attachmentsBucket.grantReadWrite(academic.task.taskRole, "aula/*");
     identityService.connections.allowFrom(academic.service, ec2.Port.tcp(3001), "academic to identity");
     // Service Connect: una tarea solo encuentra por nombre los servicios que ya existían cuando
     // arrancó. Si academic arrancara antes que identity, nunca encontraría «identity».
