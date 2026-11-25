@@ -36,6 +36,10 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
             <a href="/privacidad" className="hover:text-slate-600 hover:underline">
               Privacidad y datos personales
             </a>
+            {" · "}
+            <a href="/eliminar-cuenta" className="hover:text-slate-600 hover:underline">
+              Eliminar una cuenta
+            </a>
           </p>
         </div>
       </section>

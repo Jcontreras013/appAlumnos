@@ -109,8 +109,11 @@ export default function PrivacyPage() {
       <Section title="Sus derechos">
         <p>
           Puede pedir ver, corregir o borrar sus datos, o cerrar su cuenta, a la dirección de su centro
-          educativo. Las cuentas las crea el centro, que es quien las da de baja.
-          {contact ? ` También puede escribir a ${contact}.` : ""}
+          educativo. Las cuentas las crea el centro, que es quien las da de baja: vea{" "}
+          <a href="/eliminar-cuenta" className="underline hover:text-slate-900">
+            cómo pedir que se elimine una cuenta
+          </a>
+          .{contact ? ` También puede escribir a ${contact}.` : ""}
         </p>
       </Section>
 
