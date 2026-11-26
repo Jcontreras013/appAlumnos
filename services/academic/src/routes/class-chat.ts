@@ -1,17 +1,22 @@
 import { conflict, forbidden, notFound, parseOrThrow, requireRole, tenantOf } from "@escolar/service-kit";
 import {
+  type AssignmentDto,
   type ClassChatDto,
   type ClassChatMessageDto,
+  type ClassChatSummaryDto,
   classChatInputSchema,
   classChatStatusSchema,
 } from "@escolar/shared";
-import { and, desc, eq, gt } from "drizzle-orm";
+import { and, desc, eq, gt, inArray } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { type ClassChatMessage, classChatMessages, virtualClasses } from "../db/schema";
 import type { AcademicDeps } from "../deps";
 import { audit } from "../lib/audit";
-import { type ClassAccess, classAccess } from "../lib/classroom";
+import { type ClassAccess, classAccess, classesOfStudent } from "../lib/classroom";
+import { teacherClasses } from "../lib/evaluation";
+import { studentOf } from "../lib/family";
+import { findCurrentYear, listAssignments } from "../lib/queries";
 
 const idParams = z.object({ id: z.uuid() });
 const afterQuery = z.object({ despues: z.iso.datetime({ offset: true }).optional() });
@@ -53,6 +58,69 @@ export async function classChatRoutes(app: FastifyInstance, { db, today }: Acade
   const moderator = (access: ClassAccess, role: string) =>
     access.canEdit || role === "admin" || role === "coordinador";
 
+  /**
+   * El apartado «Chats»: los chats de las clases de quien pregunta (el maestro, las suyas; el alumno,
+   * las de su sección). La dirección y la coordinación ven los chats abiertos de todo el centro.
+   */
+  app.get("/class-chats", readers, async (request): Promise<ClassChatSummaryDto[]> => {
+    const schoolId = tenantOf(request);
+    const { role, userId } = request.auth;
+    let classes: AssignmentDto[] = [];
+    let onlyOpen = false;
+    if (role === "estudiante") {
+      const studentId = await studentOf(db, schoolId, userId);
+      classes = studentId ? await classesOfStudent(db, schoolId, studentId) : [];
+    } else if (role === "docente") {
+      classes = (await teacherClasses(db, schoolId, userId, today())).map((c) => c.assignment);
+    } else if (role === "admin" || role === "coordinador") {
+      const year = await findCurrentYear(db, schoolId);
+      classes = year ? await listAssignments(db, schoolId, { schoolYearId: year.id }) : [];
+      onlyOpen = true;
+    }
+    if (!classes.length) return [];
+    const ids = classes.map((c) => c.id);
+    const [settings, lasts] = await Promise.all([
+      db
+        .select({ id: virtualClasses.assignmentId, enabled: virtualClasses.chatEnabled })
+        .from(virtualClasses)
+        .where(inArray(virtualClasses.assignmentId, ids)),
+      db
+        .selectDistinctOn([classChatMessages.assignmentId])
+        .from(classChatMessages)
+        .where(inArray(classChatMessages.assignmentId, ids))
+        .orderBy(classChatMessages.assignmentId, desc(classChatMessages.createdAt)),
+    ]);
+    const open = new Map(settings.map((s) => [s.id, s.enabled]));
+    const last = new Map(lasts.map((m) => [m.assignmentId, m]));
+    return (
+      classes
+        .map((c): ClassChatSummaryDto => {
+          const m = last.get(c.id);
+          return {
+            assignmentId: c.id,
+            subjectName: c.subjectName,
+            sectionLabel: c.sectionLabel,
+            teacherName: c.teacherName,
+            enabled: open.get(c.id) ?? false,
+            last: m
+              ? {
+                  authorName: m.authorName,
+                  body: m.deletedAt ? null : m.body,
+                  createdAt: m.createdAt.toISOString(),
+                }
+              : null,
+          };
+        })
+        .filter((c) => !onlyOpen || c.enabled || c.last)
+        // Primero los que tienen mensajes recientes; después, por materia.
+        .sort(
+          (a, b) =>
+            (b.last?.createdAt ?? "").localeCompare(a.last?.createdAt ?? "") ||
+            a.subjectName.localeCompare(b.subjectName, "es"),
+        )
+    );
+  });
+
   app.get("/classes/:id/chat", readers, async (request): Promise<ClassChatDto> => {
     const { id } = parseOrThrow(idParams, request.params);
     const { despues } = parseOrThrow(afterQuery, request.query);
@@ -69,6 +137,9 @@ export async function classChatRoutes(app: FastifyInstance, { db, today }: Acade
       .orderBy(desc(classChatMessages.createdAt))
       .limit(PAGE);
     return {
+      subjectName: access.assignment.subjectName,
+      sectionLabel: access.assignment.sectionLabel,
+      teacherName: access.assignment.teacherName,
       enabled,
       canWrite: enabled && writer(access, request.auth),
       canModerate: moderator(access, request.auth.role),

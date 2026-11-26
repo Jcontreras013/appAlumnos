@@ -3,7 +3,7 @@ import type { SchoolRole } from "./roles";
 
 /*
  * Mensajes entre el personal del centro: conversaciones de dos personas, como un chat. En esta
- * primera etapa solo entre maestros y dirección; las familias quedan para más adelante.
+ * primera etapa entre maestros, dirección y secretaría; las familias quedan para más adelante.
  *
  * - Los mensajes no se borran: son el registro de lo que se habló.
  * - Cada persona ve si el otro ya leyó lo que le escribió ("visto").
@@ -12,7 +12,7 @@ import type { SchoolRole } from "./roles";
  */
 
 /** Quiénes usan los mensajes. Agregar un cargo aquí lo habilita en el panel y en el servicio. */
-export const MESSAGING_ROLES = ["admin", "docente"] as const satisfies readonly SchoolRole[];
+export const MESSAGING_ROLES = ["admin", "secretaria", "docente"] as const satisfies readonly SchoolRole[];
 export type MessagingRole = (typeof MESSAGING_ROLES)[number];
 
 export const MESSAGE_MAX_LENGTH = 2000;

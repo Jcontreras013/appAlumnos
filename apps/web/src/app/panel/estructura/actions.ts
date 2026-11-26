@@ -13,11 +13,14 @@ import {
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { academic } from "@/lib/academic";
+import { requestFromDirection } from "@/lib/change-requests";
 import { requireRole } from "@/lib/dal";
 import type { FormState } from "@/lib/form-state";
 import { fromServiceError, runFormAction } from "@/lib/forms";
 
 const writer = () => requireRole("admin", "coordinador");
+/** Grados, secciones y materias: la secretaría también, pero como solicitud que confirma la dirección. */
+const creator = () => requireRole("admin", "coordinador", "secretaria");
 const done = (message: string) => {
   revalidatePath("/panel/estructura");
   return message;
@@ -52,31 +55,38 @@ export async function setCurrentYearAction(formData: FormData) {
 }
 
 export async function createGradeAction(_prev: FormState, formData: FormData): Promise<FormState> {
-  const { accessToken } = await writer();
+  const { accessToken, user } = await creator();
   return runFormAction(formData, {
     schema: gradeInputSchema,
     fields: ["name", "sortOrder"],
-    submit: async (input) => done(`Grado "${(await academic.createGrade(accessToken, input)).name}" creado.`),
+    submit: async (input) =>
+      user.role === "secretaria"
+        ? done(await requestFromDirection(accessToken, "grado", input))
+        : done(`Grado "${(await academic.createGrade(accessToken, input)).name}" creado.`),
   });
 }
 
 export async function createSectionAction(_prev: FormState, formData: FormData): Promise<FormState> {
-  const { accessToken } = await writer();
+  const { accessToken, user } = await creator();
   return runFormAction(formData, {
     schema: sectionInputSchema,
     fields: ["schoolYearId", "gradeId", "name", "capacity"],
     submit: async (input) =>
-      done(`Sección ${(await academic.createSection(accessToken, input)).label} creada.`),
+      user.role === "secretaria"
+        ? done(await requestFromDirection(accessToken, "seccion", input))
+        : done(`Sección ${(await academic.createSection(accessToken, input)).label} creada.`),
   });
 }
 
 export async function createSubjectAction(_prev: FormState, formData: FormData): Promise<FormState> {
-  const { accessToken } = await writer();
+  const { accessToken, user } = await creator();
   return runFormAction(formData, {
     schema: subjectInputSchema,
     fields: ["name", "language"],
     submit: async (input) =>
-      done(`Materia "${(await academic.createSubject(accessToken, input)).name}" creada.`),
+      user.role === "secretaria"
+        ? done(await requestFromDirection(accessToken, "materia", input))
+        : done(`Materia "${(await academic.createSubject(accessToken, input)).name}" creada.`),
   });
 }
 

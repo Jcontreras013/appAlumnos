@@ -16,6 +16,7 @@ import type { PlanDrafter } from "./lib/plan-assistant";
 import { announcementRoutes } from "./routes/announcements";
 import { auditLogRoutes } from "./routes/audit-log";
 import { calendarRoutes } from "./routes/calendar";
+import { changeRequestRoutes } from "./routes/change-requests";
 import { classChatRoutes } from "./routes/class-chat";
 import { classroomRoutes } from "./routes/classroom";
 import { conductRoutes } from "./routes/conduct";
@@ -85,6 +86,7 @@ export async function buildApp(options: BuildAppOptions) {
     await taskRoutes(scope, deps);
     await quizRoutes(scope, deps);
     await classChatRoutes(scope, deps);
+    await changeRequestRoutes(scope, deps);
     await exportRoutes(scope, deps);
     await followUpRoutes(scope, deps);
     await announcementRoutes(scope, deps);

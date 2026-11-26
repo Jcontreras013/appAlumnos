@@ -4,6 +4,7 @@ import { leaveInputSchema, substitutionInputSchema } from "@escolar/shared";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { academic } from "@/lib/academic";
+import { requestFromDirection } from "@/lib/change-requests";
 import { requireRole } from "@/lib/dal";
 import type { FormState } from "@/lib/form-state";
 import { runFormAction } from "@/lib/forms";
@@ -15,11 +16,13 @@ const done = (message: string) => {
 };
 
 export async function createLeaveAction(_prev: FormState, formData: FormData): Promise<FormState> {
-  const { accessToken } = await writer();
+  // La secretaría también registra permisos, pero como solicitud que confirma la dirección.
+  const { accessToken, user } = await requireRole("admin", "coordinador", "secretaria");
   return runFormAction(formData, {
     schema: leaveInputSchema,
     fields: ["teacherUserId", "type", "startsOn", "endsOn", "notes"],
     submit: async (input) => {
+      if (user.role === "secretaria") return done(await requestFromDirection(accessToken, "licencia", input));
       const leave = await academic.createLeave(accessToken, input);
       const pending = leave.classes.length;
       return done(

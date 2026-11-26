@@ -99,6 +99,13 @@
       "when": 1795635134739,
       "tag": "0013_cuentas_eliminadas",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1795721248783,
+      "tag": "0014_usuario_del_personal",
+      "breakpoints": true
     }
   ]
 }

@@ -64,6 +64,7 @@ export function initials(name: string): string {
 
 export const ROLE_SHORT: Record<MessagingRole, string> = {
   admin: "Dirección",
+  secretaria: "Secretaría",
   docente: "Docente",
 };
 

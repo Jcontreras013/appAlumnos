@@ -32,7 +32,8 @@ export function YearForm() {
   );
 }
 
-export function GradeForm() {
+/** `request`: la secretaría no crea; envía una solicitud que confirma la dirección. */
+export function GradeForm({ request = false }: { request?: boolean }) {
   const [state, action] = useActionState(createGradeAction, initialFormState);
   return (
     <form action={action} className="space-y-3" noValidate>
@@ -41,7 +42,14 @@ export function GradeForm() {
         <Field name="name" label="Grado" placeholder="Primer grado" required state={state} />
         <Field name="sortOrder" label="Orden" type="number" min={0} placeholder="1" state={state} />
       </div>
-      <SubmitButton pendingText="Creando…">Agregar grado</SubmitButton>
+      {request && (
+        <p className="text-xs text-slate-500">
+          La dirección recibe un mensaje y lo confirma antes de que se cree.
+        </p>
+      )}
+      <SubmitButton pendingText="Enviando…">
+        {request ? "Pedir a la dirección" : "Agregar grado"}
+      </SubmitButton>
     </form>
   );
 }
@@ -50,7 +58,9 @@ export function SectionForm({
   schoolYearId,
   grades,
   years,
+  request = false,
 }: {
+  request?: boolean;
   schoolYearId: string;
   grades: Option[];
   /** Si hay más de un año, se puede preparar las secciones del año siguiente. */
@@ -76,12 +86,19 @@ export function SectionForm({
         <Field name="name" label="Sección" placeholder="A" required state={state} />
         <Field name="capacity" label="Cupo" type="number" min={1} placeholder="Sin límite" state={state} />
       </div>
-      <SubmitButton pendingText="Creando…">Agregar sección</SubmitButton>
+      {request && (
+        <p className="text-xs text-slate-500">
+          La dirección recibe un mensaje y lo confirma antes de que se cree.
+        </p>
+      )}
+      <SubmitButton pendingText="Enviando…">
+        {request ? "Pedir a la dirección" : "Agregar sección"}
+      </SubmitButton>
     </form>
   );
 }
 
-export function SubjectForm() {
+export function SubjectForm({ request = false }: { request?: boolean }) {
   const [state, action] = useActionState(createSubjectAction, initialFormState);
   return (
     <form action={action} className="space-y-3" noValidate>
@@ -94,7 +111,14 @@ export function SubjectForm() {
         defaultValue="es"
         state={state}
       />
-      <SubmitButton pendingText="Creando…">Agregar materia</SubmitButton>
+      {request && (
+        <p className="text-xs text-slate-500">
+          La dirección recibe un mensaje y lo confirma antes de que se cree.
+        </p>
+      )}
+      <SubmitButton pendingText="Enviando…">
+        {request ? "Pedir a la dirección" : "Agregar materia"}
+      </SubmitButton>
     </form>
   );
 }

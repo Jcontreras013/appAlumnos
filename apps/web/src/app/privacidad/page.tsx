@@ -97,6 +97,11 @@ export default function PrivacyPage() {
           se descarga. Al cerrar sesión se borran del teléfono las páginas y los libros guardados para usar
           sin internet.
         </p>
+        <p>
+          Si la persona activa «Entrar con huella», su usuario y su contraseña quedan cifrados en el mismo
+          teléfono y solo se abren con su huella o su rostro. La huella la revisa el teléfono: {APP_NAME} no
+          la recibe ni la guarda. Se desactiva desde la pantalla de entrada o desinstalando la app.
+        </p>
       </Section>
 
       <Section title="Cuánto tiempo se guardan">

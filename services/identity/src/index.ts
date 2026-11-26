@@ -6,6 +6,7 @@ import { DEFAULT_FILES_DIR, localFileStore, s3FileStore } from "./lib/files";
 import { loadSigningKeys } from "./lib/keys";
 import { sendPendingNotices } from "./lib/messages";
 import { webPushSender } from "./lib/push";
+import { assignMissingStaffUsernames } from "./lib/usernames";
 
 const config = loadConfig();
 
@@ -14,6 +15,12 @@ if (config.runMigrationsOnStart) {
 }
 
 const { db, pool } = createDb(config.databaseUrl);
+// El personal que ya tenía cuenta recibe su usuario automático (una sola vez).
+const named = await assignMissingStaffUsernames(db).catch((err) => {
+  console.error("No se pudieron asignar los usuarios del personal", err);
+  return 0;
+});
+if (named) console.log(`Usuarios asignados al personal: ${named}`);
 const keys = await loadSigningKeys({
   keyId: config.jwtKeyId,
   privateKeyPem: config.jwtPrivateKeyPem,

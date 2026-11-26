@@ -1,0 +1,1 @@
+ALTER TABLE "evaluation_settings" ADD COLUMN "teachers_enroll" boolean DEFAULT false NOT NULL;

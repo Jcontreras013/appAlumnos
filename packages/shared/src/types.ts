@@ -27,6 +27,8 @@ export interface UserDto {
   /** Las cuentas de familias pueden no tener correo (entran con su identidad). */
   email: string | null;
   nationalId?: string | null;
+  /** Usuario automático del personal (por ejemplo «lpaz»): entra con él. */
+  username?: string | null;
   /** Entró con una contraseña temporal: debe cambiarla antes de usar el panel. */
   mustChangePassword?: boolean;
   /** Rol en el centro o ámbito desde el que se consulta. */

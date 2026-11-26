@@ -1,6 +1,7 @@
 import { formatDay, type TransferDto } from "@escolar/shared";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Fold, FoldTag } from "@/components/fold";
 import { TransferHistory } from "@/components/transfer-history";
 import { academic } from "@/lib/academic";
 import { requireRole } from "@/lib/dal";
@@ -56,10 +57,7 @@ export default async function TransfersPage() {
       </section>
 
       {history.length > 0 && (
-        <section className="card overflow-hidden">
-          <h2 className="border-b border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
-            Últimos dos meses
-          </h2>
+        <Fold title="Últimos dos meses" summary={<FoldTag>{history.length} traslados</FoldTag>}>
           <table className="w-full text-left text-sm">
             <tbody className="divide-y divide-slate-100">
               {history.map((t) => {
@@ -97,7 +95,7 @@ export default async function TransfersPage() {
               })}
             </tbody>
           </table>
-        </section>
+        </Fold>
       )}
     </div>
   );

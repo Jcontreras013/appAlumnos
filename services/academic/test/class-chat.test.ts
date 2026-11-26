@@ -3,6 +3,7 @@ import type {
   AssignmentDto,
   ClassChatDto,
   ClassChatMessageDto,
+  ClassChatSummaryDto,
   ClassroomDto,
   PortalAccessDto,
   StudentAccessDto,
@@ -139,5 +140,30 @@ describe("chat de la clase", () => {
     expect((await say(luisUser, "¿Sigue abierto?")).status).toBe(409);
     expect((await say(ana, "Cerrado por hoy")).status).toBe(409);
     expect((await chat(luisUser)).body.messages.length).toBeGreaterThan(0);
+  });
+});
+
+describe("apartado «Chats»", () => {
+  it("cada quien ve los chats de sus clases con el último mensaje", async () => {
+    const mine = await ctx.call<ClassChatSummaryDto[]>(ana, "GET", "/class-chats");
+    const math = mine.body.find((c) => c.assignmentId === math1A.id);
+    expect(math).toMatchObject({ subjectName: math1A.subjectName, sectionLabel: math1A.sectionLabel });
+    expect(math?.last).not.toBeNull();
+    const student = await ctx.call<ClassChatSummaryDto[]>(luisUser, "GET", "/class-chats");
+    expect(student.body.map((c) => c.assignmentId)).toContain(math1A.id);
+    const other = await ctx.call<ClassChatSummaryDto[]>(pedroUser, "GET", "/class-chats");
+    expect(other.body.map((c) => c.assignmentId)).not.toContain(math1A.id);
+  });
+
+  it("la dirección ve los chats con actividad; la secretaría y las familias no tienen chats", async () => {
+    const office = await ctx.call<ClassChatSummaryDto[]>(director, "GET", "/class-chats");
+    expect(office.body.map((c) => c.assignmentId)).toContain(math1A.id);
+    expect((await ctx.call<ClassChatSummaryDto[]>(secretary, "GET", "/class-chats")).body).toEqual([]);
+    expect((await ctx.call(mother, "GET", "/class-chats")).status).toBe(403);
+  });
+
+  it("el chat trae el nombre de la clase para su página", async () => {
+    const chat = await ctx.call<ClassChatDto>(ana, "GET", `/classes/${math1A.id}/chat`);
+    expect(chat.body).toMatchObject({ subjectName: math1A.subjectName, sectionLabel: math1A.sectionLabel });
   });
 });

@@ -19,8 +19,19 @@ import { readSpreadsheet, SpreadsheetError } from "@/lib/spreadsheet";
 
 export async function createUserAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const session = await requireRole("admin");
-  const values = formValues(formData, ["name", "nationalId", "email", "role"]);
-  const parsed = createUserInputSchema.safeParse({ ...values, password: formData.get("password") });
+  const values = formValues(formData, ["firstNames", "lastNames", "nationalId", "email", "role"]);
+  if (!values.firstNames?.trim() || !values.lastNames?.trim()) {
+    return {
+      error: "Revisa los campos marcados",
+      fields: {
+        ...(values.firstNames?.trim() ? {} : { firstNames: "Escribe el nombre" }),
+        ...(values.lastNames?.trim() ? {} : { lastNames: "Escribe los apellidos" }),
+      },
+      values,
+    };
+  }
+  const name = `${values.firstNames.trim()} ${values.lastNames.trim()}`.replace(/\s+/g, " ");
+  const parsed = createUserInputSchema.safeParse({ ...values, name, password: formData.get("password") });
   if (!parsed.success) return { ...fromZodError(parsed.error), values };
 
   try {
@@ -31,8 +42,8 @@ export async function createUserAction(_prev: FormState, formData: FormData): Pr
       message: user.linkedExisting
         ? `${user.name} ya tenía cuenta (trabaja en otro centro): se le dio acceso a este como ${ROLE_LABELS[user.role]}, con su misma contraseña.`
         : user.temporaryPassword
-          ? `Se creó la cuenta de ${user.name} (${ROLE_LABELS[user.role]}). Entra con ${user.nationalId ? formatNationalId(user.nationalId) : user.email} y la contraseña temporal ${user.temporaryPassword} (la cambiará al entrar). Anótala: no se vuelve a mostrar.`
-          : `Se creó la cuenta de ${user.name} (${ROLE_LABELS[user.role]}).`,
+          ? `Se creó la cuenta de ${user.name} (${ROLE_LABELS[user.role]}). Entra con el usuario ${user.username ?? (user.nationalId ? formatNationalId(user.nationalId) : user.email)} y la contraseña temporal ${user.temporaryPassword} (la cambiará al entrar). Anótala: no se vuelve a mostrar.`
+          : `Se creó la cuenta de ${user.name} (${ROLE_LABELS[user.role]})${user.username ? `. Su usuario es ${user.username}` : ""}.`,
     };
   } catch (err) {
     return { ...fromServiceError(err), values };

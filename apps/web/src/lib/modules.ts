@@ -44,7 +44,7 @@ export const MODULES: ModuleInfo[] = [
     key: "planificacion",
     label: "Planificación semanal",
     description:
-      "Cada maestro planifica sus clases de la semana con la plantilla del centro; la dirección o coordinación revisa, aprueba o devuelve con observaciones.",
+      "Cada maestro planifica sus clases de la semana con la plantilla del centro; la dirección, la coordinación o la secretaría revisa, aprueba o devuelve con observaciones.",
     phase: 4,
     roles: ["admin", "coordinador", "docente", "secretaria"],
     href: "/panel/planificacion",

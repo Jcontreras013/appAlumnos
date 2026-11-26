@@ -8,7 +8,14 @@ import { createStudentAction } from "../actions";
 
 type Option = { value: string; label: string };
 
-export function NewStudentForm({ sections }: { sections: Option[] }) {
+export function NewStudentForm({
+  sections,
+  sectionRequired = false,
+}: {
+  sections: Option[];
+  /** El maestro siempre matricula al registrar (y solo en sus secciones). */
+  sectionRequired?: boolean;
+}) {
   const [state, action] = useActionState(createStudentAction, initialFormState);
 
   return (
@@ -86,13 +93,15 @@ export function NewStudentForm({ sections }: { sections: Option[] }) {
         <h2 className="font-semibold text-slate-900">Matrícula del año vigente</h2>
         {sections.length === 0 ? (
           <p className="text-sm text-slate-500">
-            No hay secciones en el año vigente. Puedes registrar al alumno y matricularlo después.
+            {sectionRequired
+              ? "No tienes secciones asignadas este año: pide a la dirección que te asigne tus clases."
+              : "No hay secciones en el año vigente. Puedes registrar al alumno y matricularlo después."}
           </p>
         ) : (
           <SelectField
             name="sectionId"
             label="Sección"
-            placeholder="Matricular después"
+            placeholder={sectionRequired ? "Elige la sección" : "Matricular después"}
             options={sections}
             state={state}
           />

@@ -39,24 +39,32 @@ function ageFrom(birthDate: string | null): string | null {
 }
 
 export default async function StudentPage({ params, searchParams }: PageProps<"/panel/alumnos/[id]">) {
-  const session = await requireRole("admin", "secretaria", "coordinador");
-  const canEdit = session.user.role !== "coordinador";
+  const session = await requireRole("admin", "secretaria", "coordinador", "docente");
+  const role = session.user.role;
+  // Un maestro llega aquí cuando la dirección activó la matrícula por maestros: registra, matricula en
+  // sus secciones y corrige datos; retiros, traslados y accesos siguen en la oficina.
+  const teacher = role === "docente";
+  const settings = teacher ? await academic.enrollmentSettings(session.accessToken) : null;
+  if (teacher && !settings?.teachersEnroll) notFound();
+  const canEdit = role === "admin" || role === "secretaria";
+  const canEditData = canEdit || teacher;
   const { id } = await params;
   const { nuevo } = await searchParams;
 
-  const canFollowUp = session.user.role !== "secretaria";
-  const [student, years, sections, followUps, transfers, transferTargets, conduct] = await Promise.all([
+  const canFollowUp = role === "admin" || role === "coordinador";
+  const [student, years, allSections, followUps, transfers, transferTargets, conduct] = await Promise.all([
     academic.getStudent(session.accessToken, id).catch((err) => {
       if (err instanceof ServiceError && (err.status === 404 || err.status === 400)) notFound();
       throw err;
     }),
     academic.listYears(session.accessToken),
     academic.listSections(session.accessToken),
-    academic.listFollowUps(session.accessToken, id).catch(() => []),
+    teacher ? Promise.resolve([]) : academic.listFollowUps(session.accessToken, id).catch(() => []),
     canEdit ? academic.studentTransfers(session.accessToken, id).catch(() => []) : Promise.resolve([]),
     canEdit ? identity.transferTargets(session.accessToken).catch(() => []) : Promise.resolve([]),
-    academic.studentConduct(session.accessToken, id).catch(() => []),
+    teacher ? Promise.resolve([]) : academic.studentConduct(session.accessToken, id).catch(() => []),
   ]);
+  const sections = teacher ? allSections.filter((s) => settings?.mySectionIds.includes(s.id)) : allSections;
   // Conducta: la coordinación y la dirección reportan y deciden; la suspensión y la expulsión, solo la dirección.
   const conductCan = {
     measure: session.user.role === "admin" || session.user.role === "coordinador",
@@ -93,9 +101,14 @@ export default async function StudentPage({ params, searchParams }: PageProps<"/
               <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-sm font-medium text-brand-700">
                 {current.sectionLabel}
               </span>
-              <Link href={`/panel/alumnos/${student.id}/boleta`} className="btn-secondary px-3 py-1 text-xs">
-                Boleta
-              </Link>
+              {!teacher && (
+                <Link
+                  href={`/panel/alumnos/${student.id}/boleta`}
+                  className="btn-secondary px-3 py-1 text-xs"
+                >
+                  Boleta
+                </Link>
+              )}
               {canEdit && (
                 <Link
                   href={`/panel/alumnos/${student.id}/constancia`}
@@ -187,11 +200,15 @@ export default async function StudentPage({ params, searchParams }: PageProps<"/
                   </form>
                 </div>
               )}
-              {canEdit &&
+              {canEditData &&
                 (sectionOptions.length ? (
                   <EnrollForm studentId={student.id} sections={sectionOptions} />
                 ) : (
-                  <p className="text-sm text-slate-500">No hay secciones en el año vigente.</p>
+                  <p className="text-sm text-slate-500">
+                    {teacher
+                      ? "No tienes secciones asignadas este año."
+                      : "No hay secciones en el año vigente."}
+                  </p>
                 ))}
             </div>
           )}
@@ -231,7 +248,7 @@ export default async function StudentPage({ params, searchParams }: PageProps<"/
                       </span>
                     )}
                   </p>
-                  {canEdit && !g.isPrimary && (
+                  {canEditData && !g.isPrimary && (
                     <div className="flex gap-3">
                       <form action={setPrimaryGuardianAction}>
                         <input type="hidden" name="studentId" value={student.id} />
@@ -261,7 +278,7 @@ export default async function StudentPage({ params, searchParams }: PageProps<"/
                     .filter(Boolean)
                     .join(" · ")}
                 </p>
-                {canEdit && (
+                {canEditData && (
                   <div className="mt-1">
                     <GuardianEditor studentId={student.id} guardian={g} />
                   </div>
@@ -272,7 +289,7 @@ export default async function StudentPage({ params, searchParams }: PageProps<"/
               </li>
             ))}
           </ul>
-          {canEdit && (
+          {canEditData && (
             <div className="mt-4 border-t border-slate-100 pt-4">
               <Collapsible summary="Agregar otro responsable">
                 <AddGuardianForm studentId={student.id} />
@@ -385,7 +402,7 @@ export default async function StudentPage({ params, searchParams }: PageProps<"/
         </Card>
       )}
 
-      {canEdit ? (
+      {canEditData ? (
         <Card title="Datos del alumno">
           <StudentDataForm student={student} />
         </Card>

@@ -23,9 +23,10 @@ const FIRST_LOGIN: HelpSection = {
   title: "Entrar por primera vez",
   steps: [
     "Abre la dirección de la plataforma en el navegador del teléfono o la computadora.",
-    "Escribe tu número de identidad (con o sin guiones) o tu correo, y la contraseña temporal que te entregaron en papel.",
+    "Escribe tu usuario (el personal: la inicial de tu nombre y tu primer apellido, por ejemplo «lpaz»), tu número de identidad o tu correo, y la contraseña temporal que te entregaron en papel.",
     "La plataforma te pide elegir una contraseña nueva de al menos 10 caracteres (no sirven las más usadas, como «Honduras2026», ni solo números). Desde ahí entras siempre con ella.",
     "Si olvidas la contraseña, pide a quien te dio el acceso una «Nueva contraseña temporal».",
+    "En la app de Android, después de entrar te ofrece «Activar huella». La próxima vez toca «Entrar con huella». Para quitarla: en la pantalla de entrada, «quitar la huella de este teléfono».",
   ],
   tip: "Tras 5 intentos fallidos la cuenta se bloquea 15 minutos. Si el personal deja la sesión sin usar 30 minutos, se cierra sola (avisa 2 minutos antes). Es para proteger los datos de los alumnos.",
 };
@@ -76,7 +77,7 @@ const CLASSROOM: HelpSection = {
     "Al abrir una tarea ves primero a quienes entregaron (marcados «Entregó»); «Toda la sección» muestra también a quienes faltan. Abre lo que mandaron y pon la nota con un comentario: cae en la libreta.",
     "«Nuevo examen»: elige cuándo abre y cierra, el tiempo para resolverlo y su valor. Agrega preguntas de selección múltiple, verdadero o falso (se califican solas) o abiertas (las revisas tú) y toca «Publicar examen».",
     "En los resultados del examen, abre las respuestas de cada alumno: pon los puntos de las abiertas y, si quieres, un comentario en cada pregunta (en qué falló) y uno general. Con todo revisado, la nota va a la libreta; el alumno y su familia ven tus comentarios.",
-    "«Chat de la clase»: toca «Abrir el chat» para conversar con toda la sección en un solo lugar. Puedes borrar cualquier mensaje y cerrarlo cuando quieras; las familias no lo ven.",
+    "«Chats» (en el menú) tiene el chat de cada una de tus clases: entra y toca «Abrir el chat» para conversar con toda la sección en un solo lugar. Puedes borrar cualquier mensaje y cerrarlo cuando quieras; las familias no lo ven.",
   ],
   tip: "Los videos van por enlace de YouTube (súbelos como «no listado»): así no gastan espacio del centro. Una tarea sin valor es solo para entregar. Cuando un alumno ya empezó un examen, sus preguntas no se pueden cambiar.",
 };
@@ -140,6 +141,16 @@ export const HELP_GUIDES: HelpGuide[] = [
         ],
       },
       {
+        title: "Matricular a tus alumnos",
+        steps: [
+          "Solo si la dirección activó la «Matrícula por los maestros»: en el menú aparece «Matrícula».",
+          "Ahí ves a los alumnos de las secciones donde das clase y a los que todavía no tienen matrícula este año.",
+          "«Nuevo alumno» registra al alumno con su responsable principal y lo matricula en una de tus secciones.",
+          "Para un alumno del año pasado, búscalo, abre su ficha y usa «Matricular».",
+          "Los retiros, los traslados y los accesos de las familias los hace la secretaría.",
+        ],
+      },
+      {
         title: "Fin de año: notas finales y recuperación",
         steps: [
           "En las notas de la clase, toca «Notas finales y recuperación».",
@@ -193,8 +204,26 @@ export const HELP_GUIDES: HelpGuide[] = [
           "En «Personal y usuarios», usa «Cargar personal desde Excel»: una fila por persona con nombre, identidad, correo (si tiene) y cargo.",
           "«Revisar archivo» muestra los errores de cada fila. Corrige el Excel hasta que no haya errores y confirma.",
           "Imprime la hoja de accesos: cada persona recibe su usuario y su contraseña temporal. No se vuelven a mostrar.",
-          "Para una sola persona, usa el formulario «Nuevo usuario».",
+          "Para una sola persona, usa el formulario «Nuevo usuario»: escribe sus nombres y apellidos; la identidad y el correo son opcionales.",
+          "El usuario se crea solo: la inicial del nombre y el primer apellido (Lucía Paz Mejía → lpaz). Si ya existe, se agrega el segundo apellido (lpazm). Lo ves en la lista del personal.",
           "Para corregir un nombre o una identidad mal escrita, usa «Corregir datos». Para cambiar el cargo, «Cambiar cargo».",
+        ],
+      },
+      {
+        title: "Solicitudes de la secretaría",
+        steps: [
+          "La secretaría pide crear grados, secciones y materias, o registrar el permiso de un maestro. Te llega un mensaje.",
+          "En «Solicitudes» (el número del menú dice cuántas esperan), toca «Confirmar» y se crea tal cual, o «Rechazar» con una nota.",
+          "Si algo no se puede (por ejemplo, ese grado ya existe), la solicitud sigue pendiente y ves por qué.",
+        ],
+      },
+      {
+        title: "Matrícula por los maestros",
+        steps: [
+          "En «Alumnos y familias», «Matrícula por los maestros» → «Activar».",
+          "Cada maestro registra y matricula a los alumnos de las secciones donde ya tiene clases asignadas. Así, en tiempo de matrícula, la dirección y la secretaría quedan más libres.",
+          "Los retiros, los traslados, la importación desde Excel y los accesos siguen en la secretaría.",
+          "Cuando termine la matrícula, «Desactivar».",
         ],
       },
       {
@@ -354,6 +383,28 @@ export const HELP_GUIDES: HelpGuide[] = [
         ],
       },
       {
+        title: "Pedir grados, materias y permisos de maestros",
+        steps: [
+          "En «Año, grados y materias» llena «Grado», «Sección» o «Materia» y toca «Pedir a la dirección».",
+          "En «Licencias y sustitutos», «Registrar permiso de un maestro» funciona igual.",
+          "La dirección recibe un mensaje y lo confirma; recién entonces se crea. Lo ves en «Mis solicitudes».",
+        ],
+      },
+      {
+        title: "Mensajes con los maestros",
+        steps: [
+          "En «Mensajes», «Nueva conversación» y elige al maestro o a la dirección.",
+          "Ves cuándo leyeron lo que escribiste.",
+        ],
+      },
+      {
+        title: "Revisar planificaciones",
+        steps: [
+          "En «Planificación» ves el tablero del centro con las planificaciones de la semana, una sección por desplegable.",
+          "Abre una enviada y elige «Aprobar» o «Devolver con observaciones». La secretaría y la dirección revisan; no planifican.",
+        ],
+      },
+      {
         title: "Responsables",
         steps: [
           "En la ficha del alumno, «Agregar responsable» para otro familiar.",
@@ -424,7 +475,7 @@ export const HELP_GUIDES: HelpGuide[] = [
         steps: [
           "En «Mis clases» está cada materia con su página: los temas con la explicación del maestro, videos, guías y avisos.",
           "Si tu maestro da clases en línea, toca «Entrar a la clase» a la hora indicada.",
-          "Si tu maestro abrió el «Chat de la clase», puedes escribirle a él y a tus compañeros. Sé respetuoso: el maestro lo ve todo y puede borrar mensajes.",
+          "En «Chats» está el chat de cada clase: si tu maestro lo abrió, puedes escribirle a él y a tus compañeros. Sé respetuoso: el maestro lo ve todo y puede borrar mensajes.",
         ],
       },
       {

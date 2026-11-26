@@ -474,10 +474,15 @@ export const substitutions = pgTable(
 
 // ───────────────────────────── Evaluación y asistencia ─────────────────────────────
 
-/** Configuración de evaluación del centro (por ahora, la nota mínima de aprobación). */
+/** Configuración del centro: la nota mínima de aprobación y si los maestros matriculan. */
 export const evaluationSettings = pgTable("evaluation_settings", {
   schoolId: uuid("school_id").primaryKey(),
   passingGrade: integer("passing_grade").notNull().default(DEFAULT_PASSING_GRADE),
+  /**
+   * La dirección deja que cada maestro matricule a los alumnos de las secciones donde da clase
+   * (en Honduras es común en tiempo de matrícula). Retiros y traslados siguen en la secretaría.
+   */
+  teachersEnroll: boolean("teachers_enroll").notNull().default(false),
   updatedAt: updatedAt(),
 });
 
@@ -896,6 +901,38 @@ export const planEvents = pgTable(
   ],
 );
 
+/**
+ * Solicitudes de la secretaría (crear un grado, una sección o una materia, o registrar el permiso de
+ * un maestro). Se aplican solo cuando la dirección las confirma: entonces se crea lo pedido como si
+ * lo hiciera la dirección, y queda en la bitácora quién lo pidió y quién lo confirmó.
+ */
+export const changeRequests = pgTable(
+  "change_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    schoolId: schoolId(),
+    kind: text("kind").notNull(),
+    /** Los datos del formulario, tal como se validaron al pedirlo. */
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    summary: text("summary").notNull(),
+    status: text("status").notNull().default("pendiente"),
+    requestedByUserId: uuid("requested_by_user_id").notNull(),
+    requestedByName: text("requested_by_name").notNull(),
+    decidedByUserId: uuid("decided_by_user_id"),
+    decidedByName: text("decided_by_name"),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    decisionNote: text("decision_note"),
+    /** Lo que se creó al confirmarla (el grado, la licencia…). */
+    resultId: uuid("result_id"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("change_requests_school_status_idx").on(t.schoolId, t.status, t.createdAt),
+    check("change_requests_kind", sql`${t.kind} in ('grado', 'seccion', 'materia', 'licencia')`),
+    check("change_requests_status", sql`${t.status} in ('pendiente', 'aprobada', 'rechazada')`),
+  ],
+);
+
 export const auditEvents = pgTable(
   "audit_events",
   {
@@ -1255,3 +1292,4 @@ export type TaskFile = typeof taskFiles.$inferSelect;
 export type ClassQuiz = typeof classQuizzes.$inferSelect;
 export type QuizQuestion = typeof quizQuestions.$inferSelect;
 export type QuizAttempt = typeof quizAttempts.$inferSelect;
+export type ChangeRequest = typeof changeRequests.$inferSelect;

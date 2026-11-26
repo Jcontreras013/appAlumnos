@@ -85,11 +85,18 @@ export async function canAuthor(
   weekStart: string,
 ): Promise<boolean> {
   if (!auth.schoolId) return false;
+  // La dirección y la secretaría revisan; no planifican (aunque tengan una clase asignada).
+  if (!PLAN_AUTHOR_ROLES.includes(auth.role)) return false;
   if (assignment.teacherUserId === auth.userId) return true;
   return (await coveredDuringWeek(db, auth.schoolId, auth.userId, weekStart)).has(assignment.id);
 }
 
-export const canReview = (auth: AccessClaims) => auth.role === "admin" || auth.role === "coordinador";
+/** Quienes planifican sus clases: los maestros y la coordinación (que a veces da clases). */
+export const PLAN_AUTHOR_ROLES: readonly string[] = ["docente", "coordinador"];
+/** Quienes revisan (aprueban o devuelven): dirección, coordinación y secretaría. */
+export const PLAN_REVIEWER_ROLES = ["admin", "coordinador", "secretaria"] as const;
+export const canReview = (auth: AccessClaims) =>
+  (PLAN_REVIEWER_ROLES as readonly string[]).includes(auth.role);
 
 export function toPlanDto(row: PlanRow, assignment: AssignmentDto, deadline: string): LessonPlanDto {
   return {

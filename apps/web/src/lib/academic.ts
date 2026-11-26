@@ -8,8 +8,11 @@ import type {
   AttendanceInput,
   AttendanceSheetDto,
   AuditEventDto,
+  ChangeRequestDto,
+  ChangeRequestKind,
   ClassChatDto,
   ClassChatMessageDto,
+  ClassChatSummaryDto,
   ClassLinkInput,
   ClassMaterialDto,
   ClassPostDto,
@@ -35,6 +38,7 @@ import type {
   DayOffInput,
   DocumentDto,
   DocumentSummaryDto,
+  EnrollmentSettingsDto,
   FamilyChildDto,
   FamilyChildSummaryDto,
   FollowUpDto,
@@ -230,6 +234,9 @@ export const academic = {
     }),
   updatePeriods: (token: string, input: PeriodsInput) =>
     call<GradingPeriodDto[]>("/periods", { method: "PUT", token, body: input }),
+  enrollmentSettings: (token: string) => call<EnrollmentSettingsDto>("/enrollment-settings", { token }),
+  setTeachersEnroll: (token: string, teachersEnroll: boolean) =>
+    call<EnrollmentSettingsDto>("/enrollment-settings", { method: "PUT", token, body: { teachersEnroll } }),
   setPassingGrade: (token: string, passingGrade: number) =>
     call<{ passingGrade: number }>("/evaluation-settings", { method: "PUT", token, body: { passingGrade } }),
   teacherClasses: (token: string) => call<TeacherClassDto[]>("/teacher/classes", { token }),
@@ -437,6 +444,18 @@ export const academic = {
       body: input,
     }),
   // Chat de la clase
+  // Solicitudes de la secretaría que confirma la dirección
+  createChangeRequest: (token: string, kind: ChangeRequestKind, payload: Record<string, unknown>) =>
+    call<ChangeRequestDto>("/change-requests", { method: "POST", token, body: { kind, payload } }),
+  changeRequests: (token: string, estado: "pendiente" | "todas" = "todas") =>
+    call<ChangeRequestDto[]>(`/change-requests?estado=${estado}`, { token }),
+  pendingChangeRequests: (token: string) =>
+    call<{ count: number }>("/change-requests/pending-count", { token }),
+  approveChangeRequest: (token: string, id: string) =>
+    call<ChangeRequestDto>(`/change-requests/${id}/approve`, { method: "POST", token, body: {} }),
+  rejectChangeRequest: (token: string, id: string, note?: string) =>
+    call<ChangeRequestDto>(`/change-requests/${id}/reject`, { method: "POST", token, body: { note } }),
+  classChats: (token: string) => call<ClassChatSummaryDto[]>("/class-chats", { token }),
   classChat: (token: string, assignmentId: string) =>
     call<ClassChatDto>(`/classes/${assignmentId}/chat`, { token }),
   sendClassChat: (token: string, assignmentId: string, body: string) =>

@@ -49,6 +49,9 @@
 
     <!-- Permisos: internet. Las descargas van a «Descargas» sin pedir acceso al almacenamiento. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Entrar con la huella (o el rostro): la contraseña queda cifrada en el teléfono y solo se abre con ella. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <uses-permission android:name="android.permission.USE_FINGERPRINT" android:maxSdkVersion="27" />
     <!-- Android 13 o más nuevo: la app pide permiso para avisar solo cuando la persona activa los avisos. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Sin publicidad: si alguna librería agrega el permiso del ID de publicidad, se quita. Así la

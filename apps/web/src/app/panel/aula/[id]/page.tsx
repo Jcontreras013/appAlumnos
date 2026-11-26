@@ -15,7 +15,6 @@ import { ServiceError } from "@/lib/api";
 import { requireRole } from "@/lib/dal";
 import { deleteClassMaterialAction, deleteClassPostAction, moveTopicAction } from "../actions";
 import { PublishBadge, StatusBadge } from "../status-badge";
-import { ClassChat } from "./class-chat";
 import { AddMaterial, ConfirmButton, EditPost, MeetingForm, NewPost } from "./class-editor";
 import { NewQuiz } from "./examenes/quiz-forms";
 import { MaterialView } from "./material-view";
@@ -210,7 +209,23 @@ export default async function ClassPage({ params }: PageProps<"/panel/aula/[id]"
         )}
       </Card>
 
-      {chat && <ClassChat assignmentId={room.assignmentId} initial={chat} />}
+      {chat && (
+        // El chat tiene su propio apartado («Chats»): aquí, el acceso directo.
+        <Link
+          href={`/panel/chats/${room.assignmentId}`}
+          className="card flex items-center justify-between gap-3 px-4 py-3 hover:bg-slate-50"
+        >
+          <span className="text-sm font-semibold text-slate-700">
+            Chat de la clase{" "}
+            <span
+              className={`ml-1 rounded-full px-2 py-0.5 text-xs ${chat.enabled ? "bg-brand-50 text-brand-700" : "bg-slate-200 text-slate-600"}`}
+            >
+              {chat.enabled ? "Abierto" : "Cerrado"}
+            </span>
+          </span>
+          <span className="text-sm font-medium text-brand-700">Abrir el chat →</span>
+        </Link>
+      )}
 
       <Card title="Temas" action={edit ? <NewPost assignmentId={room.assignmentId} kind="tema" /> : null}>
         {room.topics.length === 0 ? (

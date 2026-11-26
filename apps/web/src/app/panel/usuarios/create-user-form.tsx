@@ -13,13 +13,20 @@ export function CreateUserForm() {
   return (
     <form action={action} className="space-y-4" noValidate>
       <FormAlert state={state} />
-      <Field name="name" label="Nombre completo" autoComplete="off" required state={state} />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field name="firstNames" label="Nombres" autoComplete="off" required state={state} />
+        <Field name="lastNames" label="Apellidos" autoComplete="off" required state={state} />
+      </div>
+      <p className="-mt-2 text-xs text-slate-500">
+        El usuario se crea solo: la inicial del nombre y el primer apellido (Lucía Paz Mejía → lpaz). Si ya
+        existe, se usa también el segundo apellido.
+      </p>
       <Field
         name="nationalId"
-        label="Número de identidad"
+        label="Número de identidad (opcional)"
         placeholder="0801-1990-01234"
         autoComplete="off"
-        hint="Con su identidad (o su correo) entra a la plataforma."
+        hint="También puede entrar con su identidad o su correo."
         state={state}
       />
       <Field name="email" label="Correo (opcional)" type="email" autoComplete="off" state={state} />

@@ -24,6 +24,11 @@ import { formValues, fromServiceError, fromZodError, runFormAction } from "@/lib
 import { readStudentSpreadsheet, SpreadsheetError } from "@/lib/spreadsheet";
 
 const writer = () => requireRole("admin", "secretaria");
+/**
+ * Registrar, matricular y corregir datos: la oficina, y el maestro si la dirección activó la
+ * matrícula por maestros (el servicio académico revisa que sea en sus secciones).
+ */
+const enroller = () => requireRole("admin", "secretaria", "docente");
 
 const STUDENT_FIELDS = [
   "firstNames",
@@ -40,7 +45,7 @@ const guardianFrom = (values: Record<string, string>, prefix: string) =>
   Object.fromEntries(GUARDIAN_FIELDS.map((f) => [f, values[`${prefix}${f}`]]));
 
 export async function createStudentAction(_prev: FormState, formData: FormData): Promise<FormState> {
-  const { accessToken } = await writer();
+  const { accessToken } = await enroller();
   const fields = [...STUDENT_FIELDS, ...GUARDIAN_FIELDS.map((f) => `guardian.${f}`), "sectionId"];
   const values = formValues(formData, fields);
   const parsed = createStudentInputSchema.safeParse({
@@ -73,7 +78,7 @@ export async function updateStudentAction(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const { accessToken } = await writer();
+  const { accessToken } = await enroller();
   return runFormAction(formData, {
     schema: studentFieldsSchema,
     fields: STUDENT_FIELDS,
@@ -90,7 +95,7 @@ export async function addGuardianAction(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const { accessToken } = await writer();
+  const { accessToken } = await enroller();
   return runFormAction(formData, {
     schema: guardianInputSchema,
     fields: [...GUARDIAN_FIELDS, "isPrimary"],
@@ -107,7 +112,7 @@ const guardianTarget = z.object({ studentId: z.uuid(), guardianId: z.uuid() });
 
 /** Corregir los datos de un responsable (valen para todos sus hijos en el centro) y su parentesco. */
 export async function updateGuardianAction(_prev: FormState, formData: FormData): Promise<FormState> {
-  const { accessToken } = await writer();
+  const { accessToken } = await enroller();
   const { studentId, guardianId } = guardianTarget.parse({
     studentId: formData.get("studentId"),
     guardianId: formData.get("id"),
@@ -124,14 +129,14 @@ export async function updateGuardianAction(_prev: FormState, formData: FormData)
 }
 
 export async function setPrimaryGuardianAction(formData: FormData) {
-  const { accessToken } = await writer();
+  const { accessToken } = await enroller();
   const { studentId, guardianId } = guardianTarget.parse(Object.fromEntries(formData));
   await academic.setPrimaryGuardian(accessToken, studentId, guardianId);
   revalidatePath(`/panel/alumnos/${studentId}`);
 }
 
 export async function removeGuardianAction(formData: FormData) {
-  const { accessToken } = await writer();
+  const { accessToken } = await enroller();
   const { studentId, guardianId } = guardianTarget.parse(Object.fromEntries(formData));
   await academic.removeGuardian(accessToken, studentId, guardianId);
   revalidatePath(`/panel/alumnos/${studentId}`);
@@ -142,7 +147,7 @@ export async function enrollAction(
   _prev: FormState,
   formData: FormData,
 ): Promise<FormState> {
-  const { accessToken } = await writer();
+  const { accessToken } = await enroller();
   return runFormAction(formData, {
     schema: enrollInputSchema,
     fields: ["sectionId"],
@@ -325,4 +330,11 @@ export async function sectionStudentAccessAction(
   } catch (err) {
     return fromServiceError(err);
   }
+}
+
+/** La dirección activa o desactiva la matrícula por los maestros. */
+export async function setTeachersEnrollAction(formData: FormData) {
+  const { accessToken } = await requireRole("admin");
+  await academic.setTeachersEnroll(accessToken, formData.get("teachersEnroll") === "si");
+  revalidatePath("/panel", "layout");
 }

@@ -14,6 +14,8 @@ export interface NavItem {
   unreadBadge?: boolean;
   /** Título de la sección del menú (Mis clases, Alumnos, Personal, El centro). */
   group?: string;
+  /** Un número fijo al lado (por ejemplo, solicitudes por confirmar). */
+  badge?: number;
 }
 
 /** Contador de mensajes sin leer: se consulta cada medio minuto mientras el panel está a la vista. */
@@ -36,10 +38,13 @@ export function Nav({
   items,
   upcoming,
   unreadMessages = 0,
+  vertical = false,
 }: {
   items: NavItem[];
   upcoming: UpcomingItem[];
   unreadMessages?: number;
+  /** Siempre en columna con sus secciones (el menú lateral del celular). */
+  vertical?: boolean;
 }) {
   const pathname = usePathname();
   const unread = useUnreadMessages(
@@ -54,14 +59,21 @@ export function Nav({
     .filter(matches)
     .sort((a, b) => b.length - a.length)[0];
   return (
-    <nav aria-label="Principal" className="flex gap-1 overflow-x-auto md:flex-col md:overflow-visible">
+    <nav
+      aria-label="Principal"
+      className={
+        vertical ? "flex flex-col gap-1" : "flex gap-1 overflow-x-auto md:flex-col md:overflow-visible"
+      }
+    >
       {items.map((item, i) => {
         const active = item.href === activeHref;
         const heading = item.group && item.group !== items[i - 1]?.group ? item.group : null;
         return (
           <Fragment key={item.href}>
             {heading && (
-              <p className="hidden px-3 pb-1 pt-4 text-xs font-semibold uppercase tracking-wide text-slate-400 md:block">
+              <p
+                className={`px-3 pb-1 pt-4 text-xs font-semibold uppercase tracking-wide text-slate-400 ${vertical ? "block" : "hidden md:block"}`}
+              >
                 {heading}
               </p>
             )}
@@ -75,6 +87,12 @@ export function Nav({
               }`}
             >
               {item.label}
+              {Boolean(item.badge) && (
+                <span className="grid h-5 min-w-5 place-items-center rounded-full bg-amber-500 px-1.5 text-xs font-semibold text-white">
+                  {item.badge}
+                  <span className="sr-only"> por confirmar</span>
+                </span>
+              )}
               {item.unreadBadge && unread > 0 && (
                 <span className="grid h-5 min-w-5 place-items-center rounded-full bg-brand-600 px-1.5 text-xs font-semibold text-white">
                   {unread > 99 ? "99+" : unread}
@@ -86,7 +104,7 @@ export function Nav({
         );
       })}
       {upcoming.length > 0 && (
-        <div className="hidden md:mt-6 md:block">
+        <div className={vertical ? "mt-6" : "hidden md:mt-6 md:block"}>
           <p className="px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">
             Próximamente
           </p>

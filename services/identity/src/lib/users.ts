@@ -1,9 +1,10 @@
 import { badRequest, conflict, isUniqueViolation, notFound } from "@escolar/service-kit";
-import type { Role, SchoolDto, UserDto } from "@escolar/shared";
+import type { loginIdentifier, Role, SchoolDto, UserDto } from "@escolar/shared";
 import { and, eq, isNull } from "drizzle-orm";
 import type { DbOrTx } from "../db/client";
 import { type Membership, memberships, type School, type User, users } from "../db/schema";
 import { hashPassword, temporaryPassword } from "./passwords";
+import { ensureUsername, freeUsername, isStaffRole, nameParts, usernameCandidates } from "./usernames";
 
 /** La persona vista desde un acceso concreto (su rol y centro en esa sesión o ese listado). */
 export function toUserDto(user: User, membership: Membership): UserDto {
@@ -13,6 +14,7 @@ export function toUserDto(user: User, membership: Membership): UserDto {
     name: user.name,
     email: user.email,
     nationalId: user.nationalId,
+    username: user.username,
     mustChangePassword: user.mustChangePassword,
     role: membership.role,
     active: user.active && membership.active,
@@ -37,6 +39,9 @@ export function toSchoolDto(school: School): SchoolDto {
 
 export interface AccountInput {
   name: string;
+  /** Nombre(s) y apellidos por separado, para armar el usuario del personal. */
+  firstNames?: string | null;
+  lastNames?: string | null;
   email?: string | null;
   nationalId?: string | null;
   /** Sin contraseña: se genera una temporal que hay que cambiar al entrar. */
@@ -57,6 +62,14 @@ export interface Provisioned {
   /** Solo para cuentas nuevas sin contraseña elegida. */
   temporaryPassword: string | null;
 }
+
+/** Condición para buscar la cuenta con lo que la persona escribió al entrar (ver loginIdentifier). */
+export const loginWhere = (id: ReturnType<typeof loginIdentifier>) =>
+  "nationalId" in id
+    ? eq(users.nationalId, id.nationalId)
+    : "username" in id
+      ? eq(users.username, id.username)
+      : eq(users.email, id.email);
 
 /** La cuenta de una persona por su identidad o su correo (conflicto si son de personas distintas). */
 export async function findAccount(
@@ -89,28 +102,38 @@ const sameScope = (input: AccountInput) =>
 export async function provisionAccount(db: DbOrTx, input: AccountInput): Promise<Provisioned> {
   const email = input.email ? input.email.trim().toLowerCase() : null;
   const nationalId = input.nationalId ?? null;
-  if (!email && !nationalId) throw badRequest("Hace falta el correo o el número de identidad");
-  let user = await findAccount(db, { email, nationalId });
+  // El personal de un centro entra con su usuario automático: el correo y la identidad son opcionales.
+  const staff = Boolean(input.schoolId) && isStaffRole(input.role);
+  if (!email && !nationalId && !staff) throw badRequest("Hace falta el correo o el número de identidad");
+  let user = email || nationalId ? await findAccount(db, { email, nationalId }) : undefined;
   const linkedExisting = Boolean(user);
   let temporary: string | null = null;
 
   if (!user) {
     const password = input.password ?? temporaryPassword();
     if (!input.password) temporary = password;
-    try {
-      [user] = await db
-        .insert(users)
-        .values({
-          name: input.name,
-          email,
-          nationalId,
-          passwordHash: await hashPassword(password),
-          mustChangePassword: !input.password,
-        })
-        .returning();
-    } catch (err) {
-      if (isUniqueViolation(err)) throw conflict("Ya existe una cuenta con ese correo o esa identidad");
-      throw err;
+    const passwordHash = await hashPassword(password);
+    const candidates = staff ? usernameCandidates(nameParts(input)) : [];
+    // Si otra persona toma el mismo usuario en ese instante, se intenta con el siguiente libre.
+    for (let attempt = 0; !user && attempt < 3; attempt++) {
+      const username = staff ? await freeUsername(db, candidates) : null;
+      try {
+        [user] = await db
+          .insert(users)
+          .values({
+            name: input.name,
+            email,
+            nationalId,
+            username,
+            passwordHash,
+            mustChangePassword: !input.password,
+          })
+          .returning();
+      } catch (err) {
+        if (!isUniqueViolation(err)) throw err;
+        const taken = await findAccount(db, { email, nationalId });
+        if (taken || !staff) throw conflict("Ya existe una cuenta con ese correo o esa identidad");
+      }
     }
   } else if ((nationalId && !user.nationalId) || (email && !user.email)) {
     // Se completa el dato que le faltaba (p. ej. tenía correo y ahora también entra con su identidad).
@@ -121,6 +144,8 @@ export async function provisionAccount(db: DbOrTx, input: AccountInput): Promise
       .returning();
   }
   if (!user) throw new Error("No se pudo crear la cuenta");
+  // Personal que ya tenía cuenta (por ejemplo, entraba con su correo): también recibe su usuario.
+  if (staff) user = await ensureUsername(db, user, input);
 
   const [existing] = await db
     .select()

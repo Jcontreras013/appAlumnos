@@ -2,6 +2,7 @@ import { FOLLOW_UP_LABELS, formatDay, isIsoDate, RISK_RULES, todayInHonduras } f
 import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { Fold, FoldTag } from "@/components/fold";
 import { FollowUpEditor } from "@/components/follow-up-editor";
 import { Kpi } from "@/components/kpi";
 import { FilterBar, FilterEmpty, FilterRow, FilterScope } from "@/components/quick-filter";
@@ -128,6 +129,8 @@ export default async function FollowUpPage({ searchParams }: PageProps<"/panel/s
 
       <Card
         title="Alumnos en riesgo"
+        count={`${studentsAtRisk.length} ${studentsAtRisk.length === 1 ? "alumno" : "alumnos"}`}
+        alert={studentsAtRisk.length > 0}
         hint={`Asistencia de los últimos ${RISK_RULES.attendanceWindowDays} días y proyección de notas del parcial`}
       >
         {studentsAtRisk.length === 0 ? (
@@ -193,6 +196,7 @@ export default async function FollowUpPage({ searchParams }: PageProps<"/panel/s
 
       <Card
         title="Avance de notas por clase"
+        count={`${items.length} ${items.length === 1 ? "clase" : "clases"}`}
         hint="Completa = se repartieron los 100 puntos y todos los alumnos tienen nota"
       >
         {items.length === 0 ? (
@@ -310,15 +314,27 @@ function Title({ subtitle }: { subtitle: ReactNode }) {
   );
 }
 
-function Card({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
+/** Cada tabla en un desplegable: se ve cuántos hay sin que la pantalla se sature. */
+function Card({
+  title,
+  hint,
+  count,
+  alert = false,
+  children,
+}: {
+  title: string;
+  hint?: string;
+  count: string;
+  alert?: boolean;
+  children: ReactNode;
+}) {
   return (
-    <section className="card overflow-hidden">
-      <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
-        <h2 className="text-sm font-semibold text-slate-700">{title}</h2>
-        {hint && <p className="text-xs text-slate-500">{hint}</p>}
-      </div>
+    <Fold title={title} summary={<FoldTag tone={alert ? "alert" : "neutral"}>{count}</FoldTag>}>
+      {hint && (
+        <p className="border-b border-slate-100 bg-slate-50 px-4 py-2 text-xs text-slate-500">{hint}</p>
+      )}
       {children}
-    </section>
+    </Fold>
   );
 }
 
