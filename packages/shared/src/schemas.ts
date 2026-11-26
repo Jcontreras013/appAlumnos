@@ -25,18 +25,24 @@ export const passwordSchema = z
  */
 export const loginInputSchema = z.object({
   email: z
-    .string({ error: "Escribe tu correo o tu número de identidad" })
+    .string({ error: "Escribe tu usuario, tu correo o tu número de identidad" })
     .trim()
-    .min(3, { error: "Escribe tu correo o tu número de identidad" })
+    .min(3, { error: "Escribe tu usuario, tu correo o tu número de identidad" })
     .max(200),
   password: z.string({ error: "Escribe tu contraseña" }).min(1, { error: "Escribe tu contraseña" }).max(200),
 });
 
-/** "0801-1985-01234" o "0801198501234" => identidad; cualquier otra cosa => correo en minúsculas. */
-export function loginIdentifier(value: string): { nationalId: string } | { email: string } {
+/**
+ * "0801-1985-01234" o "0801198501234" => identidad; con arroba => correo; letras y números sin
+ * arroba («lpaz») => usuario del personal. Todo en minúsculas.
+ */
+export function loginIdentifier(
+  value: string,
+): { nationalId: string } | { email: string } | { username: string } {
   const trimmed = value.trim();
   const digits = trimmed.replace(/[\s-]/g, "");
   if (/^\d{13}$/.test(digits)) return { nationalId: digits };
+  if (/^[a-zA-Z0-9]{2,40}$/.test(trimmed)) return { username: trimmed.toLowerCase() };
   return { email: trimmed.toLowerCase() };
 }
 
@@ -85,6 +91,9 @@ const blankToUndefined = (v: unknown) => (typeof v === "string" && v.trim() === 
 export const createUserInputSchema = z
   .object({
     name: personNameSchema,
+    /** Nombre(s) y apellidos por separado: con ellos se arma el usuario (inicial + primer apellido). */
+    firstNames: z.preprocess(blankToUndefined, z.string().trim().max(100).optional()),
+    lastNames: z.preprocess(blankToUndefined, z.string().trim().max(100).optional()),
     email: z.preprocess(blankToUndefined, emailSchema.optional()),
     nationalId: z.preprocess(
       blankToUndefined,
@@ -98,7 +107,8 @@ export const createUserInputSchema = z
     password: z.preprocess(blankToUndefined, passwordSchema.optional()),
     role: z.enum(SCHOOL_ROLES, { error: "Rol inválido" }),
   })
-  .refine((v) => v.email || v.nationalId, {
+  .refine((v) => v.email || v.nationalId || STAFF_ROLES.includes(v.role as (typeof STAFF_ROLES)[number]), {
+    // El personal entra con su usuario automático; las demás cuentas, con correo o identidad.
     error: "Escribe el correo o el número de identidad (con eso entrará)",
     path: ["nationalId"],
   });

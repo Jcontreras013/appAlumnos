@@ -32,7 +32,7 @@ import {
 } from "../db/schema";
 import type { IdentityDeps } from "../deps";
 import { audit } from "../lib/audit";
-import { resetToTemporary, toUserDto } from "../lib/users";
+import { loginWhere, resetToTemporary, toUserDto } from "../lib/users";
 
 const idParams = z.object({ id: z.uuid() });
 const loginSchema = z.object({
@@ -186,10 +186,7 @@ export async function accountRoutes(app: FastifyInstance, { db, tokens }: Identi
     async (request, reply) => {
       const { login } = parseOrThrow(loginSchema, request.body);
       const who = loginIdentifier(login);
-      const [user] = await db
-        .select()
-        .from(users)
-        .where("nationalId" in who ? eq(users.nationalId, who.nationalId) : eq(users.email, who.email));
+      const [user] = await db.select().from(users).where(loginWhere(who));
       if (!user) throw notFound("No hay ninguna cuenta con ese correo o identidad");
       if (user.id === request.auth.userId) {
         throw forbidden("Tu propia verificación la restablece otra persona del equipo");
@@ -230,10 +227,7 @@ export async function accountRoutes(app: FastifyInstance, { db, tokens }: Identi
   app.post("/accounts/lookup", platformTeam, async (request): Promise<AccountLookupDto> => {
     const { login } = parseOrThrow(loginSchema, request.body);
     const who = loginIdentifier(login);
-    const [user] = await db
-      .select()
-      .from(users)
-      .where("nationalId" in who ? eq(users.nationalId, who.nationalId) : eq(users.email, who.email));
+    const [user] = await db.select().from(users).where(loginWhere(who));
     if (!user) throw notFound("No hay ninguna cuenta con ese correo o identidad");
     const rows = await db
       .select({

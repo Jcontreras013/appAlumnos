@@ -43,7 +43,8 @@ export default async function PlanningPage({ searchParams }: PageProps<"/panel/p
   const isOffice = role === "admin" || role === "coordinador" || role === "secretaria";
 
   const [mine, board] = await Promise.all([
-    role === "secretaria" ? null : academic.myPlans(token, week).catch(() => null),
+    // La dirección y la secretaría revisan; no planifican.
+    role === "secretaria" || role === "admin" ? null : academic.myPlans(token, week).catch(() => null),
     isOffice ? academic.planBoard(token, week).catch(() => null) : null,
   ]);
   const href = (semana: string, estado: Filter = filter) =>

@@ -13,8 +13,8 @@ import { RoleEditor } from "./role-editor";
 export const metadata: Metadata = { title: "Usuarios" };
 
 /** Lo que se busca de cada persona: nombre, identidad (con o sin guiones), correo y cargo. */
-const userText = (u: Pick<UserDto, "name" | "nationalId" | "email" | "role">) =>
-  [u.name, u.nationalId, u.email, ROLE_LABELS[u.role]].filter(Boolean).join(" ");
+const userText = (u: Pick<UserDto, "name" | "nationalId" | "email" | "role" | "username">) =>
+  [u.name, u.username, u.nationalId, u.email, ROLE_LABELS[u.role]].filter(Boolean).join(" ");
 
 export default async function UsersPage() {
   const session = await requireRole("admin");
@@ -70,6 +70,13 @@ export default async function UsersPage() {
                       <td className="px-4 py-3">
                         <p className="font-medium text-slate-900">{u.name}</p>
                         <p className="text-xs text-slate-500">
+                          {u.username && (
+                            <>
+                              Usuario{" "}
+                              <span className="font-mono font-semibold text-slate-700">{u.username}</span>
+                              {(u.nationalId || u.email) && " · "}
+                            </>
+                          )}
                           {u.nationalId ? formatNationalId(u.nationalId) : u.email}
                         </p>
                       </td>

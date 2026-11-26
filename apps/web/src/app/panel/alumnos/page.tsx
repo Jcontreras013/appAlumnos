@@ -1,9 +1,11 @@
 import { formatNationalId, formatPhone } from "@escolar/shared";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { academic, type StudentFilters } from "@/lib/academic";
 import { requireRole } from "@/lib/dal";
 import { SectionAccess } from "./section-access";
+import { TeachersEnrollToggle } from "./teachers-enroll";
 
 export const metadata: Metadata = { title: "Alumnos" };
 
@@ -16,8 +18,15 @@ const ESTADOS = [
 ] as const;
 
 export default async function StudentsPage({ searchParams }: PageProps<"/panel/alumnos">) {
-  const session = await requireRole("admin", "secretaria", "coordinador");
-  const canEdit = session.user.role !== "coordinador";
+  const session = await requireRole("admin", "secretaria", "coordinador", "docente");
+  const role = session.user.role;
+  // El maestro entra si la dirección activó la matrícula por maestros: ve sus secciones y los alumnos
+  // que todavía no tienen matrícula este año, y registra alumnos nuevos en sus secciones.
+  const teacher = role === "docente";
+  const settings =
+    teacher || role === "admin" ? await academic.enrollmentSettings(session.accessToken) : null;
+  if (teacher && !settings?.teachersEnroll) notFound();
+  const canEdit = role === "admin" || role === "secretaria";
   const params = await searchParams;
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
 
@@ -32,10 +41,11 @@ export default async function StudentsPage({ searchParams }: PageProps<"/panel/a
     limit: PAGE_SIZE,
     offset: (page - 1) * PAGE_SIZE,
   };
-  const [{ items, total }, sections] = await Promise.all([
+  const [{ items, total }, allSections] = await Promise.all([
     academic.listStudents(session.accessToken, filters),
     academic.listSections(session.accessToken),
   ]);
+  const sections = teacher ? allSections.filter((s) => settings?.mySectionIds.includes(s.id)) : allSections;
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const selectedSection = sections.find((s) => s.id === filters.sectionId);
   const imported = one(params.importados);
@@ -50,7 +60,12 @@ export default async function StudentsPage({ searchParams }: PageProps<"/panel/a
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Alumnos</h1>
+          <h1 className="text-2xl font-semibold text-slate-900">{teacher ? "Matrícula" : "Alumnos"}</h1>
+          {teacher && (
+            <p className="mt-1 text-sm text-slate-500">
+              Alumnos de tus secciones y los que todavía no tienen matrícula este año.
+            </p>
+          )}
           <p className="mt-1 text-sm text-slate-500">
             {total} {total === 1 ? "alumno" : "alumnos"}
             {filters.q || filters.sectionId || estado !== "todos"
@@ -58,17 +73,21 @@ export default async function StudentsPage({ searchParams }: PageProps<"/panel/a
               : " registrados"}
           </p>
         </div>
-        {canEdit && (
+        {(canEdit || teacher) && (
           <div className="flex gap-2">
-            <Link href="/panel/alumnos/importar" className="btn-secondary">
-              Importar desde Excel
-            </Link>
+            {canEdit && (
+              <Link href="/panel/alumnos/importar" className="btn-secondary">
+                Importar desde Excel
+              </Link>
+            )}
             <Link href="/panel/alumnos/nuevo" className="btn-primary">
               Nuevo alumno
             </Link>
           </div>
         )}
       </div>
+
+      {role === "admin" && settings && <TeachersEnrollToggle enabled={settings.teachersEnroll} />}
 
       {imported && (
         <div
@@ -94,7 +113,7 @@ export default async function StudentsPage({ searchParams }: PageProps<"/panel/a
             aria-label="Sección"
             className="input"
           >
-            <option value="">Todas las secciones</option>
+            <option value="">{teacher ? "Todas mis secciones" : "Todas las secciones"}</option>
             {sections.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.label}

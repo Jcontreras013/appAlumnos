@@ -113,6 +113,8 @@ export async function onboardingRoutes(app: FastifyInstance, { db }: IdentityDep
           if (r.status === "ya_tiene_acceso" || !r.role) continue;
           const result = await provisionAccount(tx, { name: r.name, ...r.ids, role: r.role, schoolId });
           r.temporaryPassword = result.temporaryPassword;
+          // En la hoja de accesos va el usuario automático (con él entra el personal).
+          if (result.user.username) r.login = result.user.username;
         }
         await audit(tx, request, {
           action: "users.imported",

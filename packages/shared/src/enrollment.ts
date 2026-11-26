@@ -270,6 +270,13 @@ export interface StudentListItemDto {
   primaryGuardian: Pick<GuardianDto, "fullName" | "phone"> | null;
 }
 
+/** Matrícula por los maestros: si la dirección la activó y, para un maestro, sus secciones. */
+export interface EnrollmentSettingsDto {
+  teachersEnroll: boolean;
+  /** Secciones del año vigente donde quien pregunta da clase (vacío para la oficina). */
+  mySectionIds: string[];
+}
+
 export interface StudentDetailDto {
   id: string;
   firstNames: string;

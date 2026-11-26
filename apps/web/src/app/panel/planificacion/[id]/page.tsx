@@ -97,7 +97,8 @@ export default async function PlanPage({ params }: PageProps<"/panel/planificaci
         <section className="space-y-4">
           {plan.status === "enviada" && !canReview && (
             <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900">
-              En revisión: la dirección o coordinación la revisará. Si la devuelven, podrás corregirla aquí.
+              En revisión: la dirección, la coordinación o la secretaría la revisará. Si la devuelven, podrás
+              corregirla aquí.
             </p>
           )}
           {plan.fields.map((field) => {

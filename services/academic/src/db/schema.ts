@@ -474,10 +474,15 @@ export const substitutions = pgTable(
 
 // ───────────────────────────── Evaluación y asistencia ─────────────────────────────
 
-/** Configuración de evaluación del centro (por ahora, la nota mínima de aprobación). */
+/** Configuración del centro: la nota mínima de aprobación y si los maestros matriculan. */
 export const evaluationSettings = pgTable("evaluation_settings", {
   schoolId: uuid("school_id").primaryKey(),
   passingGrade: integer("passing_grade").notNull().default(DEFAULT_PASSING_GRADE),
+  /**
+   * La dirección deja que cada maestro matricule a los alumnos de las secciones donde da clase
+   * (en Honduras es común en tiempo de matrícula). Retiros y traslados siguen en la secretaría.
+   */
+  teachersEnroll: boolean("teachers_enroll").notNull().default(false),
   updatedAt: updatedAt(),
 });
 

@@ -279,3 +279,25 @@ describe("tablero de coordinación", () => {
     expect((await ctx.call(other, "GET", `/plans/${recent[0]?.id}`)).status).toBe(404);
   });
 });
+
+describe("quién planifica y quién revisa", () => {
+  it("la secretaría revisa: aprueba una planificación enviada", async () => {
+    const created = await create(ceci, { assignmentId: math1B.id, weekStart: NEXT });
+    const id = created.body.plan.id;
+    await ctx.call(ceci, "POST", `/plans/${id}/submit`, { content: fullContent });
+    const seen = await ctx.call<PlanDetailDto>(secretary, "GET", `/plans/${id}`);
+    expect(seen.body).toMatchObject({ canEdit: false, canReview: true });
+    const res = await ctx.call<PlanDetailDto>(secretary, "POST", `/plans/${id}/review`, {
+      decision: "aprobar",
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.plan).toMatchObject({ status: "aprobada", reviewerName: "Sofía" });
+  });
+
+  it("la dirección y la secretaría no planifican: su semana viene vacía", async () => {
+    for (const who of [director, secretary]) {
+      const mine = await ctx.call<PlanBoardDto>(who, "GET", `/plans/mine?semana=${WEEK}`);
+      expect(mine.body.rows).toEqual([]);
+    }
+  });
+});

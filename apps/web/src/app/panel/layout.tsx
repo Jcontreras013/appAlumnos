@@ -1,6 +1,7 @@
 import { isPortalRole, isRegionalRole, MESSAGING_ROLES, ROLE_LABELS, type Role } from "@escolar/shared";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { BiometricOffer } from "@/components/biometric-offer";
 import { ChangePasswordForm } from "@/components/change-password-form";
 import { IdleLogout } from "@/components/idle-logout";
 import { LogoutButton } from "@/components/logout-button";
@@ -9,6 +10,7 @@ import { NativeAppBridge } from "@/components/native-app-bridge";
 import { Nav, type NavItem } from "@/components/nav";
 import { OfflineAgent } from "@/components/offline";
 import { SchoolLogo } from "@/components/school-logo";
+import { academic } from "@/lib/academic";
 import { APP_MARK, APP_NAME } from "@/lib/brand";
 import { getSession } from "@/lib/dal";
 import { identity } from "@/lib/identity";
@@ -33,6 +35,11 @@ export default async function PanelLayout({ children }: { children: ReactNode })
   const unreadMessages = messaging
     ? ((await identity.unreadMessages(accessToken).catch(() => null))?.conversations ?? 0)
     : 0;
+  // Si la dirección activó la matrícula por maestros, el maestro ve «Matrícula» en el menú.
+  const teachersEnroll =
+    !gated && is("docente")
+      ? ((await academic.enrollmentSettings(accessToken).catch(() => null))?.teachersEnroll ?? false)
+      : false;
   const items: NavItem[] = [];
   if (isRegionalRole(user.role)) {
     items.push({ href: "/panel/region", label: "Tablero de centros" });
@@ -66,6 +73,7 @@ export default async function PanelLayout({ children }: { children: ReactNode })
     add("Mis clases", "/panel/conducta", "Conducta");
   }
   if (is("admin", "secretaria", "coordinador")) add("Alumnos", "/panel/alumnos", "Alumnos y familias");
+  if (teachersEnroll) add("Alumnos", "/panel/alumnos", "Matrícula");
   if (is("admin", "secretaria")) add("Alumnos", "/panel/traslados", "Traslados");
   if (is("admin", "coordinador", "secretaria"))
     add("Alumnos", "/panel/seguimiento", "Seguimiento del centro");
@@ -170,6 +178,7 @@ export default async function PanelLayout({ children }: { children: ReactNode })
           </div>
         </header>
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-8 print:max-w-none print:p-0">
+          {!gated && <BiometricOffer />}
           {unlicensed ? (
             <div className="max-w-2xl space-y-4" role="alert">
               <h1 className="text-2xl font-semibold text-slate-900">

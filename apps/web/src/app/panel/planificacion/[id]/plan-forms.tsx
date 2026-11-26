@@ -316,7 +316,7 @@ function ActionButton({
   );
 }
 
-/** Revisión de la dirección o coordinación: aprobar, o devolver explicando qué corregir. */
+/** Revisión de la dirección, la coordinación o la secretaría: aprobar, o devolver explicando qué corregir. */
 export function ReviewForm({ planId }: { planId: string }) {
   const [state, action] = useActionState(reviewPlanAction, initialFormState);
   return (

@@ -46,6 +46,8 @@ import {
   canReview,
   coveredDuringWeek,
   deadlineOf,
+  PLAN_AUTHOR_ROLES,
+  PLAN_REVIEWER_ROLES,
   planHistory,
   recordEvent,
   templateOf,
@@ -60,13 +62,13 @@ const STAFF = ["admin", "coordinador", "secretaria", "docente"] as const;
 
 /**
  * Planificación semanal: el maestro (o su sustituto) llena la plantilla del centro para cada clase y
- * la envía antes de la fecha límite; la dirección o coordinación la aprueba o la devuelve con
- * observaciones. Cada paso queda en el historial.
+ * la envía antes de la fecha límite; la dirección, la coordinación o la secretaría la aprueba o la
+ * devuelve con observaciones (la dirección y la secretaría no planifican). Cada paso queda en el historial.
  */
 export async function planRoutes(app: FastifyInstance, { db, today, planDrafter }: AcademicDeps) {
   const staff = { preHandler: [app.authenticate, requireRole(...STAFF)] };
   const managers = { preHandler: [app.authenticate, requireRole("admin", "coordinador")] };
-  const office = { preHandler: [app.authenticate, requireRole("admin", "coordinador", "secretaria")] };
+  const office = { preHandler: [app.authenticate, requireRole(...PLAN_REVIEWER_ROLES)] };
 
   async function loadPlan(tx: DbOrTx, request: FastifyRequest, id: string) {
     const schoolId = tenantOf(request);
@@ -153,8 +155,10 @@ export async function planRoutes(app: FastifyInstance, { db, today, planDrafter 
     const weekStart = semana ?? mondayOf(today());
     const year = await requireCurrentYear(db, schoolId);
     const covered = await coveredDuringWeek(db, schoolId, request.auth.userId, weekStart);
+    // La dirección y la secretaría no planifican: su semana viene vacía (revisan en el tablero).
+    const plans = PLAN_AUTHOR_ROLES.includes(request.auth.role);
     const mine = (await listAssignments(db, schoolId, { schoolYearId: year.id })).filter(
-      (a) => a.teacherUserId === request.auth.userId || covered.has(a.id),
+      (a) => plans && (a.teacherUserId === request.auth.userId || covered.has(a.id)),
     );
     return weekBoard(db, schoolId, mine, weekStart, today());
   });
@@ -391,7 +395,7 @@ export async function planRoutes(app: FastifyInstance, { db, today, planDrafter 
     return detail(db, request, id);
   });
 
-  app.post("/plans/:id/review", managers, async (request): Promise<PlanDetailDto> => {
+  app.post("/plans/:id/review", office, async (request): Promise<PlanDetailDto> => {
     const { id } = parseOrThrow(idParams, request.params);
     const input = parseOrThrow(reviewPlanInputSchema, request.body);
     await db.transaction(async (tx) => {

@@ -28,7 +28,7 @@ import { publicJwks } from "../lib/keys";
 import { hashPassword, verifyPassword } from "../lib/passwords";
 import type { TokenService } from "../lib/tokens";
 import { hashRecoveryCode, newRecoveryCodes, newTotpSecret, otpauthUrl, verifyTotp } from "../lib/totp";
-import { toSchoolDto, toUserDto } from "../lib/users";
+import { loginWhere, toSchoolDto, toUserDto } from "../lib/users";
 
 /** Intentos fallidos seguidos antes de bloquear la cuenta, y por cuánto tiempo. */
 export const MAX_FAILED_LOGINS = 5;
@@ -107,11 +107,7 @@ export async function authRoutes(app: FastifyInstance, { db, keys, tokens, setti
     async (request): Promise<LoginResultDto> => {
       const input = parseOrThrow(loginInputSchema, request.body);
       const id = loginIdentifier(input.email);
-      const [user] = await db
-        .select()
-        .from(users)
-        .where("nationalId" in id ? eq(users.nationalId, id.nationalId) : eq(users.email, id.email))
-        .limit(1);
+      const [user] = await db.select().from(users).where(loginWhere(id)).limit(1);
       // Cuenta bloqueada por intentos fallidos: ni se mira la contraseña (pero se tarda lo mismo).
       const locked = Boolean(user?.lockedUntil && user.lockedUntil > new Date());
       const passwordOk = locked

@@ -9,6 +9,7 @@ import {
 } from "@escolar/service-kit";
 import {
   createStudentInputSchema,
+  type EnrollmentSettingsDto,
   enrollInputSchema,
   guardianInputSchema,
   guardianUpdateSchema,
@@ -17,16 +18,31 @@ import {
   studentFieldsSchema,
   withdrawInputSchema,
 } from "@escolar/shared";
-import { and, asc, eq, ilike, isNull, or, type SQL, sql } from "drizzle-orm";
+import { and, asc, eq, ilike, inArray, isNull, ne, or, type SQL, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { enrollments, grades, guardians, sections, studentGuardians, students } from "../db/schema";
+import {
+  enrollments,
+  evaluationSettings,
+  grades,
+  guardians,
+  sections,
+  studentGuardians,
+  students,
+} from "../db/schema";
 import type { AcademicDeps } from "../deps";
 import { audit } from "../lib/audit";
 import { enrollStudent } from "../lib/enroll";
 import { countActive, findCurrentYear, getSection, lockSection, sectionLabel } from "../lib/queries";
 import { findOrCreateGuardian, getStudentDetail, insertStudent, studentValues } from "../lib/students";
+import {
+  assertTeacherSection,
+  assertTeacherStudent,
+  enrollScope,
+  teacherSectionIds,
+  teachersEnrollOf,
+} from "../lib/teacher-enrollment";
 
 const idParams = z.object({ id: z.uuid() });
 const guardianParams = z.object({ id: z.uuid(), guardianId: z.uuid() });
@@ -38,14 +54,31 @@ const listQuery = z.object({
   offset: z.coerce.number().int().min(0).default(0),
 });
 
-/** Alumnos, responsables y matrícula. Escriben administración y secretaría. */
+/**
+ * Alumnos, responsables y matrícula. Escriben administración y secretaría; si la dirección lo activa,
+ * también cada maestro en las secciones donde da clase (ver lib/teacher-enrollment). Retiros y
+ * traslados siguen siendo de la oficina.
+ */
 export async function studentRoutes(app: FastifyInstance, { db, today }: AcademicDeps) {
-  const read = { preHandler: [app.authenticate, requireRole("admin", "secretaria", "coordinador")] };
-  const write = { preHandler: [app.authenticate, requireRole("admin", "secretaria")] };
+  const read = {
+    preHandler: [app.authenticate, requireRole("admin", "secretaria", "coordinador", "docente")],
+  };
+  const write = { preHandler: [app.authenticate, requireRole("admin", "secretaria", "docente")] };
+  const office = { preHandler: [app.authenticate, requireRole("admin", "secretaria")] };
+  const director = { preHandler: [app.authenticate, requireRole("admin")] };
+  const staffAny = {
+    preHandler: [app.authenticate, requireRole("admin", "coordinador", "secretaria", "docente")],
+  };
+  /** Para un maestro: 403 si no puede tocar a este alumno. */
+  const checkStudent = async (request: Parameters<typeof tenantOf>[0], id: string, edit = false) => {
+    const schoolId = tenantOf(request);
+    await assertTeacherStudent(db, await enrollScope(db, request.auth, schoolId), schoolId, id, { edit });
+  };
 
   app.get("/students", read, async (request): Promise<{ items: StudentListItemDto[]; total: number }> => {
     const schoolId = tenantOf(request);
     const query = parseOrThrow(listQuery, request.query);
+    const scope = await enrollScope(db, request.auth, schoolId);
     const year = await findCurrentYear(db, schoolId);
     const primaryLink = alias(studentGuardians, "primary_link");
     const primaryGuardian = alias(guardians, "primary_guardian");
@@ -66,6 +99,16 @@ export async function studentRoutes(app: FastifyInstance, { db, today }: Academi
     if (query.estado === "matriculados") filters.push(eq(enrollments.status, "activa"));
     if (query.estado === "retirados") filters.push(eq(enrollments.status, "retirada"));
     if (query.estado === "sin_matricula") filters.push(isNull(enrollments.id));
+    // Un maestro ve los alumnos de sus secciones y los que todavía no tienen matrícula este año.
+    if (scope.kind === "teacher") {
+      filters.push(
+        or(
+          and(eq(enrollments.status, "activa"), inArray(enrollments.sectionId, scope.sectionIds)),
+          isNull(enrollments.id),
+          ne(enrollments.status, "activa"),
+        ),
+      );
+    }
 
     const base = db
       .select({
@@ -122,6 +165,7 @@ export async function studentRoutes(app: FastifyInstance, { db, today }: Academi
 
   app.get("/students/:id", read, async (request): Promise<StudentDetailDto> => {
     const { id } = parseOrThrow(idParams, request.params);
+    await checkStudent(request, id);
     return getStudentDetail(db, tenantOf(request), id);
   });
 
@@ -129,6 +173,7 @@ export async function studentRoutes(app: FastifyInstance, { db, today }: Academi
   app.post("/students", write, async (request, reply) => {
     const schoolId = tenantOf(request);
     const input = parseOrThrow(createStudentInputSchema, request.body);
+    assertTeacherSection(await enrollScope(db, request.auth, schoolId), input.sectionId);
     const studentId = await db.transaction(async (tx) => {
       const student = await insertStudent(tx, schoolId, input);
       const hasPrimary = input.guardians.some((g) => g.isPrimary);
@@ -169,6 +214,7 @@ export async function studentRoutes(app: FastifyInstance, { db, today }: Academi
   app.put("/students/:id", write, async (request): Promise<StudentDetailDto> => {
     const schoolId = tenantOf(request);
     const { id } = parseOrThrow(idParams, request.params);
+    await checkStudent(request, id, true);
     const input = parseOrThrow(studentFieldsSchema, request.body);
     try {
       await db.transaction(async (tx) => {
@@ -193,6 +239,7 @@ export async function studentRoutes(app: FastifyInstance, { db, today }: Academi
   app.post("/students/:id/guardians", write, async (request): Promise<StudentDetailDto> => {
     const schoolId = tenantOf(request);
     const { id } = parseOrThrow(idParams, request.params);
+    await checkStudent(request, id, true);
     const input = parseOrThrow(guardianInputSchema, request.body);
     await getStudentDetail(db, schoolId, id); // 404 si el alumno no es de este colegio
     await db.transaction(async (tx) => {
@@ -225,6 +272,7 @@ export async function studentRoutes(app: FastifyInstance, { db, today }: Academi
   app.put("/students/:id/guardians/:guardianId", write, async (request): Promise<StudentDetailDto> => {
     const schoolId = tenantOf(request);
     const { id, guardianId } = parseOrThrow(guardianParams, request.params);
+    await checkStudent(request, id, true);
     const input = parseOrThrow(guardianUpdateSchema, request.body);
     const detail = await getStudentDetail(db, schoolId, id);
     if (!detail.guardians.some((g) => g.id === guardianId)) throw notFound("Responsable no encontrado");
@@ -265,6 +313,7 @@ export async function studentRoutes(app: FastifyInstance, { db, today }: Academi
   app.post("/students/:id/guardians/:guardianId/primary", write, async (request) => {
     const schoolId = tenantOf(request);
     const { id, guardianId } = parseOrThrow(guardianParams, request.params);
+    await checkStudent(request, id, true);
     await db.transaction(async (tx) => {
       const [link] = await tx
         .select()
@@ -295,6 +344,7 @@ export async function studentRoutes(app: FastifyInstance, { db, today }: Academi
   app.delete("/students/:id/guardians/:guardianId", write, async (request) => {
     const schoolId = tenantOf(request);
     const { id, guardianId } = parseOrThrow(guardianParams, request.params);
+    await checkStudent(request, id, true);
     const detail = await getStudentDetail(db, schoolId, id);
     const link = detail.guardians.find((g) => g.id === guardianId);
     if (!link) throw notFound("Responsable no encontrado");
@@ -315,10 +365,43 @@ export async function studentRoutes(app: FastifyInstance, { db, today }: Academi
   });
 
   // ── Matrícula ──
+  /** ¿Matriculan los maestros? Para un maestro, también sus secciones (lo usa el menú y el formulario). */
+  app.get("/enrollment-settings", staffAny, async (request): Promise<EnrollmentSettingsDto> => {
+    const schoolId = tenantOf(request);
+    const teachersEnroll = await teachersEnrollOf(db, schoolId);
+    const mySectionIds =
+      teachersEnroll && request.auth.role === "docente"
+        ? await teacherSectionIds(db, schoolId, request.auth.userId)
+        : [];
+    return { teachersEnroll, mySectionIds };
+  });
+
+  /** La dirección activa o desactiva la matrícula por los maestros. */
+  app.put("/enrollment-settings", director, async (request): Promise<EnrollmentSettingsDto> => {
+    const schoolId = tenantOf(request);
+    const { teachersEnroll } = parseOrThrow(z.object({ teachersEnroll: z.boolean() }), request.body);
+    await db.transaction(async (tx) => {
+      await tx
+        .insert(evaluationSettings)
+        .values({ schoolId, teachersEnroll })
+        .onConflictDoUpdate({
+          target: evaluationSettings.schoolId,
+          set: { teachersEnroll, updatedAt: new Date() },
+        });
+      await audit(tx, request, {
+        action: teachersEnroll ? "enrollment.teachers_enabled" : "enrollment.teachers_disabled",
+      });
+    });
+    return { teachersEnroll, mySectionIds: [] };
+  });
+
   app.post("/enrollments", write, async (request, reply) => {
     const schoolId = tenantOf(request);
     const input = parseOrThrow(enrollInputSchema, request.body);
     await getStudentDetail(db, schoolId, input.studentId); // 404 si el alumno no es de este colegio
+    const scope = await enrollScope(db, request.auth, schoolId);
+    assertTeacherSection(scope, input.sectionId);
+    await assertTeacherStudent(db, scope, schoolId, input.studentId);
     const { reactivated } = await db.transaction(async (tx) => {
       const result = await enrollStudent(tx, { schoolId, ...input, today: today() });
       await audit(tx, request, {
@@ -332,7 +415,7 @@ export async function studentRoutes(app: FastifyInstance, { db, today }: Academi
     return reply.status(reactivated ? 200 : 201).send(await getStudentDetail(db, schoolId, input.studentId));
   });
 
-  app.post("/enrollments/:id/withdraw", write, async (request): Promise<StudentDetailDto> => {
+  app.post("/enrollments/:id/withdraw", office, async (request): Promise<StudentDetailDto> => {
     const schoolId = tenantOf(request);
     const { id } = parseOrThrow(idParams, request.params);
     const input = parseOrThrow(withdrawInputSchema, request.body);
@@ -357,7 +440,7 @@ export async function studentRoutes(app: FastifyInstance, { db, today }: Academi
   });
 
   /** Cambio de sección dentro del mismo año lectivo (respeta el cupo de la sección destino). */
-  app.post("/enrollments/:id/transfer", write, async (request): Promise<StudentDetailDto> => {
+  app.post("/enrollments/:id/transfer", office, async (request): Promise<StudentDetailDto> => {
     const schoolId = tenantOf(request);
     const { id } = parseOrThrow(idParams, request.params);
     const { sectionId } = parseOrThrow(z.object({ sectionId: z.uuid() }), request.body);

@@ -35,6 +35,7 @@ import type {
   DayOffInput,
   DocumentDto,
   DocumentSummaryDto,
+  EnrollmentSettingsDto,
   FamilyChildDto,
   FamilyChildSummaryDto,
   FollowUpDto,
@@ -230,6 +231,9 @@ export const academic = {
     }),
   updatePeriods: (token: string, input: PeriodsInput) =>
     call<GradingPeriodDto[]>("/periods", { method: "PUT", token, body: input }),
+  enrollmentSettings: (token: string) => call<EnrollmentSettingsDto>("/enrollment-settings", { token }),
+  setTeachersEnroll: (token: string, teachersEnroll: boolean) =>
+    call<EnrollmentSettingsDto>("/enrollment-settings", { method: "PUT", token, body: { teachersEnroll } }),
   setPassingGrade: (token: string, passingGrade: number) =>
     call<{ passingGrade: number }>("/evaluation-settings", { method: "PUT", token, body: { passingGrade } }),
   teacherClasses: (token: string) => call<TeacherClassDto[]>("/teacher/classes", { token }),

@@ -97,6 +97,11 @@ export const users = pgTable(
     email: text("email").unique("users_email_unique"),
     /** Número de identidad (13 dígitos): las familias sin correo entran con él. */
     nationalId: text("national_id").unique("users_national_id_unique"),
+    /**
+     * Usuario del personal del centro, generado del nombre («lpaz»; ver lib/usernames). En minúsculas
+     * y único en toda la plataforma: se entra con él, con el correo o con la identidad.
+     */
+    username: text("username").unique("users_username_unique"),
     passwordHash: text("password_hash").notNull(),
     /** Contraseña temporal entregada por el centro: hay que cambiarla al entrar. */
     mustChangePassword: boolean("must_change_password").notNull().default(false),
@@ -130,7 +135,7 @@ export const users = pgTable(
   (t) => [
     check(
       "users_login_identifier",
-      sql`${t.email} is not null or ${t.nationalId} is not null or ${t.deletedAt} is not null`,
+      sql`${t.email} is not null or ${t.nationalId} is not null or ${t.username} is not null or ${t.deletedAt} is not null`,
     ),
   ],
 );
