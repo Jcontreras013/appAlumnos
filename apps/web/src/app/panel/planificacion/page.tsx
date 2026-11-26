@@ -13,6 +13,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { DayOffBanner } from "@/components/day-off-banner";
+import { Fold, FoldTag } from "@/components/fold";
 import { Kpi } from "@/components/kpi";
 import { PlanStatusBadge } from "@/components/plan-status";
 import { academic } from "@/lib/academic";
@@ -169,6 +170,10 @@ function SchoolBoard({
   const rows = board.rows
     .filter((r) => !filter || (filter === "atrasadas" ? r.overdue : r.status === filter))
     .sort((a, b) => order(a.status) - order(b.status) || Number(b.overdue) - Number(a.overdue));
+  // Agrupadas por sección, en el orden de grados y secciones del centro (el del tablero).
+  const bySection = new Map<string, typeof rows>(board.rows.map((r) => [r.assignment.sectionLabel, []]));
+  for (const r of rows) bySection.get(r.assignment.sectionLabel)?.push(r);
+  const groups = [...bySection.entries()].filter(([, group]) => group.length > 0);
 
   return (
     <section className="space-y-4">
@@ -211,39 +216,59 @@ function SchoolBoard({
             </Link>
           ))}
         </div>
-        {rows.length === 0 ? (
+        {rows.length === 0 && (
           <p className="p-6 text-center text-sm text-slate-500">
             {board.rows.length === 0 ? "No hay clases asignadas este año." : "Ninguna en este estado."}
           </p>
-        ) : (
-          <Table head={["Sección", "Materia", "Docente", "Estado", ""]}>
-            {rows.map((r) => (
-              <tr key={r.assignment.id}>
-                <td className="whitespace-nowrap px-4 py-3">{r.assignment.sectionLabel}</td>
-                <td className="px-4 py-3">{r.assignment.subjectName}</td>
-                <td className="px-4 py-3">{r.assignment.teacherName}</td>
-                <td className="px-4 py-3">
-                  <PlanStatusBadge status={r.status} overdue={r.overdue} />
-                </td>
-                <td className="px-4 py-3 text-right">
-                  {r.planId && (
-                    <Link
-                      href={`/panel/planificacion/${r.planId}`}
-                      className={
-                        r.status === "enviada"
-                          ? "btn-primary px-3 py-1.5"
-                          : "text-xs font-semibold text-brand-700 hover:underline"
-                      }
-                    >
-                      {r.status === "enviada" ? "Revisar" : "Ver"}
-                    </Link>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </Table>
         )}
       </div>
+      {/* Una sección por desplegable: se ve cuántas esperan revisión sin abrir la tabla. */}
+      {groups.map(([label, group]) => {
+        const toReview = group.filter((r) => r.status === "enviada").length;
+        const late = group.filter((r) => r.overdue).length;
+        return (
+          <Fold
+            key={label}
+            title={label}
+            open={Boolean(filter) && groups.length === 1}
+            summary={
+              <>
+                <FoldTag>
+                  {group.length} {group.length === 1 ? "clase" : "clases"}
+                </FoldTag>
+                {toReview > 0 && <FoldTag tone="alert">{toReview} por revisar</FoldTag>}
+                {late > 0 && <FoldTag tone="alert">{late} atrasadas</FoldTag>}
+              </>
+            }
+          >
+            <Table head={["Materia", "Docente", "Estado", ""]}>
+              {group.map((r) => (
+                <tr key={r.assignment.id}>
+                  <td className="px-4 py-3">{r.assignment.subjectName}</td>
+                  <td className="px-4 py-3">{r.assignment.teacherName}</td>
+                  <td className="px-4 py-3">
+                    <PlanStatusBadge status={r.status} overdue={r.overdue} />
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    {r.planId && (
+                      <Link
+                        href={`/panel/planificacion/${r.planId}`}
+                        className={
+                          r.status === "enviada"
+                            ? "btn-primary px-3 py-1.5"
+                            : "text-xs font-semibold text-brand-700 hover:underline"
+                        }
+                      >
+                        {r.status === "enviada" ? "Revisar" : "Ver"}
+                      </Link>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </Table>
+          </Fold>
+        );
+      })}
       <p className="text-xs text-slate-500">
         Estados: {Object.values(PLAN_STATUS_LABELS).join(" · ")}. Atrasada = no se ha enviado y ya pasó la
         fecha límite.

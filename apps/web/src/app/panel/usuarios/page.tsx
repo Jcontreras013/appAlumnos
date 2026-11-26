@@ -2,7 +2,7 @@ import { formatDate, formatNationalId, ROLE_LABELS, type UserDto } from "@escola
 import type { Metadata } from "next";
 import Link from "next/link";
 import { AccountEditor } from "@/components/account-editor";
-import { FilterBar, FilterEmpty, FilterRow, FilterScope } from "@/components/quick-filter";
+import { FilterBar, FilterEmpty, FilterFold, FilterRow, FilterScope } from "@/components/quick-filter";
 import { ResetPassword } from "@/components/reset-password";
 import { requireRole } from "@/lib/dal";
 import { identity } from "@/lib/identity";
@@ -12,6 +12,14 @@ import { RoleEditor } from "./role-editor";
 
 export const metadata: Metadata = { title: "Usuarios" };
 
+const ROLE_ORDER: UserDto["role"][] = ["admin", "coordinador", "secretaria", "docente"];
+const ROLE_GROUPS: Record<string, string> = {
+  admin: "Dirección",
+  coordinador: "Coordinación",
+  secretaria: "Secretaría",
+  docente: "Docentes",
+};
+
 /** Lo que se busca de cada persona: nombre, identidad (con o sin guiones), correo y cargo. */
 const userText = (u: Pick<UserDto, "name" | "nationalId" | "email" | "role" | "username">) =>
   [u.name, u.username, u.nationalId, u.email, ROLE_LABELS[u.role]].filter(Boolean).join(" ");
@@ -19,6 +27,92 @@ const userText = (u: Pick<UserDto, "name" | "nationalId" | "email" | "role" | "u
 export default async function UsersPage() {
   const session = await requireRole("admin");
   const users = await identity.listUsers(session.accessToken);
+
+  const table = (list: UserDto[]) => (
+    <div className="overflow-x-auto">
+      <table className="w-full text-left text-sm">
+        <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+          <tr>
+            <th className="px-4 py-3 font-semibold">Nombre</th>
+            <th className="px-4 py-3 font-semibold">Rol</th>
+            <th className="px-4 py-3 font-semibold">Alta</th>
+            <th className="px-4 py-3 font-semibold">Estado</th>
+            <th className="px-4 py-3">
+              <span className="sr-only">Acciones</span>
+            </th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-100">
+          {list.map((u) => (
+            <FilterRow
+              key={`${u.id}-${u.role}`}
+              text={userText(u)}
+              group={u.role}
+              className={u.active ? "" : "bg-slate-50 text-slate-400"}
+            >
+              <td className="px-4 py-3">
+                <p className="font-medium text-slate-900">{u.name}</p>
+                <p className="text-xs text-slate-500">
+                  {u.username && (
+                    <>
+                      Usuario <span className="font-mono font-semibold text-slate-700">{u.username}</span>
+                      {(u.nationalId || u.email) && " · "}
+                    </>
+                  )}
+                  {u.nationalId ? formatNationalId(u.nationalId) : u.email}
+                </p>
+              </td>
+              <td className="whitespace-nowrap px-4 py-3">{ROLE_LABELS[u.role]}</td>
+              <td className="whitespace-nowrap px-4 py-3 tabular-nums">{formatDate(u.createdAt)}</td>
+              <td className="px-4 py-3">
+                <span
+                  className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                    u.active ? "bg-brand-50 text-brand-700" : "bg-slate-200 text-slate-600"
+                  }`}
+                >
+                  {u.active ? "Activo" : "Desactivado"}
+                </span>
+              </td>
+              <td className="space-y-1 px-4 py-3 text-right">
+                {u.id !== session.user.id && u.active && u.role !== "admin" && (
+                  <ResetPassword userId={u.id} name={u.name} />
+                )}
+                {u.id !== session.user.id && u.active && u.role !== "admin" && (
+                  <div>
+                    <AccountEditor user={u} />
+                  </div>
+                )}
+                {u.id !== session.user.id && u.active && (
+                  <div>
+                    <RoleEditor user={u} />
+                  </div>
+                )}
+                {u.id !== session.user.id && (
+                  <form action={setUserActiveAction}>
+                    <input type="hidden" name="id" value={u.id} />
+                    <input type="hidden" name="active" value={String(!u.active)} />
+                    <button
+                      type="submit"
+                      className="text-xs font-semibold text-slate-600 hover:text-slate-900"
+                    >
+                      {u.active ? "Desactivar" : "Reactivar"}
+                    </button>
+                  </form>
+                )}
+              </td>
+            </FilterRow>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+  // Por cargo, cada grupo en un desplegable (se abre solo al buscar).
+  const groups: Array<[string, UserDto[]]> = ROLE_ORDER.map((role) => [
+    role,
+    users.filter((u) => u.role === role),
+  ]);
+  groups.push(["otros", users.filter((u) => !ROLE_ORDER.includes(u.role))]);
+  const byRole = groups.filter(([, list]) => list.length > 0);
 
   return (
     <div className="space-y-6">
@@ -46,83 +140,15 @@ export default async function UsersPage() {
               groupLabel="Cargo"
               allLabel="Todos"
             />
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-                  <tr>
-                    <th className="px-4 py-3 font-semibold">Nombre</th>
-                    <th className="px-4 py-3 font-semibold">Rol</th>
-                    <th className="px-4 py-3 font-semibold">Alta</th>
-                    <th className="px-4 py-3 font-semibold">Estado</th>
-                    <th className="px-4 py-3">
-                      <span className="sr-only">Acciones</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {users.map((u) => (
-                    <FilterRow
-                      key={`${u.id}-${u.role}`}
-                      text={userText(u)}
-                      group={u.role}
-                      className={u.active ? "" : "bg-slate-50 text-slate-400"}
-                    >
-                      <td className="px-4 py-3">
-                        <p className="font-medium text-slate-900">{u.name}</p>
-                        <p className="text-xs text-slate-500">
-                          {u.username && (
-                            <>
-                              Usuario{" "}
-                              <span className="font-mono font-semibold text-slate-700">{u.username}</span>
-                              {(u.nationalId || u.email) && " · "}
-                            </>
-                          )}
-                          {u.nationalId ? formatNationalId(u.nationalId) : u.email}
-                        </p>
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3">{ROLE_LABELS[u.role]}</td>
-                      <td className="whitespace-nowrap px-4 py-3 tabular-nums">{formatDate(u.createdAt)}</td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                            u.active ? "bg-brand-50 text-brand-700" : "bg-slate-200 text-slate-600"
-                          }`}
-                        >
-                          {u.active ? "Activo" : "Desactivado"}
-                        </span>
-                      </td>
-                      <td className="space-y-1 px-4 py-3 text-right">
-                        {u.id !== session.user.id && u.active && u.role !== "admin" && (
-                          <ResetPassword userId={u.id} name={u.name} />
-                        )}
-                        {u.id !== session.user.id && u.active && u.role !== "admin" && (
-                          <div>
-                            <AccountEditor user={u} />
-                          </div>
-                        )}
-                        {u.id !== session.user.id && u.active && (
-                          <div>
-                            <RoleEditor user={u} />
-                          </div>
-                        )}
-                        {u.id !== session.user.id && (
-                          <form action={setUserActiveAction}>
-                            <input type="hidden" name="id" value={u.id} />
-                            <input type="hidden" name="active" value={String(!u.active)} />
-                            <button
-                              type="submit"
-                              className="text-xs font-semibold text-slate-600 hover:text-slate-900"
-                            >
-                              {u.active ? "Desactivar" : "Reactivar"}
-                            </button>
-                          </form>
-                        )}
-                      </td>
-                    </FilterRow>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            {byRole.map(([role, list]) => (
+              <FilterFold
+                key={role}
+                title={ROLE_GROUPS[role] ?? "Otros"}
+                items={list.map((u) => ({ text: userText(u), group: u.role }))}
+              >
+                {table(list)}
+              </FilterFold>
+            ))}
             <FilterEmpty message="Nadie del personal coincide con la búsqueda." />
           </FilterScope>
         </section>

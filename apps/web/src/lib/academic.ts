@@ -8,8 +8,11 @@ import type {
   AttendanceInput,
   AttendanceSheetDto,
   AuditEventDto,
+  ChangeRequestDto,
+  ChangeRequestKind,
   ClassChatDto,
   ClassChatMessageDto,
+  ClassChatSummaryDto,
   ClassLinkInput,
   ClassMaterialDto,
   ClassPostDto,
@@ -441,6 +444,18 @@ export const academic = {
       body: input,
     }),
   // Chat de la clase
+  // Solicitudes de la secretaría que confirma la dirección
+  createChangeRequest: (token: string, kind: ChangeRequestKind, payload: Record<string, unknown>) =>
+    call<ChangeRequestDto>("/change-requests", { method: "POST", token, body: { kind, payload } }),
+  changeRequests: (token: string, estado: "pendiente" | "todas" = "todas") =>
+    call<ChangeRequestDto[]>(`/change-requests?estado=${estado}`, { token }),
+  pendingChangeRequests: (token: string) =>
+    call<{ count: number }>("/change-requests/pending-count", { token }),
+  approveChangeRequest: (token: string, id: string) =>
+    call<ChangeRequestDto>(`/change-requests/${id}/approve`, { method: "POST", token, body: {} }),
+  rejectChangeRequest: (token: string, id: string, note?: string) =>
+    call<ChangeRequestDto>(`/change-requests/${id}/reject`, { method: "POST", token, body: { note } }),
+  classChats: (token: string) => call<ClassChatSummaryDto[]>("/class-chats", { token }),
   classChat: (token: string, assignmentId: string) =>
     call<ClassChatDto>(`/classes/${assignmentId}/chat`, { token }),
   sendClassChat: (token: string, assignmentId: string, body: string) =>

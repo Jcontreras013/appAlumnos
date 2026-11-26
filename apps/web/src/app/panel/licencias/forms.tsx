@@ -8,7 +8,8 @@ import { addSubstitutionAction, coverAllAction, createLeaveAction } from "./acti
 
 type Option = { value: string; label: string };
 
-export function LeaveForm({ teachers }: { teachers: Option[] }) {
+/** `request`: la secretaría envía el permiso para que lo confirme la dirección. */
+export function LeaveForm({ teachers, request = false }: { teachers: Option[]; request?: boolean }) {
   const [state, action] = useActionState(createLeaveAction, initialFormState);
   const today = todayInHonduras();
   const withDefaults: FormState = { ...state, values: { startsOn: today, endsOn: today, ...state.values } };
@@ -34,7 +35,14 @@ export function LeaveForm({ teachers }: { teachers: Option[] }) {
         <Field name="endsOn" label="Hasta (último día)" type="date" required state={withDefaults} />
       </div>
       <TextAreaField name="notes" label="Notas (opcional)" rows={2} state={state} />
-      <SubmitButton pendingText="Registrando…">Registrar licencia</SubmitButton>
+      {request && (
+        <p className="text-xs text-slate-500">
+          La dirección recibe un mensaje y lo confirma antes de que se cree.
+        </p>
+      )}
+      <SubmitButton pendingText="Enviando…">
+        {request ? "Pedir a la dirección" : "Registrar licencia"}
+      </SubmitButton>
     </form>
   );
 }

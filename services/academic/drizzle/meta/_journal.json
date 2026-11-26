@@ -162,6 +162,13 @@
       "when": 1795720978321,
       "tag": "0022_maestros_matriculan",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1795723748685,
+      "tag": "0023_solicitudes_de_secretaria",
+      "breakpoints": true
     }
   ]
 }

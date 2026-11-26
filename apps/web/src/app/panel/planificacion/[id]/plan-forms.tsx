@@ -69,7 +69,8 @@ export function PlanEditor({
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
 
-  const others = sources.filter((s) => s.id !== plan.id);
+  // Solo semanas anteriores de esta misma clase: copiar de otra clase confundía.
+  const others = sources.filter((s) => s.id !== plan.id && s.assignment.id === plan.assignment.id);
   const hasText = Object.values(values).some((v) =>
     typeof v === "string" ? v.trim() : Object.values(v).some((d) => d.trim()),
   );
@@ -182,7 +183,7 @@ export function PlanEditor({
         {others.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 rounded-lg border border-dashed border-slate-300 bg-white px-3 py-2 text-sm">
             <label htmlFor="copiar" className="text-slate-600">
-              Empezar desde otra planificación tuya:
+              Empezar desde una semana anterior de esta clase:
             </label>
             <select
               id="copiar"
@@ -196,7 +197,7 @@ export function PlanEditor({
               <option value="">Elegir…</option>
               {others.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.assignment.subjectName} {s.assignment.sectionLabel} · {formatWeekRange(s.weekStart)}
+                  Semana del {formatWeekRange(s.weekStart)}
                 </option>
               ))}
             </select>

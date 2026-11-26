@@ -6,6 +6,7 @@ import { ChangePasswordForm } from "@/components/change-password-form";
 import { IdleLogout } from "@/components/idle-logout";
 import { LogoutButton } from "@/components/logout-button";
 import { MfaSetup } from "@/components/mfa-setup";
+import { MobileMenu } from "@/components/mobile-menu";
 import { NativeAppBridge } from "@/components/native-app-bridge";
 import { Nav, type NavItem } from "@/components/nav";
 import { OfflineAgent } from "@/components/offline";
@@ -40,6 +41,11 @@ export default async function PanelLayout({ children }: { children: ReactNode })
     !gated && is("docente")
       ? ((await academic.enrollmentSettings(accessToken).catch(() => null))?.teachersEnroll ?? false)
       : false;
+  // Solicitudes de la secretaría que esperan a la dirección (número en el menú).
+  const pendingRequests =
+    !gated && is("admin")
+      ? ((await academic.pendingChangeRequests(accessToken).catch(() => null))?.count ?? 0)
+      : 0;
   const items: NavItem[] = [];
   if (isRegionalRole(user.role)) {
     items.push({ href: "/panel/region", label: "Tablero de centros" });
@@ -50,6 +56,7 @@ export default async function PanelLayout({ children }: { children: ReactNode })
     items.push({ href: "/panel/biblioteca", label: "Biblioteca" });
   } else if (is("estudiante")) {
     items.push({ href: "/panel/aula", label: "Mis clases" });
+    items.push({ href: "/panel/chats", label: "Chats" });
     items.push({ href: "/panel/mis-notas", label: "Mis notas" });
     items.push({ href: "/panel/biblioteca", label: "Biblioteca" });
   } else {
@@ -66,6 +73,7 @@ export default async function PanelLayout({ children }: { children: ReactNode })
   if (is("docente", "admin", "coordinador")) add("Mis clases", "/panel/cuaderno", "Asistencia y notas");
   if (is("docente", "admin", "coordinador", "secretaria")) {
     add("Mis clases", "/panel/aula", "Aula virtual");
+    if (!is("secretaria")) add("Mis clases", "/panel/chats", "Chats");
     add("Mis clases", "/panel/planificacion", "Planificación");
   }
   if (is("admin", "coordinador", "secretaria", "docente")) {
@@ -85,6 +93,14 @@ export default async function PanelLayout({ children }: { children: ReactNode })
     add("El centro", "/panel/documentos", "Documentos");
     add("El centro", "/panel/biblioteca", "Biblioteca");
   }
+  if (is("admin"))
+    items.push({
+      href: "/panel/solicitudes",
+      label: "Solicitudes",
+      group: "El centro",
+      badge: pendingRequests,
+    });
+  if (is("secretaria")) add("El centro", "/panel/solicitudes", "Mis solicitudes");
   if (is("admin", "coordinador", "secretaria")) {
     add("El centro", "/panel/estructura", "Año, grados y materias");
     add("El centro", "/panel/exportar", "Exportar datos");
@@ -109,7 +125,8 @@ export default async function PanelLayout({ children }: { children: ReactNode })
         <IdleLogout minutes={Number(process.env.SESSION_IDLE_MINUTES ?? 30) || 30} />
       )}
       <NativeAppBridge messaging={messaging} />
-      <aside className="border-b border-slate-200 bg-white px-4 py-4 md:min-h-dvh md:border-b-0 md:border-r md:py-6 print:hidden">
+      {/* En el celular la barra va escondida (botón ☰ del encabezado); en la computadora, siempre a la vista. */}
+      <aside className="hidden border-r border-slate-200 bg-white px-4 py-6 md:block md:min-h-dvh print:hidden">
         <div className="mb-4 flex items-center gap-2 px-1 font-semibold md:mb-8">
           <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-600 text-sm text-white">
             {APP_MARK}
@@ -120,8 +137,42 @@ export default async function PanelLayout({ children }: { children: ReactNode })
       </aside>
 
       <div className="flex min-w-0 flex-col">
-        <header className="flex items-center justify-between gap-4 border-b border-slate-200 bg-white px-4 py-3 sm:px-8 print:hidden">
+        <header className="sticky top-0 z-30 flex items-center justify-between gap-4 border-b border-slate-200 bg-white px-4 py-3 sm:px-8 md:static print:hidden">
           <div className="flex min-w-0 items-center gap-3">
+            {!gated && (
+              <MobileMenu
+                items={items}
+                upcoming={upcoming}
+                unreadMessages={unreadMessages}
+                brand={
+                  <div className="flex items-center gap-2 font-semibold">
+                    <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-brand-600 text-sm text-white">
+                      {APP_MARK}
+                    </span>
+                    <span className="truncate">{APP_NAME}</span>
+                  </div>
+                }
+                who={
+                  <>
+                    <p className="truncate font-medium text-slate-900">{user.name}</p>
+                    <p className="truncate text-xs text-slate-500">
+                      {ROLE_LABELS[user.role]} · {school?.name ?? current.scopeName}
+                    </p>
+                  </>
+                }
+                footer={
+                  <>
+                    <Link
+                      href="/panel/cuenta"
+                      className="text-sm font-medium text-slate-600 hover:text-slate-900"
+                    >
+                      Mi cuenta
+                    </Link>
+                    <LogoutButton action={logoutAction} />
+                  </>
+                }
+              />
+            )}
             {school ? (
               <SchoolLogo school={school} className="size-10" />
             ) : (
@@ -174,7 +225,10 @@ export default async function PanelLayout({ children }: { children: ReactNode })
             >
               Mi cuenta
             </Link>
-            <LogoutButton action={logoutAction} />
+            {/* En el celular «Cerrar sesión» está en el menú (☰), salvo antes de poder usar el panel. */}
+            <div className={gated ? "" : "hidden md:block"}>
+              <LogoutButton action={logoutAction} />
+            </div>
           </div>
         </header>
         <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-8 print:max-w-none print:p-0">

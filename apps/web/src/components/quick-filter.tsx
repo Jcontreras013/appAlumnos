@@ -2,6 +2,7 @@
 
 import { matchesSearch } from "@escolar/shared";
 import { createContext, type ReactNode, useContext, useId, useState } from "react";
+import { Fold, FoldTag } from "@/components/fold";
 
 /**
  * Búsqueda (y, si hace falta, un selector de grupo como la sección o el distrito) para tablas y
@@ -144,5 +145,37 @@ export function FilterEmpty({ message = "Nada coincide con la búsqueda." }: { m
         Ver todo
       </button>
     </div>
+  );
+}
+
+/**
+ * Un grupo desplegable dentro de una lista con buscador (por ejemplo, el personal por cargo). Viene
+ * cerrado; al buscar o elegir un grupo se abre solo, y se esconde si no tiene nada que coincida.
+ */
+export function FilterFold({
+  title,
+  items,
+  defaultOpen = false,
+  children,
+}: {
+  title: ReactNode;
+  items: FilterItem[];
+  /** Abierto al llegar (por ejemplo, el día de hoy en la bitácora). */
+  defaultOpen?: boolean;
+  children: ReactNode;
+}) {
+  const { query, group } = useFilter();
+  const filtering = query.trim() !== "" || group !== ALL;
+  const shown = items.filter((i) => matches(i, query, group)).length;
+  if (filtering && shown === 0) return null;
+  return (
+    <Fold
+      title={title}
+      open={filtering || defaultOpen}
+      className="rounded-none border-x-0 border-b-0 shadow-none"
+      summary={<FoldTag>{filtering ? `${shown} de ${items.length}` : items.length}</FoldTag>}
+    >
+      {children}
+    </Fold>
   );
 }

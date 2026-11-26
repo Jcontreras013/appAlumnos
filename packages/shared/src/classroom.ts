@@ -199,6 +199,10 @@ export interface ClassChatMessageDto {
 }
 
 export interface ClassChatDto {
+  /** Materia y sección (para el título de la página del chat). */
+  subjectName: string;
+  sectionLabel: string;
+  teacherName: string | null;
   enabled: boolean;
   /** Puede escribir (el chat está abierto y es el maestro o un alumno de la sección). */
   canWrite: boolean;
@@ -206,6 +210,17 @@ export interface ClassChatDto {
   canModerate: boolean;
   /** Del más viejo al más nuevo. */
   messages: ClassChatMessageDto[];
+}
+
+/** Un chat de clase en la lista del apartado «Chats». */
+export interface ClassChatSummaryDto {
+  assignmentId: string;
+  subjectName: string;
+  sectionLabel: string;
+  teacherName: string | null;
+  enabled: boolean;
+  /** El último mensaje (null si nadie ha escrito). El texto es null si se borró. */
+  last: { authorName: string; body: string | null; createdAt: string } | null;
 }
 
 // ───────────────────────────── Tareas con entrega ─────────────────────────────

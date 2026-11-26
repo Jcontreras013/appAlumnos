@@ -82,7 +82,7 @@ export default async function LeavesPage({ searchParams }: PageProps<"/panel/lic
         </section>
       )}
 
-      <div className={`grid gap-6 ${canEdit ? "lg:grid-cols-[1fr_22rem]" : ""}`}>
+      <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
         <section className="space-y-4">
           <nav aria-label="Licencias" className="flex gap-1 border-b border-slate-200">
             {TABS.map((t) => (
@@ -218,15 +218,18 @@ export default async function LeavesPage({ searchParams }: PageProps<"/panel/lic
           })}
         </section>
 
-        {canEdit && (
+        {/* La secretaría también: su permiso llega como solicitud que confirma la dirección. */}
+        {(canEdit || session.user.role === "secretaria") && (
           <aside className="card h-fit p-5">
-            <h2 className="mb-4 font-semibold text-slate-900">Registrar licencia</h2>
+            <h2 className="mb-4 font-semibold text-slate-900">
+              {canEdit ? "Registrar licencia" : "Registrar permiso de un maestro"}
+            </h2>
             {teachers.length === 0 ? (
               <p className="text-sm text-slate-500">
                 Primero crea los usuarios de los maestros en Personal y usuarios.
               </p>
             ) : (
-              <LeaveForm teachers={teachers} />
+              <LeaveForm teachers={teachers} request={!canEdit} />
             )}
           </aside>
         )}

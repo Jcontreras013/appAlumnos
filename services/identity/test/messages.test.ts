@@ -92,21 +92,23 @@ beforeAll(async () => {
 afterAll(() => ctx.close());
 
 describe("contactos", () => {
-  it("cada quien ve a los maestros y la dirección de su centro, sin contarse a sí mismo", async () => {
+  it("cada quien ve a los maestros, la dirección y la secretaría de su centro, sin contarse a sí mismo", async () => {
     const { body } = await call<MessageContactDto[]>(ana.token, "GET", "/messages/contacts");
-    expect(body.map((c) => c.name)).toEqual(["Admin", "Beto Docente", "Carla Docente"]);
+    expect(body.map((c) => c.name)).toEqual(["Admin", "Beto Docente", "Carla Docente", "Sara Secretaria"]);
     expect(body.find((c) => c.name === "Admin")?.role).toBe("admin");
   });
 
-  it("en esta etapa secretaría no usa los mensajes", async () => {
-    expect((await call(sara.token, "GET", "/messages/contacts")).status).toBe(403);
-    expect((await call(sara.token, "GET", "/messages/unread")).status).toBe(403);
+  it("la secretaría escribe a los maestros y a la dirección", async () => {
+    const { body } = await call<MessageContactDto[]>(sara.token, "GET", "/messages/contacts");
+    expect(body.map((c) => c.name)).toEqual(["Admin", "Ana Docente", "Beto Docente", "Carla Docente"]);
+    expect(
+      (await call(sara.token, "POST", "/messages/conversations", { userId: ana.id })).status,
+    ).toBeLessThan(300);
   });
 
-  it("no se abre conversación con alguien de otro centro, de secretaría o consigo mismo", async () => {
+  it("no se abre conversación con alguien de otro centro o consigo mismo", async () => {
     const { body: outsiders } = await call<MessageContactDto[]>(otherAdmin, "GET", "/messages/contacts");
     expect(outsiders).toEqual([]);
-    expect((await call(ana.token, "POST", "/messages/conversations", { userId: sara.id })).status).toBe(404);
     expect((await call(otherAdmin, "POST", "/messages/conversations", { userId: ana.id })).status).toBe(404);
     expect((await call(ana.token, "POST", "/messages/conversations", { userId: ana.id })).status).toBe(400);
   });
@@ -160,7 +162,7 @@ describe("conversaciones", () => {
   it("nadie más lee la conversación: ni otro maestro, ni secretaría, ni otro centro", async () => {
     expect((await view(carla.token, id)).status).toBe(404);
     expect((await send(carla.token, id, "Hola")).status).toBe(404);
-    expect((await view(sara.token, id)).status).toBe(403);
+    expect((await view(sara.token, id)).status).toBe(404);
     expect((await view(otherAdmin, id)).status).toBe(404);
   });
 

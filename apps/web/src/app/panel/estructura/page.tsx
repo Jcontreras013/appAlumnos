@@ -1,6 +1,7 @@
 import { formatDay } from "@escolar/shared";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { Fold, FoldTag } from "@/components/fold";
 import { academic } from "@/lib/academic";
 import { requireRole } from "@/lib/dal";
 import { identity } from "@/lib/identity";
@@ -22,6 +23,8 @@ export default async function StructurePage() {
   const session = await requireRole("admin", "coordinador", "secretaria");
   const token = session.accessToken;
   const canEdit = session.user.role !== "secretaria";
+  // La secretaría pide grados, secciones y materias; la dirección los confirma.
+  const requests = session.user.role === "secretaria";
 
   const [years, grades, sections, subjects, assignments, staff, evaluation] = await Promise.all([
     academic.listYears(token),
@@ -48,7 +51,11 @@ export default async function StructurePage() {
         </p>
       </div>
 
-      <Block title="Años lectivos" aside={canEdit && <YearForm />}>
+      <Block
+        title="Años lectivos"
+        count={`${years.length} ${years.length === 1 ? "año" : "años"}`}
+        aside={canEdit && <YearForm />}
+      >
         {years.length === 0 ? (
           <Empty>Todavía no hay años lectivos.</Empty>
         ) : (
@@ -80,6 +87,7 @@ export default async function StructurePage() {
       {current && evaluation && (
         <Block
           title={`Parciales ${current.name} y nota mínima`}
+          count={`${evaluation.periods.length} parciales · mínima ${evaluation.passingGrade}`}
           aside={canEdit && <PassingGradeForm passingGrade={evaluation.passingGrade} />}
         >
           {canEdit ? (
@@ -110,13 +118,15 @@ export default async function StructurePage() {
 
       <Block
         title="Grados y secciones"
+        count={`${grades.length} ${grades.length === 1 ? "grado" : "grados"} · ${sections.length} ${sections.length === 1 ? "sección" : "secciones"}`}
         aside={
-          canEdit && (
+          (canEdit || requests) && (
             <div className="space-y-6">
-              <GradeForm />
+              <GradeForm request={requests} />
               {current && grades.length > 0 && (
                 <div className="border-t border-slate-200 pt-5">
                   <SectionForm
+                    request={requests}
                     schoolYearId={current.id}
                     grades={grades.map((g) => ({ value: g.id, label: g.name }))}
                     years={years
@@ -173,11 +183,12 @@ export default async function StructurePage() {
 
       <Block
         title="Materias y docentes"
+        count={`${subjects.length} ${subjects.length === 1 ? "materia" : "materias"} · ${assignments.length} ${assignments.length === 1 ? "clase" : "clases"}`}
         aside={
-          canEdit && (
+          (canEdit || requests) && (
             <div className="space-y-6">
-              <SubjectForm />
-              {sections.length > 0 && subjects.length > 0 && (
+              <SubjectForm request={requests} />
+              {canEdit && sections.length > 0 && subjects.length > 0 && (
                 <div className="border-t border-slate-200 pt-5">
                   <AssignmentForm
                     sections={sections.map((s) => ({ value: s.id, label: s.label }))}
@@ -240,15 +251,23 @@ export default async function StructurePage() {
   );
 }
 
-function Block({ title, children, aside }: { title: string; children: ReactNode; aside?: ReactNode }) {
+/** Cada tabla en un desplegable con cuántos hay, para que la pantalla no se sature. */
+function Block({
+  title,
+  count,
+  children,
+  aside,
+}: {
+  title: string;
+  count: string;
+  children: ReactNode;
+  aside?: ReactNode;
+}) {
   return (
-    <section className={`grid gap-6 ${aside ? "lg:grid-cols-[1fr_22rem]" : ""}`}>
-      <div className="card overflow-hidden">
-        <h2 className="border-b border-slate-200 bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-700">
-          {title}
-        </h2>
+    <section className={`grid items-start gap-6 ${aside ? "lg:grid-cols-[1fr_22rem]" : ""}`}>
+      <Fold title={title} summary={<FoldTag>{count}</FoldTag>}>
         {children}
-      </div>
+      </Fold>
       {aside && <div className="card h-fit p-5">{aside}</div>}
     </section>
   );

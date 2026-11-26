@@ -18,7 +18,16 @@ const time = (iso: string) =>
  * Chat de toda la clase: el maestro y los alumnos de la sección. Se actualiza solo cada pocos
  * segundos mientras la página está a la vista. El maestro lo abre o lo cierra y puede borrar mensajes.
  */
-export function ClassChat({ assignmentId, initial }: { assignmentId: string; initial: ClassChatDto }) {
+export function ClassChat({
+  assignmentId,
+  initial,
+  full = false,
+}: {
+  assignmentId: string;
+  initial: ClassChatDto;
+  /** En su propia página («Chats»): ocupa casi toda la pantalla. */
+  full?: boolean;
+}) {
   const [chat, setChat] = useState(initial);
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -90,7 +99,10 @@ export function ClassChat({ assignmentId, initial }: { assignmentId: string; ini
             : "El maestro todavía no abrió el chat de la clase."}
         </p>
       ) : (
-        <ol ref={list} className="max-h-96 space-y-2 overflow-y-auto px-4 py-3">
+        <ol
+          ref={list}
+          className={`space-y-2 overflow-y-auto px-4 py-3 ${full ? "h-[calc(100dvh-17rem)] min-h-64" : "max-h-96"}`}
+        >
           {chat.messages.map((m) => (
             <li key={m.id} className={`flex ${m.mine ? "justify-end" : "justify-start"}`}>
               <div

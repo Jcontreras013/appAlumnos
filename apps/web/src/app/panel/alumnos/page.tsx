@@ -2,6 +2,7 @@ import { formatNationalId, formatPhone } from "@escolar/shared";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { Fold, FoldTag } from "@/components/fold";
 import { academic, type StudentFilters } from "@/lib/academic";
 import { requireRole } from "@/lib/dal";
 import { SectionAccess } from "./section-access";
@@ -49,6 +50,18 @@ export default async function StudentsPage({ searchParams }: PageProps<"/panel/a
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const selectedSection = sections.find((s) => s.id === filters.sectionId);
   const imported = one(params.importados);
+  const filtered = Boolean(filters.q || filters.sectionId || estado !== "todos");
+  // En el orden de las secciones del centro; al final, retirados y sin matrícula.
+  const groupOf = (s: (typeof items)[number]) =>
+    !s.enrollment
+      ? "Sin matrícula este año"
+      : s.enrollment.status === "activa"
+        ? s.enrollment.sectionLabel
+        : "Retirados";
+  const order = [...allSections.map((s) => s.label), "Retirados", "Sin matrícula este año"];
+  const groups = order
+    .map((label) => [label, items.filter((s) => groupOf(s) === label)] as const)
+    .filter(([, list]) => list.length > 0);
   const pageHref = (n: number) => {
     const next = new URLSearchParams({ ...(filters.q ? { q: filters.q } : {}), estado: estado ?? "todos" });
     if (filters.sectionId) next.set("seccion", filters.sectionId);
@@ -141,67 +154,83 @@ export default async function StudentsPage({ searchParams }: PageProps<"/panel/a
         />
       )}
 
-      <section className="card overflow-hidden">
-        {items.length === 0 ? (
-          <p className="p-8 text-center text-sm text-slate-500">
-            {total === 0 && !filters.q && !filters.sectionId && estado === "todos"
-              ? "Todavía no hay alumnos. Agrégalos uno por uno o impórtalos desde Excel."
-              : "Ningún alumno coincide con la búsqueda."}
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th className="px-4 py-3 font-semibold">Alumno</th>
-                  <th className="px-4 py-3 font-semibold">Sección</th>
-                  <th className="px-4 py-3 font-semibold">Responsable principal</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {items.map((s) => (
-                  <tr key={s.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3">
-                      <Link
-                        href={`/panel/alumnos/${s.id}`}
-                        className="font-medium text-slate-900 hover:underline"
-                      >
-                        {s.lastNames}, {s.firstNames}
-                      </Link>
-                      <p className="text-xs tabular-nums text-slate-500">{formatNationalId(s.nationalId)}</p>
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3">
-                      {s.enrollment ? (
-                        s.enrollment.status === "activa" ? (
-                          s.enrollment.sectionLabel
-                        ) : (
-                          <span className="text-slate-400">Retirado ({s.enrollment.sectionLabel})</span>
-                        )
-                      ) : (
-                        <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800">
-                          Sin matrícula
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      {s.primaryGuardian ? (
-                        <>
-                          <p>{s.primaryGuardian.fullName}</p>
+      {items.length === 0 ? (
+        <p className="card p-8 text-center text-sm text-slate-500">
+          {total === 0 && !filters.q && !filters.sectionId && estado === "todos"
+            ? "Todavía no hay alumnos. Agrégalos uno por uno o impórtalos desde Excel."
+            : "Ningún alumno coincide con la búsqueda."}
+        </p>
+      ) : (
+        // Por sección, cada una en un desplegable (abiertas si se está buscando o filtrando).
+        <div className="space-y-3">
+          {groups.map(([label, list]) => (
+            <Fold
+              key={label}
+              title={label}
+              open={filtered || groups.length === 1}
+              summary={
+                <FoldTag>
+                  {list.length} {list.length === 1 ? "alumno" : "alumnos"}
+                </FoldTag>
+              }
+            >
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="border-b border-slate-200 bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                    <tr>
+                      <th className="px-4 py-3 font-semibold">Alumno</th>
+                      <th className="px-4 py-3 font-semibold">Sección</th>
+                      <th className="px-4 py-3 font-semibold">Responsable principal</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {list.map((s) => (
+                      <tr key={s.id} className="hover:bg-slate-50">
+                        <td className="px-4 py-3">
+                          <Link
+                            href={`/panel/alumnos/${s.id}`}
+                            className="font-medium text-slate-900 hover:underline"
+                          >
+                            {s.lastNames}, {s.firstNames}
+                          </Link>
                           <p className="text-xs tabular-nums text-slate-500">
-                            {formatPhone(s.primaryGuardian.phone)}
+                            {formatNationalId(s.nationalId)}
                           </p>
-                        </>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3">
+                          {s.enrollment ? (
+                            s.enrollment.status === "activa" ? (
+                              s.enrollment.sectionLabel
+                            ) : (
+                              <span className="text-slate-400">Retirado ({s.enrollment.sectionLabel})</span>
+                            )
+                          ) : (
+                            <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800">
+                              Sin matrícula
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          {s.primaryGuardian ? (
+                            <>
+                              <p>{s.primaryGuardian.fullName}</p>
+                              <p className="text-xs tabular-nums text-slate-500">
+                                {formatPhone(s.primaryGuardian.phone)}
+                              </p>
+                            </>
+                          ) : (
+                            "—"
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Fold>
+          ))}
+        </div>
+      )}
 
       {pages > 1 && (
         <nav aria-label="Páginas" className="flex items-center justify-between text-sm">
