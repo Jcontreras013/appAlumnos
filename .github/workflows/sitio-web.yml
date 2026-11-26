@@ -87,9 +87,31 @@ jobs:
       - name: Bucket y CloudFront
         run: |
           set -euo pipefail
-          aws cloudformation deploy --stack-name "$PILA" --template-file infra/sitio-web.yaml \
+          # Si la primera vez falló, la pila queda en ROLLBACK_COMPLETE y no se puede actualizar: se borra
+          # (el bucket de esa vez queda vacío; no cobra).
+          ESTADO_PILA=$(aws cloudformation describe-stacks --stack-name "$PILA" \
+            --query "Stacks[0].StackStatus" --output text 2>/dev/null || echo NINGUNA)
+          if [ "$ESTADO_PILA" = "ROLLBACK_COMPLETE" ]; then
+            echo "El intento anterior falló: se borra para volver a crear."
+            aws cloudformation delete-stack --stack-name "$PILA"
+            aws cloudformation wait stack-delete-complete --stack-name "$PILA"
+          fi
+          if ! aws cloudformation deploy --stack-name "$PILA" --template-file infra/sitio-web.yaml \
             --parameter-overrides "Dominio=$DOMINIO" "CertificadoArn=$CERTIFICADO" \
-            --tags proyecto=sitio-jcsystem --no-fail-on-empty-changeset
+            --tags proyecto=sitio-jcsystem --no-fail-on-empty-changeset; then
+            # El motivo que dio AWS, para saber qué arreglar.
+            MOTIVOS=$(aws cloudformation describe-stack-events --stack-name "$PILA" \
+              --query "StackEvents[?ends_with(ResourceStatus, 'FAILED')].[LogicalResourceId,ResourceStatusReason]" \
+              --output text | grep -v "Resource creation cancelled" | head -n 5 || true)
+            echo "$MOTIVOS"
+            echo "$MOTIVOS" > motivo.txt
+            if grep -qi "must be verified" motivo.txt; then
+              echo "::error::AWS todavía no deja usar CloudFront en esta cuenta: hay que pedir a AWS Support que la verifique (ver el resumen)."
+            else
+              echo "::error::AWS no pudo crear el sitio: el motivo está arriba y en el resumen."
+            fi
+            exit 1
+          fi
           salida() {
             aws cloudformation describe-stacks --stack-name "$PILA" \
               --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text
@@ -132,6 +154,20 @@ jobs:
           {
             echo "## Sitio de Jc-System"
             echo
+            if [ -s motivo.txt ]; then
+              echo "### AWS no pudo crear el sitio"
+              echo
+              echo '```'
+              cat motivo.txt
+              echo '```'
+              echo
+              if grep -qi "must be verified" motivo.txt; then
+                echo "La cuenta de AWS es nueva y todavía no puede usar **CloudFront**. Abre un caso en"
+                echo "**AWS Support → Create case → Account and billing** pidiendo que verifiquen la cuenta para usar"
+                echo "CloudFront (para el sitio web de la empresa). Cuando respondan, vuelve a correr este flujo."
+                echo
+              fi
+            fi
             if [ -n "${CLOUDFRONT:-}" ]; then
               echo "Vista previa (ya funciona): https://$CLOUDFRONT"
               echo
