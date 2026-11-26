@@ -37,13 +37,15 @@ jobs:
     env:
       DOMINIO: ${{ vars.SITIO_DOMINIO || 'jcsystemhn.com' }}
       PILA: JcSystem-sitio
-      AWS_REGION: us-east-1
+      # El bucket y CloudFront van en la región de CONECTA: la cuenta solo permite crear recursos ahí.
+      # El certificado sí va en us-east-1, donde CloudFront lo exige (ver ACM abajo).
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-east-2' }}
     steps:
       - uses: actions/checkout@v4
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: us-east-1
+          aws-region: ${{ vars.AWS_REGION || 'us-east-2' }}
           mask-aws-account-id: true
 
       - name: Certificado HTTPS
@@ -53,30 +55,31 @@ jobs:
             echo "::error::SITIO_DOMINIO no es un dominio válido."
             exit 1
           fi
-          ARN=$(aws acm list-certificates --certificate-statuses ISSUED PENDING_VALIDATION \
+          ACM="aws acm --region us-east-1"
+          ARN=$($ACM list-certificates --certificate-statuses ISSUED PENDING_VALIDATION \
             --query "CertificateSummaryList[?DomainName=='$DOMINIO'].CertificateArn | [0]" --output text)
           if [ "$ARN" = "None" ] || [ -z "$ARN" ]; then
-            ARN=$(aws acm request-certificate --domain-name "$DOMINIO" \
+            ARN=$($ACM request-certificate --domain-name "$DOMINIO" \
               --subject-alternative-names "www.$DOMINIO" --validation-method DNS \
               --idempotency-token sitiojcsystem --tags Key=proyecto,Value=sitio-jcsystem \
               --query CertificateArn --output text)
             echo "Certificado pedido para $DOMINIO y www.$DOMINIO."
             # AWS tarda unos segundos en preparar los registros de validación.
             for _ in $(seq 1 12); do
-              N=$(aws acm describe-certificate --certificate-arn "$ARN" \
+              N=$($ACM describe-certificate --certificate-arn "$ARN" \
                 --query "length(Certificate.DomainValidationOptions[?ResourceRecord])" --output text)
               [ "$N" = "2" ] && break
               sleep 5
             done
           fi
-          ESTADO=$(aws acm describe-certificate --certificate-arn "$ARN" --query Certificate.Status --output text)
+          ESTADO=$($ACM describe-certificate --certificate-arn "$ARN" --query Certificate.Status --output text)
           echo "Estado del certificado: $ESTADO"
           if [ "$ESTADO" = "ISSUED" ]; then
             echo "CERTIFICADO=$ARN" >> "$GITHUB_ENV"
           else
             echo "CERTIFICADO=" >> "$GITHUB_ENV"
             # Los registros de validación son públicos (van en el DNS): se muestran para copiarlos.
-            aws acm describe-certificate --certificate-arn "$ARN" \
+            $ACM describe-certificate --certificate-arn "$ARN" \
               --query "Certificate.DomainValidationOptions[].ResourceRecord.[Name,Value]" --output text \
               | sort -u > validacion.txt
           fi
