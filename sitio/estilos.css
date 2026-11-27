@@ -780,6 +780,81 @@ p {
   background: linear-gradient(180deg, transparent, rgba(76, 195, 255, 0.04), transparent);
 }
 
+/* JC POS: el azul de la marca con el acento cian; la pantalla es una maqueta en HTML que se escala con
+   el ancho del equipo (unidades cqw). */
+.pos {
+  overflow: hidden;
+  background: linear-gradient(180deg, var(--fondo) 0%, #0b2a5c 55%, var(--fondo) 100%);
+}
+
+.pos__fondo {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(600px circle at 12% 18%, rgba(76, 195, 255, 0.2), transparent 60%),
+    radial-gradient(520px circle at 92% 88%, rgba(109, 124, 255, 0.24), transparent 60%);
+  pointer-events: none;
+}
+
+.pos .contenedor {
+  position: relative;
+}
+
+.pos__fila {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 60px;
+  align-items: center;
+}
+
+.pos__marca {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.pos__icono {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, var(--acento), var(--acento-2));
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+.pos__icono svg {
+  width: 34px;
+  height: 34px;
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.pos h2 {
+  margin: 2px 0 0;
+  letter-spacing: 0.04em;
+}
+
+.pos__lema {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--acento);
+  margin: 22px 0 12px;
+}
+
+.pos__texto > p:not(.pos__lema):not(.pos__nota) {
+  color: #c3d2e6;
+}
+
+.pos .pos__nota {
+  margin: 18px 0 0;
+  font-size: 14px;
+  color: #9fb3cf;
+}
+
 /* CONECTA */
 .conecta {
   overflow: hidden;
@@ -863,6 +938,11 @@ p {
     var(--verde)
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12l5 5L20 7'/%3E%3C/svg%3E")
     center / 11px no-repeat;
+}
+
+/* En JC POS la marca de cada función va en azul. */
+.pos .funciones li::before {
+  background-color: #1f8fe0;
 }
 
 .conecta .nota {
@@ -977,6 +1057,20 @@ p {
   font-size: 18px;
 }
 
+/* Pestañas de JC POS: en azul, no en el verde de CONECTA. */
+.pos .vistas__pestanas {
+  border-color: rgba(76, 195, 255, 0.25);
+}
+
+.pos .vistas__pestanas button {
+  color: #c3d2e6;
+}
+
+.pos .vistas__pestanas button[aria-selected="true"] {
+  background: var(--acento);
+  color: #04213a;
+}
+
 @keyframes entra {
   from {
     opacity: 0;
@@ -1076,6 +1170,7 @@ p {
 .contacto > *,
 .portada__fila > *,
 .conecta__fila > *,
+.pos__fila > *,
 .vistas__panel > * {
   min-width: 0;
 }
@@ -1265,6 +1360,7 @@ p {
 @media (max-width: 1000px) {
   .portada__fila,
   .conecta__fila,
+  .pos__fila,
   .vistas__panel,
   .contacto {
     grid-template-columns: 1fr;
