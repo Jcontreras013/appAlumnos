@@ -9,7 +9,11 @@ import { ServiceError } from "@/lib/api";
 export async function POST(request: Request, { params }: { params: Promise<{ schoolId: string }> }) {
   const { schoolId } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(schoolId)) return Response.json({ ok: false }, { status: 404 });
-  const body = await request.json().catch(() => null);
+  // PixelPay lo manda en JSON; por si llegara como formulario, también se acepta.
+  const type = request.headers.get("content-type") ?? "";
+  const body = type.includes("application/x-www-form-urlencoded")
+    ? Object.fromEntries(new URLSearchParams(await request.text()))
+    : await request.json().catch(() => null);
   if (!body || typeof body !== "object") return Response.json({ ok: false }, { status: 400 });
   try {
     await academic.pixelpayCallback(schoolId, body);

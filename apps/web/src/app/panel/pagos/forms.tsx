@@ -8,7 +8,8 @@ import {
   PAYMENT_METHOD_LABELS,
   type PaymentSettingsDto,
 } from "@escolar/shared";
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useActionState, useEffect, useState } from "react";
 import { Field, FormAlert, SelectField, SubmitButton } from "@/components/form-controls";
 import { initialFormState } from "@/lib/form-state";
 import {
@@ -195,22 +196,33 @@ export function PayOnlineForm({
 }) {
   const [state, action] = useActionState<CheckoutState, FormData>(payOnlineAction, initialFormState);
   const shown = { ...state, values: { email, ...state.values } };
-  // Con la orden firmada lista, el navegador la envía a PixelPay (página segura de pago).
-  const checkout = useRef<HTMLFormElement>(null);
+  const router = useRouter();
+  // Con la orden firmada lista se abre la página segura de PixelPay (los campos van en la dirección,
+  // como permite su Hosted Payment). En la app de Android se abre en el navegador del teléfono, donde la
+  // verificación del banco funciona completa; al volver a la app se actualiza el estado de cuenta.
+  const url = state.checkout
+    ? `${state.checkout.action}?${new URLSearchParams(state.checkout.fields).toString()}`
+    : null;
   useEffect(() => {
-    if (state.checkout) checkout.current?.submit();
-  }, [state.checkout]);
-  if (state.checkout) {
+    if (!url) return;
+    window.location.assign(url);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") router.refresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, [url, router]);
+  if (url) {
     return (
-      <form ref={checkout} method="post" action={state.checkout.action} className="space-y-2">
-        {Object.entries(state.checkout.fields).map(([name, value]) => (
-          <input key={name} type="hidden" name={name} value={value} />
-        ))}
-        <p className="text-sm text-slate-600">Abriendo la página segura de PixelPay…</p>
-        <button type="submit" className="btn-primary">
-          Continuar al pago
-        </button>
-      </form>
+      <div className="space-y-2 text-sm text-slate-600">
+        <p>
+          Se abrió la página segura de PixelPay. Cuando termines de pagar, vuelve aquí: tu pago aparecerá en
+          tus recibos.
+        </p>
+        <a href={url} className="btn-primary inline-flex" rel="noopener">
+          Abrir la página de pago
+        </a>
+      </div>
     );
   }
   return (

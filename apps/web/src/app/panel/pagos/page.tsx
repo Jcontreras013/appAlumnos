@@ -167,6 +167,11 @@ export default async function PaymentsPage() {
                           {PAYMENT_METHOD_LABELS[p.method]} · {p.byName}
                           {p.status === "anulado" && " · ANULADO"}
                         </span>
+                        {p.reference?.startsWith("PAGO DOBLE") && p.status !== "anulado" && (
+                          <span className="mt-0.5 block text-xs font-semibold text-amber-700">
+                            Pago doble: revisar la devolución
+                          </span>
+                        )}
                       </span>
                       <span
                         className={`tabular-nums ${p.status === "anulado" ? "text-slate-400 line-through" : ""}`}

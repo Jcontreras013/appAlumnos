@@ -28,7 +28,7 @@ const FIRST_LOGIN: HelpSection = {
     "Si olvidas la contraseña, pide a quien te dio el acceso una «Nueva contraseña temporal».",
     "En la app de Android, después de entrar te ofrece «Activar huella». La próxima vez toca «Entrar con huella». Para quitarla: en la pantalla de entrada, «quitar la huella de este teléfono».",
   ],
-  tip: "Tras 5 intentos fallidos la cuenta se bloquea 15 minutos. Si el personal deja la sesión sin usar 30 minutos, se cierra sola (avisa 2 minutos antes). Es para proteger los datos de los alumnos.",
+  tip: "Tras 5 intentos fallidos la cuenta se bloquea 15 minutos. Si la sesión queda sin usar 30 minutos, se cierra sola para todos (personal, familias y alumnos), aunque hayas cerrado la app o la pestaña; si la tienes abierta, avisa 2 minutos antes. En el celular vuelves a entrar con tu huella. Es para proteger los datos de los alumnos.",
 };
 
 const CALENDAR: HelpSection = {

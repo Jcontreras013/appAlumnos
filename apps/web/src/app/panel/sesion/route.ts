@@ -5,3 +5,11 @@
 export function GET() {
   return new Response(null, { status: 204, headers: { "cache-control": "no-store" } });
 }
+
+/**
+ * «Sigo aquí»: mientras la persona usa una página sin cambiar de página (escribe una planificación
+ * larga, lee un libro), la página avisa cada pocos minutos su última actividad y el proxy la guarda.
+ */
+export function POST() {
+  return new Response(null, { status: 204, headers: { "cache-control": "no-store" } });
+}

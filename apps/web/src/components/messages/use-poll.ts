@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { activityHeaders } from "@/lib/activity";
 import { MESSAGES_CHANGED } from "./format";
 
 /**
@@ -42,7 +43,11 @@ export function usePoll(task: () => Promise<void>, intervalMs: number) {
 
 /** Lee JSON de las rutas del panel; si la sesión venció del todo, recarga para volver a entrar. */
 export async function fetchPanelJson<T>(url: string): Promise<T | null> {
-  const res = await fetch(url, { cache: "no-store", headers: { accept: "application/json" } });
+  const res = await fetch(url, {
+    cache: "no-store",
+    // La consulta no es actividad: se informa la última vez que la persona tocó el panel.
+    headers: { accept: "application/json", ...activityHeaders() },
+  });
   if (res.redirected || res.status === 401) {
     window.location.reload();
     return null;
