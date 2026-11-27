@@ -1,4 +1,5 @@
 import {
+  ApiError,
   badRequest,
   conflict,
   isUniqueViolation,
@@ -13,16 +14,19 @@ import {
   type FamilyChildSummaryDto,
   type PortalAccessDto,
   portalAccessInputSchema,
+  type SectionFamilyAccessDto,
+  sectionFamilyAccessInputSchema,
 } from "@escolar/shared";
-import { and, asc, eq, ne } from "drizzle-orm";
+import { and, asc, desc, eq, ne } from "drizzle-orm";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { DbOrTx } from "../db/client";
-import { guardians, studentGuardians, students } from "../db/schema";
+import { enrollments, guardians, studentGuardians, students } from "../db/schema";
 import type { AcademicDeps } from "../deps";
 import { audit } from "../lib/audit";
 import { childrenOf, familyChild, summarize } from "../lib/family";
 import { bearerOf } from "../lib/identity-client";
+import { getSection } from "../lib/queries";
 
 const idParams = z.object({ id: z.uuid() });
 
@@ -67,6 +71,26 @@ export async function familyRoutes(app: FastifyInstance, { db, identity, today }
     };
   }
 
+  async function linkAccount(
+    request: FastifyRequest,
+    guardianId: string,
+    account: FamilyAccountDto,
+    extra: Record<string, unknown> = {},
+  ) {
+    await db.transaction(async (tx) => {
+      await tx
+        .update(guardians)
+        .set({ userId: account.userId, updatedAt: new Date() })
+        .where(eq(guardians.id, guardianId));
+      await audit(tx, request, {
+        action: "guardian.portal_access",
+        entityType: "guardian",
+        entityId: guardianId,
+        data: { userId: account.userId, linkedExisting: account.linkedExisting, ...extra },
+      });
+    });
+  }
+
   // ── Acceso al portal (oficina) ──
   app.post("/guardians/:id/portal-access", office, async (request): Promise<PortalAccessDto> => {
     const schoolId = tenantOf(request);
@@ -99,19 +123,99 @@ export async function familyRoutes(app: FastifyInstance, { db, identity, today }
       nationalId,
       email,
     });
-    await db.transaction(async (tx) => {
-      await tx
-        .update(guardians)
-        .set({ userId: account.userId, updatedAt: new Date() })
-        .where(eq(guardians.id, id));
-      await audit(tx, request, {
-        action: "guardian.portal_access",
-        entityType: "guardian",
-        entityId: id,
-        data: { userId: account.userId, linkedExisting: account.linkedExisting },
-      });
-    });
+    await linkAccount(request, guardian.id, account);
     return accessDto(guardian, account);
+  });
+
+  /**
+   * Acceso al portal para las familias de toda una sección de una vez (por ejemplo, para entregar las
+   * cartas en la reunión de padres): al responsable principal de cada alumno activo, o a todos sus
+   * encargados. Un encargado con varios hijos en la sección recibe una sola cuenta. Los que no se
+   * pueden (sin identidad ni correo en su ficha) se informan para completarlos.
+   */
+  app.post("/sections/:id/portal-access", office, async (request): Promise<SectionFamilyAccessDto> => {
+    const schoolId = tenantOf(request);
+    const { id } = parseOrThrow(idParams, request.params);
+    const { allGuardians } = parseOrThrow(sectionFamilyAccessInputSchema, request.body ?? {});
+    const section = await getSection(db, schoolId, id);
+    const rows = await db
+      .select({
+        studentId: students.id,
+        firstNames: students.firstNames,
+        lastNames: students.lastNames,
+        guardian: guardians,
+      })
+      .from(enrollments)
+      .innerJoin(students, eq(students.id, enrollments.studentId))
+      .leftJoin(
+        studentGuardians,
+        and(
+          eq(studentGuardians.studentId, students.id),
+          allGuardians ? undefined : eq(studentGuardians.isPrimary, true),
+        ),
+      )
+      .leftJoin(guardians, eq(guardians.id, studentGuardians.guardianId))
+      .where(
+        and(
+          eq(enrollments.schoolId, schoolId),
+          eq(enrollments.sectionId, section.id),
+          eq(enrollments.status, "activa"),
+        ),
+      )
+      .orderBy(asc(students.lastNames), asc(students.firstNames), desc(studentGuardians.isPrimary));
+
+    const result: SectionFamilyAccessDto = { created: [], alreadyActive: 0, skipped: [], interrupted: null };
+    const seen = new Set<string>();
+    for (const row of rows) {
+      const studentName = `${row.firstNames} ${row.lastNames}`;
+      const guardian = row.guardian;
+      if (!guardian) {
+        result.skipped.push({
+          studentId: row.studentId,
+          studentName,
+          guardianName: null,
+          reason: "No tiene responsable registrado",
+        });
+        continue;
+      }
+      if (seen.has(guardian.id)) continue;
+      seen.add(guardian.id);
+      if (guardian.userId) {
+        result.alreadyActive++;
+        continue;
+      }
+      const skip = (reason: string) =>
+        result.skipped.push({
+          studentId: row.studentId,
+          studentName,
+          guardianName: guardian.fullName,
+          reason,
+        });
+      if (!guardian.nationalId && !guardian.email) {
+        skip("Sin identidad ni correo en su ficha");
+        continue;
+      }
+      let account: FamilyAccountDto;
+      try {
+        account = await identity.createFamilyAccount(bearerOf(request), {
+          name: guardian.fullName,
+          nationalId: guardian.nationalId ?? undefined,
+          email: guardian.email ?? undefined,
+        });
+      } catch (err) {
+        if (err instanceof ApiError && err.statusCode < 500) {
+          skip(err.message);
+          continue;
+        }
+        // Lo creado hasta aquí ya quedó: se devuelve para no perder sus contraseñas temporales.
+        result.interrupted =
+          err instanceof ApiError ? err.message : "Se cortó la conexión. Vuelve a intentarlo.";
+        break;
+      }
+      await linkAccount(request, guardian.id, account, { sectionId: section.id });
+      result.created.push(await accessDto(guardian, account));
+    }
+    return result;
   });
 
   app.post("/guardians/:id/portal-access/reset", office, async (request): Promise<PortalAccessDto> => {

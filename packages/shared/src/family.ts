@@ -42,6 +42,24 @@ export interface PortalAccessDto extends FamilyAccountDto {
   children: string[];
 }
 
+/** Acceso al portal para las familias de toda una sección. */
+export const sectionFamilyAccessInputSchema = z.object({
+  /** También a los demás encargados (no solo al responsable principal de cada alumno). */
+  allGuardians: z.boolean().default(false),
+});
+export type SectionFamilyAccessInput = z.infer<typeof sectionFamilyAccessInputSchema>;
+
+export interface SectionFamilyAccessDto {
+  /** Las nuevas (con su contraseña temporal) y las que ya tenían cuenta en otro centro (sin ella). */
+  created: PortalAccessDto[];
+  /** Ya tenían acceso en este centro: siguen con su contraseña. */
+  alreadyActive: number;
+  /** No se pudo: sin encargado, sin identidad ni correo, o identity no lo aceptó (con el motivo). */
+  skipped: Array<{ studentId: string; studentName: string; guardianName: string | null; reason: string }>;
+  /** Se cortó a medias (identity no respondió): lo creado hasta ahí sí quedó y se muestra. */
+  interrupted: string | null;
+}
+
 export interface FamilyGradeDto {
   /** Nota del parcial cuando ya se evaluaron los 100 puntos. */
   grade: number | null;

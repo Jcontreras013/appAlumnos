@@ -99,6 +99,7 @@ import type {
   SchoolYearInput,
   ScoresInput,
   SectionDto,
+  SectionFamilyAccessDto,
   SectionFinalsDto,
   SectionInput,
   SectionScheduleInput,
@@ -545,6 +546,12 @@ export const academic = {
     call<void>(`/students/${studentId}/student-access`, { method: "DELETE", token }),
   sectionStudentAccess: (token: string, sectionId: string) =>
     call<SectionStudentAccessDto>(`/sections/${sectionId}/student-access`, { method: "POST", token }),
+  sectionFamilyAccess: (token: string, sectionId: string, allGuardians: boolean) =>
+    call<SectionFamilyAccessDto>(`/sections/${sectionId}/portal-access`, {
+      method: "POST",
+      token,
+      body: { allGuardians },
+    }),
   studentMe: (token: string) => call<FamilyChildDto>("/student/me", { token }),
   studentSchedule: (token: string) => call<ScheduleDto>("/student/me/schedule", { token }),
   reportCard: (token: string, studentId: string) =>

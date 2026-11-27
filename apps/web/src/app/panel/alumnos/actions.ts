@@ -8,6 +8,7 @@ import {
   type ImportResultDto,
   type PortalAccessDto,
   portalAccessInputSchema,
+  type SectionFamilyAccessDto,
   type SectionStudentAccessDto,
   type StudentAccessDto,
   studentFieldsSchema,
@@ -325,6 +326,30 @@ export async function sectionStudentAccessAction(
   const sectionId = z.uuid().parse(formData.get("sectionId"));
   try {
     const result = await academic.sectionStudentAccess(accessToken, sectionId);
+    revalidatePath("/panel/alumnos");
+    return { ok: true, result };
+  } catch (err) {
+    return fromServiceError(err);
+  }
+}
+
+export interface SectionFamilyState extends FormState {
+  result?: SectionFamilyAccessDto;
+}
+
+/** Acceso al portal para las familias de toda una sección (las que todavía no tienen). */
+export async function sectionFamilyAccessAction(
+  _prev: SectionFamilyState,
+  formData: FormData,
+): Promise<SectionFamilyState> {
+  const { accessToken } = await requireRole("admin", "secretaria");
+  const sectionId = z.uuid().parse(formData.get("sectionId"));
+  try {
+    const result = await academic.sectionFamilyAccess(
+      accessToken,
+      sectionId,
+      formData.get("allGuardians") === "si",
+    );
     revalidatePath("/panel/alumnos");
     return { ok: true, result };
   } catch (err) {

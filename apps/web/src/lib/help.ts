@@ -433,6 +433,8 @@ export const HELP_GUIDES: HelpGuide[] = [
         title: "Acceso de las familias al portal",
         steps: [
           "En la ficha del alumno, junto al responsable, «Acceso al portal de familias».",
+          "Toda una sección de una vez (por ejemplo, para la reunión de padres): en «Alumnos y familias», filtra por la sección y toca «Dar acceso a las familias». Se crea al responsable principal de cada alumno (marca la casilla para incluir a los demás encargados); un encargado con varios hijos recibe una sola cuenta. Imprime la hoja y recorta una tira para cada familia.",
+          "Los que no tienen identidad ni correo en su ficha aparecen en una lista: complétala y vuelve a tocar el botón (solo crea las que faltan).",
           "Imprime la carta: lleva el usuario (su identidad o correo) y una contraseña temporal. Al entrar, la familia elige la suya.",
           "Si la olvidan, desde el mismo lugar se da una nueva contraseña temporal.",
         ],
