@@ -38,19 +38,21 @@ export default async function StudentsPage({ searchParams }: PageProps<"/panel/a
   const filters: StudentFilters = {
     q: one(params.q) || undefined,
     sectionId: one(params.seccion) || undefined,
+    shiftId: one(params.jornada) || undefined,
     estado,
     limit: PAGE_SIZE,
     offset: (page - 1) * PAGE_SIZE,
   };
-  const [{ items, total }, allSections] = await Promise.all([
+  const [{ items, total }, allSections, shifts] = await Promise.all([
     academic.listStudents(session.accessToken, filters),
     academic.listSections(session.accessToken),
+    academic.listShifts(session.accessToken).catch(() => []),
   ]);
   const sections = teacher ? allSections.filter((s) => settings?.mySectionIds.includes(s.id)) : allSections;
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const selectedSection = sections.find((s) => s.id === filters.sectionId);
   const imported = one(params.importados);
-  const filtered = Boolean(filters.q || filters.sectionId || estado !== "todos");
+  const filtered = Boolean(filters.q || filters.sectionId || filters.shiftId || estado !== "todos");
   // En el orden de las secciones del centro; al final, retirados y sin matrícula.
   const groupOf = (s: (typeof items)[number]) =>
     !s.enrollment
@@ -65,6 +67,7 @@ export default async function StudentsPage({ searchParams }: PageProps<"/panel/a
   const pageHref = (n: number) => {
     const next = new URLSearchParams({ ...(filters.q ? { q: filters.q } : {}), estado: estado ?? "todos" });
     if (filters.sectionId) next.set("seccion", filters.sectionId);
+    if (filters.shiftId) next.set("jornada", filters.shiftId);
     next.set("pagina", String(n));
     return `/panel/alumnos?${next}` as `/panel/alumnos?${string}`;
   };
@@ -112,7 +115,13 @@ export default async function StudentsPage({ searchParams }: PageProps<"/panel/a
       )}
 
       <search>
-        <form className="card grid gap-3 p-4 sm:grid-cols-[1fr_14rem_12rem_auto]">
+        <form
+          className={`card grid gap-3 p-4 ${
+            shifts.length
+              ? "sm:grid-cols-[1fr_12rem_14rem_12rem_auto]"
+              : "sm:grid-cols-[1fr_14rem_12rem_auto]"
+          }`}
+        >
           <input
             name="q"
             defaultValue={filters.q}
@@ -120,6 +129,22 @@ export default async function StudentsPage({ searchParams }: PageProps<"/panel/a
             aria-label="Buscar"
             className="input"
           />
+          {shifts.length > 0 && (
+            <select
+              name="jornada"
+              defaultValue={filters.shiftId ?? ""}
+              aria-label="Jornada"
+              className="input"
+            >
+              <option value="">Todas las jornadas</option>
+              <option value="regular">Regular (lunes a viernes)</option>
+              {shifts.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          )}
           <select
             name="seccion"
             defaultValue={filters.sectionId ?? ""}
@@ -130,6 +155,7 @@ export default async function StudentsPage({ searchParams }: PageProps<"/panel/a
             {sections.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.label}
+                {s.shiftName ? ` · ${s.shiftName}` : ""}
               </option>
             ))}
           </select>

@@ -101,6 +101,8 @@ describe("Gemini: la respuesta", () => {
       miercoles: "Desarrollo",
       jueves: "",
       viernes: "",
+      sabado: "",
+      domingo: "",
     });
     const text = fields.find((f) => f.type !== "dias");
     if (!text) throw new Error("falta un campo de texto");

@@ -2,9 +2,13 @@
 
 import {
   type ClassTaskDto,
+  formatDay,
   type GradingPeriodDto,
+  isMeetingSchedule,
+  nextClassDay,
   SUBMISSION_FILE_MAX_BYTES,
   type TaskSubmissionDto,
+  todayInHonduras,
 } from "@escolar/shared";
 import { useActionState, useEffect, useId, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
@@ -28,12 +32,15 @@ export function TaskForm({
   periods,
   currentPeriodId,
   task,
+  classDays,
   onDone,
 }: {
   assignmentId: string;
   periods: GradingPeriodDto[];
   currentPeriodId: string | null;
   task?: ClassTaskDto;
+  /** Días de clase de la sección: en fin de semana, la entrega sugerida es el próximo encuentro. */
+  classDays?: number[];
   onDone?: () => void;
 }) {
   const id = useId();
@@ -46,6 +53,8 @@ export function TaskForm({
     }
   }, [state, onDone]);
   const v = state.values;
+  const nextMeeting =
+    !task && classDays && isMeetingSchedule(classDays) ? nextClassDay(todayInHonduras(), classDays) : null;
   return (
     <form action={action} className="space-y-3" noValidate>
       <input type="hidden" name="assignmentId" value={assignmentId} />
@@ -74,8 +83,9 @@ export function TaskForm({
           name="dueDate"
           label="Fecha de entrega"
           type="date"
-          defaultValue={v?.dueDate ?? task?.dueDate ?? ""}
+          defaultValue={v?.dueDate ?? task?.dueDate ?? nextMeeting ?? ""}
           state={state}
+          hint={nextMeeting ? `Próximo encuentro: ${formatDay(nextMeeting)}` : undefined}
         />
         <Field
           idPrefix={id}
@@ -199,6 +209,7 @@ export function NewTask(props: {
   assignmentId: string;
   periods: GradingPeriodDto[];
   currentPeriodId: string | null;
+  classDays?: number[];
 }) {
   return (
     <Toggle label="+ Nueva tarea" className="btn-primary">

@@ -1,0 +1,1 @@
+ALTER TABLE "schools" ADD COLUMN "weekend_notices" boolean DEFAULT false NOT NULL;

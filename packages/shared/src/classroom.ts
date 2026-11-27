@@ -171,6 +171,8 @@ export interface ClassroomDto {
   quizzes: ClassQuizDto[];
   /** El maestro abrió el chat de la clase. */
   chatEnabled: boolean;
+  /** Días de clase de la jornada de la sección (1 = lunes … 7 = domingo). */
+  classDays: number[];
 }
 
 // ───────────────────────────── Chat de la clase ─────────────────────────────

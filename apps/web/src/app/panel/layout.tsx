@@ -46,6 +46,9 @@ export default async function PanelLayout({ children }: { children: ReactNode })
     !gated && is("admin")
       ? ((await academic.pendingChangeRequests(accessToken).catch(() => null))?.count ?? 0)
       : 0;
+  // El alumno que responde por sí mismo ve «Mis pagos» (a los demás, los pagos los ve su familia).
+  const ownPayments =
+    !gated && is("estudiante") ? Boolean(await academic.myAccount(accessToken).catch(() => null)) : false;
   const items: NavItem[] = [];
   if (isRegionalRole(user.role)) {
     items.push({ href: "/panel/region", label: "Tablero de centros" });
@@ -53,11 +56,13 @@ export default async function PanelLayout({ children }: { children: ReactNode })
   } else if (is("padre")) {
     items.push({ href: "/panel/familia", label: "Mis hijos" });
     items.push({ href: "/panel/aula", label: "Clases" });
+    items.push({ href: "/panel/pagos/familia", label: "Pagos" });
     items.push({ href: "/panel/biblioteca", label: "Biblioteca" });
   } else if (is("estudiante")) {
     items.push({ href: "/panel/aula", label: "Mis clases" });
     items.push({ href: "/panel/chats", label: "Chats" });
     items.push({ href: "/panel/mis-notas", label: "Mis notas" });
+    if (ownPayments) items.push({ href: "/panel/pagos/mis-pagos", label: "Mis pagos" });
     items.push({ href: "/panel/biblioteca", label: "Biblioteca" });
   } else {
     items.push({ href: "/panel", label: "Inicio" });
@@ -82,6 +87,7 @@ export default async function PanelLayout({ children }: { children: ReactNode })
   }
   if (is("admin", "secretaria", "coordinador")) add("Alumnos", "/panel/alumnos", "Alumnos y familias");
   if (teachersEnroll) add("Alumnos", "/panel/alumnos", "Matrícula");
+  if (is("admin", "secretaria")) add("Alumnos", "/panel/pagos", "Pagos");
   if (is("admin", "secretaria")) add("Alumnos", "/panel/traslados", "Traslados");
   if (is("admin", "coordinador", "secretaria"))
     add("Alumnos", "/panel/seguimiento", "Seguimiento del centro");

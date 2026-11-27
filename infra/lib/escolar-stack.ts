@@ -352,6 +352,13 @@ export class EscolarStack extends Stack {
       return { environment, ...(Object.keys(secrets).length ? { secrets } : {}) };
     };
 
+    // Pagos con tarjeta: cifra la llave secreta de PixelPay de cada centro (se genera sola, nadie la ve).
+    const paymentsKey = new secretsmanager.Secret(this, "LlavePagos", {
+      description: "Cifra las llaves secretas de la pasarela de pagos de cada centro (CONECTA)",
+      generateSecretString: { passwordLength: 64, excludePunctuation: true },
+      removalPolicy: RemovalPolicy.RETAIN,
+    });
+
     // academic no tiene la llave privada: verifica tokens con el JWKS público de identity.
     const assistant = assistantSettings();
     const academic = backendService("academic", {
@@ -368,7 +375,10 @@ export class EscolarStack extends Stack {
         FILES_BUCKET: attachmentsBucket.bucketName,
         AWS_REGION: this.region,
       },
-      ...(assistant.secrets ? { secrets: assistant.secrets } : {}),
+      secrets: {
+        ...assistant.secrets,
+        PAYMENTS_ENCRYPTION_KEY: ecs.Secret.fromSecretsManager(paymentsKey),
+      },
     });
     // academic solo puede leer y escribir en sus carpetas (biblioteca y aula virtual), no en los
     // adjuntos de los mensajes.

@@ -1,3 +1,4 @@
+import { describeClassDays } from "@escolar/shared";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ScheduleGrid } from "@/components/schedule-grid";
@@ -41,8 +42,8 @@ export default async function SchedulePage({ searchParams }: PageProps<"/panel/h
       <div>
         <h1 className="text-2xl font-semibold text-slate-900">Horario de clases</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Las horas de clase del centro y qué clase va en cada día y hora de cada sección. Un docente no puede
-          quedar en dos secciones a la misma hora.
+          Las horas de clase de cada jornada y qué clase va en cada día y hora de cada sección. Un docente no
+          puede quedar en dos secciones a la misma hora.
         </p>
       </div>
 
@@ -70,12 +71,19 @@ export default async function SchedulePage({ searchParams }: PageProps<"/panel/h
                   }`}
                 >
                   {s.label}
+                  {s.shiftName && <span className="ml-1 text-xs text-slate-500">· {s.shiftName}</span>}
                 </Link>
               ))}
             </nav>
             {selected && schedule && (
               <>
-                <h2 className="font-semibold text-slate-900">{selected.label}</h2>
+                <h2 className="font-semibold text-slate-900">
+                  {selected.label}
+                  <span className="ml-2 text-sm font-normal text-slate-500">
+                    {selected.shiftName ? `${selected.shiftName} · ` : ""}
+                    {describeClassDays(selected.classDays)}
+                  </span>
+                </h2>
                 {canEdit && schedule.blocks.length > 0 ? (
                   classes.length === 0 ? (
                     <p className="text-sm text-slate-500">
@@ -95,10 +103,15 @@ export default async function SchedulePage({ searchParams }: PageProps<"/panel/h
               </>
             )}
           </section>
-          {canEdit && schedule && (
+          {canEdit && schedule && selected && (
             <aside className="card h-fit p-5">
-              <h2 className="mb-3 font-semibold text-slate-900">Horas de clase</h2>
-              <BlocksForm blocks={schedule.blocks} />
+              <h2 className="mb-1 font-semibold text-slate-900">Horas de clase</h2>
+              <p className="mb-3 text-xs text-slate-500">
+                {selected.shiftName
+                  ? `De la jornada ${selected.shiftName}: valen para todas sus secciones.`
+                  : "De las secciones sin jornada (lunes a viernes)."}
+              </p>
+              <BlocksForm key={selected.shiftId ?? "-"} blocks={schedule.blocks} shiftId={selected.shiftId} />
             </aside>
           )}
         </div>

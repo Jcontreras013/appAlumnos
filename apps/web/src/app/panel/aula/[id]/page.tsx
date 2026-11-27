@@ -71,6 +71,7 @@ export default async function ClassPage({ params }: PageProps<"/panel/aula/[id]"
           edit ? (
             <NewTask
               assignmentId={room.assignmentId}
+              classDays={room.classDays}
               periods={periods}
               currentPeriodId={current?.id ?? null}
             />

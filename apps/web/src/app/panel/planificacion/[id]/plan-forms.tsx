@@ -1,19 +1,36 @@
 "use client";
 
 import {
+  classDayKeys,
   type DaysValue,
   formatWeekRange,
+  isMeetingSchedule,
   type LessonPlanDto,
   type PlanContent,
   type PlanField,
   WEEKDAY_LABELS,
   WEEKDAYS,
+  type Weekday,
 } from "@escolar/shared";
 import { useActionState, useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { FormAlert } from "@/components/form-controls";
 import { initialFormState } from "@/lib/form-state";
 import { type DraftState, draftPlanAction, reviewPlanAction, savePlanAction } from "../actions";
+
+/** Columnas de la cuadrícula de días (Tailwind necesita las clases escritas completas). */
+const DAY_COLUMNS: Record<number, string> = {
+  1: "md:grid-cols-1",
+  2: "md:grid-cols-2",
+  3: "md:grid-cols-3",
+  4: "md:grid-cols-4",
+  5: "md:grid-cols-5",
+  6: "md:grid-cols-3",
+  7: "md:grid-cols-4",
+};
+/** «Lunes» o, en una jornada de fin de semana, «Encuentro del sábado». */
+const dayTitle = (day: Weekday, meetings: boolean) =>
+  meetings ? `Encuentro del ${WEEKDAY_LABELS[day].toLowerCase()}` : WEEKDAY_LABELS[day];
 
 export interface AssistantInfo {
   enabled: boolean;
@@ -197,7 +214,7 @@ export function PlanEditor({
               <option value="">Elegir…</option>
               {others.map((s) => (
                 <option key={s.id} value={s.id}>
-                  Semana del {formatWeekRange(s.weekStart)}
+                  Semana del {formatWeekRange(s.weekStart, plan.assignment.classDays)}
                 </option>
               ))}
             </select>
@@ -218,16 +235,24 @@ export function PlanEditor({
           );
           if (field.type === "dias") {
             const days = values[field.key] as DaysValue;
+            const classDays = classDayKeys(plan.assignment.classDays);
+            const meetings = isMeetingSchedule(plan.assignment.classDays);
             return (
               <fieldset key={field.key} className="card space-y-3 p-4" aria-invalid={Boolean(error)}>
                 <legend className="sr-only">{field.label}</legend>
                 {label}
                 {field.help && <p className="-mt-2 text-xs text-slate-500">{field.help}</p>}
-                <div className="grid gap-3 md:grid-cols-5">
-                  {WEEKDAYS.map((day) => (
+                {meetings && (
+                  <p className="-mt-2 text-xs text-slate-500">
+                    Jornada de fin de semana: planifica cada encuentro completo (inicio, desarrollo y cierre)
+                    y lo que harán en casa hasta el próximo.
+                  </p>
+                )}
+                <div className={`grid gap-3 ${DAY_COLUMNS[classDays.length] ?? "md:grid-cols-5"}`}>
+                  {classDays.map((day) => (
                     <label key={day} className="block">
                       <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
-                        {WEEKDAY_LABELS[day]}
+                        {dayTitle(day, meetings)}
                       </span>
                       <textarea
                         name={`f.${field.key}.${day}`}
@@ -238,7 +263,7 @@ export function PlanEditor({
                             [field.key]: { ...(v[field.key] as DaysValue), [day]: e.target.value },
                           }))
                         }
-                        rows={5}
+                        rows={meetings ? 10 : 5}
                         className="input min-h-28 text-sm"
                       />
                     </label>

@@ -34,6 +34,7 @@ const app = await buildApp({
       throw new Error("no se usa en esta prueba");
     },
     revokeStudentAccount: async () => {},
+    setWeekendNotices: async () => {},
   },
   verifier: await createAccessTokenVerifier({ publicKey: keys.publicKey }),
   today: () => "2026-11-09",

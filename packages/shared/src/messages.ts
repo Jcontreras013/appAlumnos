@@ -178,22 +178,29 @@ export interface UnreadMessagesDto {
 // ───────────────────────────── Avisos en el celular ─────────────────────────────
 
 /**
- * Horario de atención (hora de Honduras): lunes a viernes de 6:00 a 19:00. Fuera de ese horario los
- * mensajes llegan, pero el teléfono no avisa hasta que empieza la jornada.
+ * Horario de atención (hora de Honduras): lunes a viernes de 6:00 a 19:00, y también sábado y domingo
+ * en los centros con jornada de fin de semana. Fuera de ese horario los mensajes llegan, pero el
+ * teléfono no avisa hasta que empieza la jornada.
  */
-export const NOTIFY_HOURS = { from: 6, to: 19, weekdays: [1, 2, 3, 4, 5] } as const;
+export const NOTIFY_HOURS = { from: 6, to: 19, weekdays: [1, 2, 3, 4, 5], weekend: [0, 6] } as const;
 
 /** Honduras no cambia de horario: siempre UTC-6. */
 const HONDURAS_OFFSET_MS = 6 * 60 * 60 * 1000;
 
-export function withinNotifyHours(at: Date): boolean {
+/** ¿Es sábado o domingo en Honduras? */
+export function isWeekendInHonduras(at: Date): boolean {
+  const local = new Date(at.getTime() - HONDURAS_OFFSET_MS);
+  return (NOTIFY_HOURS.weekend as readonly number[]).includes(local.getUTCDay());
+}
+
+/** `weekends`: el centro tiene clases sábado o domingo, así que esos días también se avisa. */
+export function withinNotifyHours(at: Date, options: { weekends?: boolean } = {}): boolean {
   const local = new Date(at.getTime() - HONDURAS_OFFSET_MS);
   const hour = local.getUTCHours();
-  return (
-    (NOTIFY_HOURS.weekdays as readonly number[]).includes(local.getUTCDay()) &&
-    hour >= NOTIFY_HOURS.from &&
-    hour < NOTIFY_HOURS.to
-  );
+  const days: readonly number[] = options.weekends
+    ? [...NOTIFY_HOURS.weekdays, ...NOTIFY_HOURS.weekend]
+    : NOTIFY_HOURS.weekdays;
+  return days.includes(local.getUTCDay()) && hour >= NOTIFY_HOURS.from && hour < NOTIFY_HOURS.to;
 }
 
 export const pushSubscriptionSchema = z.object({

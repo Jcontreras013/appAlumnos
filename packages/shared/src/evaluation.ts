@@ -35,6 +35,20 @@ export const RISK_RULES = {
   minPointsToProject: 20,
 };
 
+/**
+ * Umbrales de asistencia según cuántos días a la semana tiene clases la sección. En una jornada de
+ * fin de semana (uno o dos encuentros por semana) faltar un día es perder la semana: la alerta salta
+ * desde la primera ausencia sin justificar.
+ */
+export function attendanceRiskRules(classDays: readonly number[]) {
+  const meetings = classDays.length > 0 && classDays.length <= 2;
+  return {
+    maxAbsences: meetings ? 1 : RISK_RULES.maxAbsences,
+    minAttendanceDays: meetings ? 1 : RISK_RULES.minAttendanceDays,
+    minAttendanceRate: RISK_RULES.minAttendanceRate,
+  };
+}
+
 const isoDate = z.string().refine(isIsoDate, { error: "Fecha inválida" });
 
 // ───────────────────────────── Parciales ─────────────────────────────

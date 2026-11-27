@@ -8,6 +8,7 @@ import {
   schoolYearInputSchema,
   sectionInputSchema,
   sectionUpdateSchema,
+  shiftInputSchema,
   subjectInputSchema,
 } from "@escolar/shared";
 import { revalidatePath } from "next/cache";
@@ -70,7 +71,7 @@ export async function createSectionAction(_prev: FormState, formData: FormData):
   const { accessToken, user } = await creator();
   return runFormAction(formData, {
     schema: sectionInputSchema,
-    fields: ["schoolYearId", "gradeId", "name", "capacity"],
+    fields: ["schoolYearId", "gradeId", "name", "capacity", "shiftId"],
     submit: async (input) =>
       user.role === "secretaria"
         ? done(await requestFromDirection(accessToken, "seccion", input))
@@ -151,7 +152,7 @@ export async function updateSectionAction(_prev: FormState, formData: FormData):
   const id = idOf(formData);
   return runFormAction(formData, {
     schema: sectionUpdateSchema,
-    fields: ["name", "capacity"],
+    fields: ["name", "capacity", "shiftId"],
     submit: async (input) =>
       done(`Sección ${(await academic.updateSection(accessToken, id, input)).label} guardada.`),
   });
@@ -224,5 +225,45 @@ export async function setPassingGradeAction(_prev: FormState, formData: FormData
       await academic.setPassingGrade(accessToken, passingGrade);
       return done(`Nota mínima de aprobación: ${passingGrade}.`);
     },
+  });
+}
+
+// ── Jornadas (solo la dirección) ──
+
+/** Nombre y días marcados (casillas «classDays», una por día: 1 = lunes … 7 = domingo). */
+function shiftFrom(formData: FormData) {
+  const values = { name: String(formData.get("name") ?? "") };
+  const parsed = shiftInputSchema.safeParse({
+    ...values,
+    classDays: formData.getAll("classDays").map(Number),
+  });
+  return { values, parsed };
+}
+
+export async function createShiftAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const { accessToken } = await requireRole("admin");
+  const { values, parsed } = shiftFrom(formData);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Revisa la jornada", values };
+  return attempt(async () =>
+    done(`Jornada «${(await academic.createShift(accessToken, parsed.data)).name}» creada.`),
+  );
+}
+
+export async function updateShiftAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const { accessToken } = await requireRole("admin");
+  const id = idOf(formData);
+  const { values, parsed } = shiftFrom(formData);
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Revisa la jornada", values };
+  return attempt(async () =>
+    done(`Jornada «${(await academic.updateShift(accessToken, id, parsed.data)).name}» guardada.`),
+  );
+}
+
+export async function deleteShiftAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const { accessToken } = await requireRole("admin");
+  const id = idOf(formData);
+  return attempt(async () => {
+    await academic.deleteShift(accessToken, id);
+    return done("Jornada eliminada.");
   });
 }

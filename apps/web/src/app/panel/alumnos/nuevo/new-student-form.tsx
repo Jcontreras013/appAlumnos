@@ -1,7 +1,14 @@
 "use client";
 
-import { RELATIONSHIP_LABELS, RELATIONSHIPS, SEX_LABELS, SEXES } from "@escolar/shared";
-import { useActionState } from "react";
+import {
+  ageOn,
+  RELATIONSHIP_LABELS,
+  RELATIONSHIPS,
+  SEX_LABELS,
+  SEXES,
+  todayInHonduras,
+} from "@escolar/shared";
+import { useActionState, useState } from "react";
 import { Field, FormAlert, SelectField, SubmitButton, TextAreaField } from "@/components/form-controls";
 import { initialFormState } from "@/lib/form-state";
 import { createStudentAction } from "../actions";
@@ -17,6 +24,10 @@ export function NewStudentForm({
   sectionRequired?: boolean;
 }) {
   const [state, action] = useActionState(createStudentAction, initialFormState);
+  // Responde por sí mismo (mayor de edad, o paga él su colegiatura): el responsable es opcional.
+  const [self, setSelf] = useState(state.values?.selfResponsible === "on");
+  const [touched, setTouched] = useState(false);
+  const [adult, setAdult] = useState(false);
 
   return (
     <form action={action} className="space-y-6" noValidate>
@@ -35,7 +46,19 @@ export function NewStudentForm({
             inputMode="numeric"
             state={state}
           />
-          <Field name="birthDate" label="Fecha de nacimiento" type="date" state={state} />
+          <Field
+            name="birthDate"
+            label="Fecha de nacimiento"
+            type="date"
+            state={state}
+            onChange={(e) => {
+              const value = e.currentTarget.value;
+              const isAdult = /^\d{4}-\d{2}-\d{2}$/.test(value) && ageOn(value, todayInHonduras()) >= 18;
+              setAdult(isAdult);
+              // Un mayor de edad casi siempre responde por sí mismo: se marca, pero se puede desmarcar.
+              if (isAdult && !touched) setSelf(true);
+            }}
+          />
           <SelectField
             name="sex"
             label="Sexo"
@@ -53,7 +76,30 @@ export function NewStudentForm({
         />
       </fieldset>
 
-      <fieldset className="card space-y-4 p-5">
+      <div className="card space-y-1 p-5">
+        <label className="flex items-start gap-3 text-sm">
+          <input
+            type="checkbox"
+            name="selfResponsible"
+            checked={self}
+            onChange={(e) => {
+              setTouched(true);
+              setSelf(e.currentTarget.checked);
+            }}
+            className="mt-0.5 rounded border-slate-300"
+          />
+          <span>
+            <span className="font-medium text-slate-900">El alumno responde por sí mismo</span>
+            <span className="block text-slate-500">
+              Mayor de edad, o paga él su colegiatura (por ejemplo, en jornada de fin de semana). No necesita
+              responsable y, con su cuenta del aula virtual, ve sus cobros y paga.
+              {adult && !self && " Según su fecha de nacimiento ya tiene 18 años."}
+            </span>
+          </span>
+        </label>
+      </div>
+
+      <fieldset className="card space-y-4 p-5" hidden={self} disabled={self}>
         <legend className="sr-only">Responsable principal</legend>
         <h2 className="font-semibold text-slate-900">Responsable principal</h2>
         <p className="-mt-2 text-sm text-slate-500">

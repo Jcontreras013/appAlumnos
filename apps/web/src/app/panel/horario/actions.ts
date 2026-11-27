@@ -18,7 +18,7 @@ export async function saveBlocksAction(_prev: FormState, formData: FormData): Pr
   const blocks = starts
     .map((startsAt, i) => ({ startsAt, endsAt: ends[i] ?? "" }))
     .filter((b) => b.startsAt || b.endsAt);
-  const parsed = scheduleBlocksInputSchema.safeParse({ blocks });
+  const parsed = scheduleBlocksInputSchema.safeParse({ blocks, shiftId: formData.get("shiftId") || null });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Revisa las horas" };
   try {
     await academic.saveScheduleBlocks(accessToken, parsed.data);
@@ -44,7 +44,11 @@ export async function saveSectionScheduleAction(_prev: FormState, formData: Form
   try {
     const saved = await academic.saveSectionSchedule(accessToken, sectionId, parsed.data);
     revalidatePath("/panel/horario");
-    return { ok: true, message: `Horario guardado: ${saved.slots.length} horas de clase a la semana.` };
+    const n = saved.slots.length;
+    return {
+      ok: true,
+      message: `Horario guardado: ${n} ${n === 1 ? "hora" : "horas"} de clase a la semana.`,
+    };
   } catch (err) {
     return fromServiceError(err);
   }

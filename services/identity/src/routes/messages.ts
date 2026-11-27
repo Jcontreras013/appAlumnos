@@ -45,6 +45,7 @@ import {
   messages,
   pushDevices,
   pushSubscriptions,
+  schools,
   users,
 } from "../db/schema";
 import type { IdentityDeps } from "../deps";
@@ -319,7 +320,11 @@ export async function messageRoutes(
     body: string,
     attachment?: Omit<typeof messageAttachments.$inferInsert, "messageId" | "conversationId" | "schoolId">,
   ): Promise<MessageDto> {
-    const notifyNow = canNotify && withinNotifyHours(now());
+    const [school] = await db
+      .select({ weekendNotices: schools.weekendNotices })
+      .from(schools)
+      .where(eq(schools.id, c.schoolId));
+    const notifyNow = canNotify && withinNotifyHours(now(), { weekends: school?.weekendNotices ?? false });
     const { message, saved } = await db.transaction(async (tx) => {
       const [row] = await tx
         .insert(messages)

@@ -31,6 +31,7 @@ import {
   grades,
   lessonPlans,
   libraryItems,
+  scheduleSlots,
   schoolYears,
   sections,
   subjects,
@@ -61,6 +62,16 @@ async function uniqueOr<T>(promise: Promise<T>, constraint: string, message: str
     return await promise;
   } catch (err) {
     if (isUniqueViolation(err, constraint)) throw conflict(message);
+    throw err;
+  }
+}
+
+/** Una jornada de otro centro (o que no existe) choca con la llave foránea: 404 claro. */
+async function shiftOr<T>(promise: Promise<T>): Promise<T> {
+  try {
+    return await promise;
+  } catch (err) {
+    if (isForeignKeyViolation(err)) throw notFound("Jornada no encontrada");
     throw err;
   }
 }
@@ -250,13 +261,15 @@ export async function structureRoutes(app: FastifyInstance, { db, identity, toda
     if (!year) throw notFound("Año lectivo no encontrado");
     if (!grade) throw notFound("Grado no encontrado");
 
-    const [section] = await uniqueOr(
-      db
-        .insert(sections)
-        .values({ schoolId, ...input })
-        .returning(),
-      "sections_name_unique",
-      `Ya existe la sección "${input.name}" en ese grado para ese año`,
+    const [section] = await shiftOr(
+      uniqueOr(
+        db
+          .insert(sections)
+          .values({ schoolId, ...input })
+          .returning(),
+        "sections_name_unique",
+        `Ya existe la sección "${input.name}" en ese grado para ese año`,
+      ),
     );
     if (!section) throw new Error("No se creó la sección");
     return reply.status(201).send(await getSection(db, schoolId, section.id));
@@ -272,22 +285,34 @@ export async function structureRoutes(app: FastifyInstance, { db, identity, toda
         `${before.label} tiene ${plural(before.enrolledCount, "alumno", "alumnos")}: el cupo no puede ser menor.`,
       );
     }
-    await db.transaction(async (tx) => {
-      await uniqueOr(
-        tx
-          .update(sections)
-          .set(input)
-          .where(and(eq(sections.schoolId, schoolId), eq(sections.id, id))),
-        "sections_name_unique",
-        `Ya existe la sección "${input.name}" en ese grado para ese año`,
-      );
-      await audit(tx, request, {
-        action: "section.updated",
-        entityType: "section",
-        entityId: id,
-        data: { before: { name: before.name, capacity: before.capacity }, after: input },
-      });
-    });
+    const shiftChanged = input.shiftId !== undefined && (input.shiftId ?? null) !== before.shiftId;
+    await shiftOr(
+      db.transaction(async (tx) => {
+        await uniqueOr(
+          tx
+            .update(sections)
+            .set(input)
+            .where(and(eq(sections.schoolId, schoolId), eq(sections.id, id))),
+          "sections_name_unique",
+          `Ya existe la sección "${input.name}" en ese grado para ese año`,
+        );
+        // Otra jornada tiene otros días y otras horas: el horario de la sección se vuelve a armar.
+        if (shiftChanged) {
+          await tx
+            .delete(scheduleSlots)
+            .where(and(eq(scheduleSlots.schoolId, schoolId), eq(scheduleSlots.sectionId, id)));
+        }
+        await audit(tx, request, {
+          action: "section.updated",
+          entityType: "section",
+          entityId: id,
+          data: {
+            before: { name: before.name, capacity: before.capacity, shiftId: before.shiftId },
+            after: input,
+          },
+        });
+      }),
+    );
     return getSection(db, schoolId, id);
   });
 

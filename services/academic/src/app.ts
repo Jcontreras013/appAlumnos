@@ -28,10 +28,12 @@ import { finalRoutes } from "./routes/finals";
 import { followUpRoutes } from "./routes/followups";
 import { importRoutes } from "./routes/import";
 import { libraryRoutes } from "./routes/library";
+import { paymentRoutes } from "./routes/payments";
 import { planRoutes } from "./routes/plans";
 import { quizRoutes } from "./routes/quizzes";
 import { regionalRoutes } from "./routes/regional";
 import { scheduleRoutes } from "./routes/schedule";
+import { shiftRoutes } from "./routes/shifts";
 import { staffRoutes } from "./routes/staff";
 import { structureRoutes } from "./routes/structure";
 import { studentAccessRoutes } from "./routes/student-access";
@@ -51,6 +53,8 @@ export interface BuildAppOptions {
   planDrafter?: PlanDrafter | null;
   /** Archivos de la biblioteca; por defecto, la carpeta .biblioteca (desarrollo). */
   files?: FileStore;
+  /** Llave para cifrar las llaves secretas de la pasarela (PAYMENTS_ENCRYPTION_KEY). */
+  paymentsKey?: string | null;
 }
 
 export async function buildApp(options: BuildAppOptions) {
@@ -71,6 +75,7 @@ export async function buildApp(options: BuildAppOptions) {
     today: options.today ?? (() => todayInHonduras()),
     planDrafter: options.planDrafter ?? null,
     files: options.files ?? localFileStore(defaultFilesDir(".biblioteca")),
+    paymentsKey: options.paymentsKey ?? null,
   };
   await app.register(async (scope) => {
     await structureRoutes(scope, deps);
@@ -87,6 +92,8 @@ export async function buildApp(options: BuildAppOptions) {
     await quizRoutes(scope, deps);
     await classChatRoutes(scope, deps);
     await changeRequestRoutes(scope, deps);
+    await paymentRoutes(scope, deps);
+    await shiftRoutes(scope, deps);
     await exportRoutes(scope, deps);
     await followUpRoutes(scope, deps);
     await announcementRoutes(scope, deps);

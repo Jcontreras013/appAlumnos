@@ -13,6 +13,7 @@ import {
   memberships,
   pushDevices,
   pushSubscriptions,
+  schools,
   users,
 } from "../db/schema";
 import { noticeText } from "./attachments";
@@ -99,7 +100,9 @@ export const messagePayload = (
  * nadie recibe el aviso dos veces.
  */
 export async function sendPendingNotices(db: DbOrTx, notifier: Notifier, now: Date): Promise<number> {
-  if (!withinNotifyHours(now)) return 0;
+  if (!withinNotifyHours(now, { weekends: true })) return 0;
+  // Sábado y domingo solo se avisa en los centros con jornada de fin de semana.
+  const onlyWeekendSchools = !withinNotifyHours(now);
   const claimed = await db
     .update(conversationMembers)
     .set({ notifiedAt: sql`${conversations.lastMessageAt}` })
@@ -111,6 +114,9 @@ export async function sendPendingNotices(db: DbOrTx, notifier: Notifier, now: Da
         ne(conversations.lastSenderId, conversationMembers.userId),
         sql`${conversations.lastMessageAt} > coalesce(${conversationMembers.lastReadAt}, '-infinity'::timestamptz)`,
         sql`${conversations.lastMessageAt} > coalesce(${conversationMembers.notifiedAt}, '-infinity'::timestamptz)`,
+        onlyWeekendSchools
+          ? sql`${conversations.schoolId} in (select ${schools.id} from ${schools} where ${schools.weekendNotices})`
+          : undefined,
       ),
     )
     .returning({ userId: conversationMembers.userId });

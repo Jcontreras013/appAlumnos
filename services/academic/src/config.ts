@@ -30,6 +30,8 @@ export interface AcademicConfig {
    * FILES_DIR (una carpeta, en la demo). Sin ninguno, la carpeta .biblioteca del servicio.
    */
   files: { kind: "s3"; bucket: string } | { kind: "local"; dir: string | null };
+  /** PAYMENTS_ENCRYPTION_KEY: cifra las llaves secretas de la pasarela de cada centro. */
+  paymentsKey: string | null;
 }
 
 /**
@@ -103,5 +105,7 @@ export function loadConfig(): AcademicConfig {
     files: process.env.FILES_BUCKET?.trim()
       ? { kind: "s3", bucket: process.env.FILES_BUCKET.trim() }
       : { kind: "local", dir: process.env.FILES_DIR?.trim() || null },
+    // Cifra las llaves secretas de la pasarela de cada centro (secreto de AWS en producción).
+    paymentsKey: process.env.PAYMENTS_ENCRYPTION_KEY?.trim() || null,
   };
 }

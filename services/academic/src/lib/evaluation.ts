@@ -5,6 +5,7 @@ import {
   type AttendanceStatus,
   addDays,
   attendanceRate,
+  attendanceRiskRules,
   currentPeriod,
   DEFAULT_PASSING_GRADE,
   defaultPeriods,
@@ -416,9 +417,11 @@ export async function followUp(db: DbOrTx, schoolId: string, date: string): Prom
     const rate = attendanceRate(own);
     const absences = own.filter((s) => s === "ausente").length;
     const counted = own.filter((s) => s !== "justificada").length;
+    // En fin de semana (uno o dos encuentros por semana) la alerta salta desde la primera falta.
+    const rules = attendanceRiskRules(sectionList.find((s) => s.id === kid.sectionId)?.classDays ?? []);
     const attendanceRisk =
-      absences >= RISK_RULES.maxAbsences ||
-      (rate !== null && counted >= RISK_RULES.minAttendanceDays && rate < RISK_RULES.minAttendanceRate);
+      absences >= rules.maxAbsences ||
+      (rate !== null && counted >= rules.minAttendanceDays && rate < rules.minAttendanceRate);
 
     const failing: StudentRiskDto["failing"] = [];
     for (const assignment of assignments.filter((a) => a.sectionId === kid.sectionId)) {

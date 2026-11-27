@@ -109,6 +109,25 @@ export const grades = pgTable(
   ],
 );
 
+/**
+ * Jornadas del centro (matutina, nocturna, fin de semana…): sus días de clase (1 = lunes … 7 =
+ * domingo). Las secciones sin jornada trabajan de lunes a viernes.
+ */
+export const shifts = pgTable(
+  "shifts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    schoolId: schoolId(),
+    name: text("name").notNull(),
+    classDays: integer("class_days").array().notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique("shifts_tenant_key").on(t.schoolId, t.id),
+    unique("shifts_name_unique").on(t.schoolId, t.name),
+  ],
+);
+
 export const sections = pgTable(
   "sections",
   {
@@ -119,10 +138,17 @@ export const sections = pgTable(
     name: text("name").notNull(),
     /** Cupo máximo de alumnos. null = sin límite. */
     capacity: integer("capacity"),
+    /** Jornada (null = la de siempre, lunes a viernes). */
+    shiftId: uuid("shift_id"),
     createdAt: createdAt(),
   },
   (t) => [
     unique("sections_tenant_key").on(t.schoolId, t.id),
+    foreignKey({
+      name: "sections_shift_fk",
+      columns: [t.schoolId, t.shiftId],
+      foreignColumns: [shifts.schoolId, shifts.id],
+    }),
     unique("sections_year_key").on(t.schoolYearId, t.id),
     unique("sections_name_unique").on(t.schoolYearId, t.gradeId, t.name),
     foreignKey({
@@ -204,6 +230,11 @@ export const students = pgTable(
     email: text("email"),
     /** Cuenta del alumno en el aula virtual (identity), cuando se le cree una. */
     userId: uuid("user_id"),
+    /**
+     * Responde por sí mismo (mayor de edad, o paga él su colegiatura): no necesita responsables y desde
+     * su cuenta ve sus cobros y paga.
+     */
+    selfResponsible: boolean("self_responsible").notNull().default(false),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -723,12 +754,26 @@ export const announcements = pgTable(
 export const scheduleBlocks = pgTable(
   "schedule_blocks",
   {
+    id: uuid("id").primaryKey().defaultRandom(),
     schoolId: schoolId(),
+    /** Las horas de esa jornada (null = las de las secciones sin jornada). */
+    shiftId: uuid("shift_id"),
     number: integer("number").notNull(),
     startsAt: text("starts_at").notNull(),
     endsAt: text("ends_at").notNull(),
   },
-  (t) => [primaryKey({ name: "schedule_blocks_pk", columns: [t.schoolId, t.number] })],
+  (t) => [
+    uniqueIndex("schedule_blocks_number_unique").on(
+      t.schoolId,
+      sql`coalesce(${t.shiftId}, '00000000-0000-0000-0000-000000000000'::uuid)`,
+      t.number,
+    ),
+    foreignKey({
+      name: "schedule_blocks_shift_fk",
+      columns: [t.schoolId, t.shiftId],
+      foreignColumns: [shifts.schoolId, shifts.id],
+    }).onDelete("cascade"),
+  ],
 );
 
 /** Qué clase tiene cada sección en cada día (1 = lunes) y bloque. */
@@ -744,7 +789,7 @@ export const scheduleSlots = pgTable(
   (t) => [
     primaryKey({ name: "schedule_slots_pk", columns: [t.sectionId, t.weekday, t.block] }),
     index("schedule_slots_assignment_idx").on(t.assignmentId),
-    check("schedule_slots_weekday", sql`${t.weekday} between 1 and 5`),
+    check("schedule_slots_weekday", sql`${t.weekday} between 1 and 7`),
     foreignKey({
       name: "schedule_slots_section_fk",
       columns: [t.schoolId, t.sectionId],
@@ -900,6 +945,129 @@ export const planEvents = pgTable(
     }).onDelete("cascade"),
   ],
 );
+
+// ───────────────────────────── Pagos de las familias ─────────────────────────────
+
+/**
+ * Un cobro del centro (matrícula, mensualidad de marzo, uniforme…) para todo el centro, un grado, una
+ * sección o un alumno. Al crearlo se genera un cargo por cada alumno matriculado en ese alcance.
+ */
+export const feeItems = pgTable(
+  "fee_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    schoolId: schoolId(),
+    schoolYearId: uuid("school_year_id").notNull(),
+    name: text("name").notNull(),
+    amountCents: integer("amount_cents").notNull(),
+    dueOn: date("due_on", { mode: "string" }).notNull(),
+    scope: text("scope").notNull(),
+    targetId: uuid("target_id"),
+    scopeLabel: text("scope_label").notNull(),
+    createdByUserId: uuid("created_by_user_id").notNull(),
+    createdByName: text("created_by_name").notNull(),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique("fee_items_tenant_key").on(t.schoolId, t.id),
+    index("fee_items_school_idx").on(t.schoolId, t.createdAt),
+    check("fee_items_scope", sql`${t.scope} in ('centro', 'grado', 'seccion', 'alumno')`),
+    check("fee_items_amount", sql`${t.amountCents} > 0`),
+  ],
+);
+
+/** Lo que debe un alumno por un cobro. Se paga completo, de una vez. */
+export const studentCharges = pgTable(
+  "student_charges",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    schoolId: schoolId(),
+    feeItemId: uuid("fee_item_id").notNull(),
+    studentId: uuid("student_id").notNull(),
+    amountCents: integer("amount_cents").notNull(),
+    dueOn: date("due_on", { mode: "string" }).notNull(),
+    status: text("status").notNull().default("pendiente"),
+    paymentId: uuid("payment_id"),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique("student_charges_unique").on(t.feeItemId, t.studentId),
+    index("student_charges_student_idx").on(t.studentId, t.status),
+    check("student_charges_status", sql`${t.status} in ('pendiente', 'pagado', 'anulado')`),
+    foreignKey({
+      name: "student_charges_fee_fk",
+      columns: [t.schoolId, t.feeItemId],
+      foreignColumns: [feeItems.schoolId, feeItems.id],
+    }).onDelete("cascade"),
+  ],
+);
+
+/**
+ * Un pago: en la oficina (efectivo, depósito, transferencia) o en línea con tarjeta. El pago en línea
+ * empieza «pendiente» y se confirma cuando PixelPay avisa. El recibo se numera al confirmarse.
+ */
+export const payments = pgTable(
+  "payments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    schoolId: schoolId(),
+    studentId: uuid("student_id").notNull(),
+    receiptNumber: integer("receipt_number"),
+    amountCents: integer("amount_cents").notNull(),
+    method: text("method").notNull(),
+    reference: text("reference"),
+    status: text("status").notNull(),
+    /** Número de orden enviado a la pasarela (único). */
+    orderId: text("order_id").unique("payments_order_unique"),
+    gatewayUuid: text("gateway_uuid"),
+    byUserId: uuid("by_user_id").notNull(),
+    byName: text("by_name").notNull(),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
+    voidedAt: timestamp("voided_at", { withTimezone: true }),
+    voidReason: text("void_reason"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique("payments_receipt_unique").on(t.schoolId, t.receiptNumber),
+    index("payments_school_idx").on(t.schoolId, t.createdAt),
+    index("payments_student_idx").on(t.studentId),
+    check("payments_status", sql`${t.status} in ('pendiente', 'confirmado', 'fallido', 'anulado')`),
+    check("payments_method", sql`${t.method} in ('efectivo', 'deposito', 'transferencia', 'tarjeta')`),
+  ],
+);
+
+/** Qué cargos cubre cada pago (con el monto de ese momento, para el recibo). */
+export const paymentItems = pgTable(
+  "payment_items",
+  {
+    paymentId: uuid("payment_id")
+      .notNull()
+      .references(() => payments.id, { onDelete: "cascade" }),
+    chargeId: uuid("charge_id")
+      .notNull()
+      .references(() => studentCharges.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    amountCents: integer("amount_cents").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.paymentId, t.chargeId] })],
+);
+
+/**
+ * La cuenta de PixelPay de cada centro (el dinero le llega directo al centro). La llave secreta se
+ * guarda cifrada (AES-256-GCM con la llave de la instalación) y nunca se devuelve.
+ */
+export const paymentSettings = pgTable("payment_settings", {
+  schoolId: uuid("school_id").primaryKey(),
+  enabled: boolean("enabled").notNull().default(false),
+  mode: text("mode").notNull().default("sandbox"),
+  endpoint: text("endpoint").notNull(),
+  keyId: text("key_id").notNull(),
+  secretEncrypted: text("secret_encrypted"),
+  updatedByUserId: uuid("updated_by_user_id").notNull(),
+  updatedAt: updatedAt(),
+});
 
 /**
  * Solicitudes de la secretaría (crear un grado, una sección o una materia, o registrar el permiso de
@@ -1293,3 +1461,6 @@ export type ClassQuiz = typeof classQuizzes.$inferSelect;
 export type QuizQuestion = typeof quizQuestions.$inferSelect;
 export type QuizAttempt = typeof quizAttempts.$inferSelect;
 export type ChangeRequest = typeof changeRequests.$inferSelect;
+export type FeeItem = typeof feeItems.$inferSelect;
+export type StudentCharge = typeof studentCharges.$inferSelect;
+export type Payment = typeof payments.$inferSelect;

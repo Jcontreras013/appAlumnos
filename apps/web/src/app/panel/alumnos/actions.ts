@@ -8,6 +8,7 @@ import {
   type ImportResultDto,
   type PortalAccessDto,
   portalAccessInputSchema,
+  type SectionFamilyAccessDto,
   type SectionStudentAccessDto,
   type StudentAccessDto,
   studentFieldsSchema,
@@ -46,11 +47,20 @@ const guardianFrom = (values: Record<string, string>, prefix: string) =>
 
 export async function createStudentAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const { accessToken } = await enroller();
-  const fields = [...STUDENT_FIELDS, ...GUARDIAN_FIELDS.map((f) => `guardian.${f}`), "sectionId"];
+  const fields = [
+    ...STUDENT_FIELDS,
+    ...GUARDIAN_FIELDS.map((f) => `guardian.${f}`),
+    "sectionId",
+    "selfResponsible",
+  ];
   const values = formValues(formData, fields);
+  const selfResponsible = values.selfResponsible === "on";
+  // Quien responde por sí mismo puede quedar sin responsable (si no se escribió ninguno).
+  const withGuardian = !selfResponsible || Boolean(values["guardian.fullName"]);
   const parsed = createStudentInputSchema.safeParse({
     ...Object.fromEntries(STUDENT_FIELDS.map((f) => [f, values[f]])),
-    guardians: [{ ...guardianFrom(values, "guardian."), isPrimary: true }],
+    selfResponsible,
+    guardians: withGuardian ? [{ ...guardianFrom(values, "guardian."), isPrimary: true }] : [],
     sectionId: values.sectionId,
   });
   if (!parsed.success) {
@@ -81,7 +91,8 @@ export async function updateStudentAction(
   const { accessToken } = await enroller();
   return runFormAction(formData, {
     schema: studentFieldsSchema,
-    fields: STUDENT_FIELDS,
+    fields: [...STUDENT_FIELDS, "selfResponsible"],
+    build: (v) => ({ ...v, selfResponsible: v.selfResponsible === "on" }),
     submit: async (input) => {
       await academic.updateStudent(accessToken, id, input);
       revalidatePath(`/panel/alumnos/${id}`);
@@ -325,6 +336,30 @@ export async function sectionStudentAccessAction(
   const sectionId = z.uuid().parse(formData.get("sectionId"));
   try {
     const result = await academic.sectionStudentAccess(accessToken, sectionId);
+    revalidatePath("/panel/alumnos");
+    return { ok: true, result };
+  } catch (err) {
+    return fromServiceError(err);
+  }
+}
+
+export interface SectionFamilyState extends FormState {
+  result?: SectionFamilyAccessDto;
+}
+
+/** Acceso al portal para las familias de toda una sección (las que todavía no tienen). */
+export async function sectionFamilyAccessAction(
+  _prev: SectionFamilyState,
+  formData: FormData,
+): Promise<SectionFamilyState> {
+  const { accessToken } = await requireRole("admin", "secretaria");
+  const sectionId = z.uuid().parse(formData.get("sectionId"));
+  try {
+    const result = await academic.sectionFamilyAccess(
+      accessToken,
+      sectionId,
+      formData.get("allGuardians") === "si",
+    );
     revalidatePath("/panel/alumnos");
     return { ok: true, result };
   } catch (err) {

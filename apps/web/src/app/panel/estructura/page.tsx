@@ -1,4 +1,4 @@
-import { formatDay } from "@escolar/shared";
+import { describeClassDays, formatDay } from "@escolar/shared";
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Fold, FoldTag } from "@/components/fold";
@@ -6,13 +6,14 @@ import { academic } from "@/lib/academic";
 import { requireRole } from "@/lib/dal";
 import { identity } from "@/lib/identity";
 import { setCurrentYearAction } from "./actions";
-import { AssignmentEditor, GradeEditor, SectionEditor, SubjectEditor } from "./editors";
+import { AssignmentEditor, GradeEditor, SectionEditor, ShiftEditor, SubjectEditor } from "./editors";
 import {
   AssignmentForm,
   GradeForm,
   PassingGradeForm,
   PeriodsForm,
   SectionForm,
+  ShiftForm,
   SubjectForm,
   YearForm,
 } from "./forms";
@@ -26,7 +27,8 @@ export default async function StructurePage() {
   // La secretaría pide grados, secciones y materias; la dirección los confirma.
   const requests = session.user.role === "secretaria";
 
-  const [years, grades, sections, subjects, assignments, staff, evaluation] = await Promise.all([
+  const isDirector = session.user.role === "admin";
+  const [years, grades, sections, subjects, assignments, staff, evaluation, shiftList] = await Promise.all([
     academic.listYears(token),
     academic.listGrades(token),
     academic.listSections(token),
@@ -34,7 +36,12 @@ export default async function StructurePage() {
     academic.listAssignments(token),
     canEdit ? identity.listUsers(token) : Promise.resolve([]),
     academic.periods(token).catch(() => null),
+    academic.listShifts(token).catch(() => []),
   ]);
+  const shiftOptions = shiftList.map((s) => ({
+    value: s.id,
+    label: `${s.name} (${describeClassDays(s.classDays)})`,
+  }));
   const current = years.find((y) => y.isCurrent);
   const teachers = staff
     .filter((u) => u.active && (u.role === "docente" || u.role === "coordinador"))
@@ -117,6 +124,35 @@ export default async function StructurePage() {
       )}
 
       <Block
+        title="Jornadas"
+        count={
+          shiftList.length
+            ? `${shiftList.length} ${shiftList.length === 1 ? "jornada" : "jornadas"}`
+            : "Una sola (lunes a viernes)"
+        }
+        aside={isDirector && <ShiftForm />}
+      >
+        {shiftList.length === 0 ? (
+          <Empty>
+            Todas las secciones trabajan de lunes a viernes. Si el centro tiene jornada nocturna, de fin de
+            semana o dominical, agrégala aquí y elige la jornada de cada sección: el horario, la
+            planificación, la asistencia y los avisos se ajustan a sus días.
+          </Empty>
+        ) : (
+          <Table head={["Jornada", "Días de clase", "Secciones este año", ""]}>
+            {shiftList.map((s) => (
+              <tr key={s.id}>
+                <td className="px-4 py-3 font-medium text-slate-900">{s.name}</td>
+                <td className="px-4 py-3">{describeClassDays(s.classDays)}</td>
+                <td className="px-4 py-3 tabular-nums">{s.sections}</td>
+                <td className="px-4 py-3 text-right">{isDirector && <ShiftEditor shift={s} />}</td>
+              </tr>
+            ))}
+          </Table>
+        )}
+      </Block>
+
+      <Block
         title="Grados y secciones"
         count={`${grades.length} ${grades.length === 1 ? "grado" : "grados"} · ${sections.length} ${sections.length === 1 ? "sección" : "secciones"}`}
         aside={
@@ -132,6 +168,7 @@ export default async function StructurePage() {
                     years={years
                       .filter((y) => y.startsOn >= current.startsOn)
                       .map((y) => ({ value: y.id, label: y.name }))}
+                    shifts={shiftOptions}
                   />
                 </div>
               )}
@@ -169,8 +206,9 @@ export default async function StructurePage() {
                         <span>
                           <strong className="font-semibold">{s.name}</strong> · {s.enrolledCount}
                           {s.capacity !== null ? `/${s.capacity}` : ""} alumnos
+                          {s.shiftName && <span className="text-xs text-slate-500"> · {s.shiftName}</span>}
                         </span>
-                        {canEdit && <SectionEditor section={s} />}
+                        {canEdit && <SectionEditor section={s} shifts={shiftOptions} />}
                       </span>
                     );
                   })}

@@ -32,7 +32,12 @@ export interface TestUser {
  * y identity se reemplaza por un doble que responde con los usuarios registrados en el test.
  */
 export async function setupAcademic(
-  options: { today?: string; planDrafter?: PlanDrafter | null; files?: FileStore } = {},
+  options: {
+    today?: string;
+    planDrafter?: PlanDrafter | null;
+    files?: FileStore;
+    paymentsKey?: string | null;
+  } = {},
 ) {
   const client = new PGlite();
   await migrate(drizzle(client, { schema }), { migrationsFolder: migrationsFolder() });
@@ -50,6 +55,8 @@ export async function setupAcademic(
   const familyAccounts = new Map<string, { userId: string; password: string; active: boolean }>();
   /** Cuentas de alumnos del aula virtual, igual. */
   const studentAccounts = new Map<string, { userId: string; password: string; active: boolean }>();
+  /** Lo que academic le pidió a identity sobre los avisos de fin de semana (en orden). */
+  const weekendNotices: boolean[] = [];
   const identity: IdentityClient = {
     async getUser(_token, userId) {
       return directory.get(userId) ?? null;
@@ -128,6 +135,9 @@ export async function setupAcademic(
     async revokeStudentAccount(_token, userId) {
       for (const account of studentAccounts.values()) if (account.userId === userId) account.active = false;
     },
+    async setWeekendNotices(_token, enabled) {
+      weekendNotices.push(enabled);
+    },
   };
 
   let today = options.today ?? "2026-11-09";
@@ -140,6 +150,8 @@ export async function setupAcademic(
     planDrafter: options.planDrafter ?? null,
     // Los archivos (la biblioteca) quedan en memoria: las pruebas no escriben en disco.
     files: options.files ?? memoryFileStore(),
+    paymentsKey:
+      options.paymentsKey === undefined ? "llave-de-prueba-de-la-instalacion" : options.paymentsKey,
   });
 
   async function sign(claims: Record<string, unknown>, id: string) {
@@ -273,6 +285,7 @@ export async function setupAcademic(
     call,
     familyAccounts,
     studentAccounts,
+    weekendNotices,
     activity,
     scopes,
     transferTargets,

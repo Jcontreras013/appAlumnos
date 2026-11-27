@@ -1,4 +1,11 @@
-import { conflict, isUniqueViolation, notFound, parseOrThrow, requireRole } from "@escolar/service-kit";
+import {
+  conflict,
+  isUniqueViolation,
+  notFound,
+  parseOrThrow,
+  requireRole,
+  tenantOf,
+} from "@escolar/service-kit";
 import { createSchoolInputSchema, type SchoolDto, type UserDto } from "@escolar/shared";
 import { asc, eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
@@ -112,4 +119,35 @@ export async function schoolRoutes(app: FastifyInstance, { db, tokens }: Identit
       return toSchoolDto(school);
     });
   });
+
+  /**
+   * El centro tiene clases sábado o domingo (alguna de sus jornadas): los avisos en el celular también
+   * llegan esos días. Lo manda academic cuando la dirección guarda sus jornadas.
+   */
+  app.put(
+    "/schools/current/weekend-notices",
+    { preHandler: [app.authenticate, requireRole("admin")] },
+    async (request, reply) => {
+      const schoolId = tenantOf(request);
+      const { enabled } = parseOrThrow(z.object({ enabled: z.boolean() }), request.body);
+      await db.transaction(async (tx) => {
+        const [before] = await tx
+          .select({ weekendNotices: schools.weekendNotices })
+          .from(schools)
+          .where(eq(schools.id, schoolId));
+        if (!before) throw notFound("Colegio no encontrado");
+        if (before.weekendNotices === enabled) return;
+        await tx.update(schools).set({ weekendNotices: enabled }).where(eq(schools.id, schoolId));
+        await audit(tx, request, {
+          action: "school.weekend_notices",
+          schoolId,
+          actorUserId: request.auth.userId,
+          entityType: "school",
+          entityId: schoolId,
+          data: { enabled },
+        });
+      });
+      return reply.status(204).send();
+    },
+  );
 }

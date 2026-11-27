@@ -10,8 +10,10 @@ import {
 } from "@escolar/service-kit";
 import {
   addDays,
+  classDayKeys,
   createPlanInputSchema,
   formatDay,
+  isMeetingSchedule,
   type LessonPlanDto,
   missingRequiredFields,
   mondayOf,
@@ -27,7 +29,7 @@ import {
   planTemplateInputSchema,
   reviewPlanInputSchema,
   savePlanInputSchema,
-  WEEKDAYS,
+  weekdayOf,
   weekStartSchema,
 } from "@escolar/shared";
 import { and, eq, gte, inArray, sql } from "drizzle-orm";
@@ -88,7 +90,11 @@ export async function planRoutes(app: FastifyInstance, { db, today, planDrafter 
     const { row, assignment, author } = await loadPlan(tx, request, id);
     const template = await templateOf(tx, row.schoolId);
     return {
-      plan: toPlanDto(row, assignment, deadlineOf(row.weekStart, template.deadlineDaysBefore)),
+      plan: toPlanDto(
+        row,
+        assignment,
+        deadlineOf(row.weekStart, template.deadlineDaysBefore, assignment.classDays),
+      ),
       history: await planHistory(tx, row.id),
       canEdit: author && (row.status === "borrador" || row.status === "devuelta"),
       canReview: canReview(request.auth) && row.status === "enviada",
@@ -302,10 +308,11 @@ export async function planRoutes(app: FastifyInstance, { db, today, planDrafter 
       .selectDistinct({ weekday: scheduleSlots.weekday })
       .from(scheduleSlots)
       .where(and(eq(scheduleSlots.schoolId, row.schoolId), eq(scheduleSlots.assignmentId, assignment.id)));
-    const scheduled = WEEKDAYS.filter((_, i) => slots.some((s) => s.weekday === i + 1));
+    const jornada = classDayKeys(assignment.classDays);
+    const scheduled = jornada.filter((d) => slots.some((s) => weekdayOf(s.weekday) === d));
     // Sin los feriados y vacaciones de esa semana (el calendario escolar del centro).
-    const weekDaysOff = await daysOffBetween(db, row.schoolId, row.weekStart, addDays(row.weekStart, 4));
-    const classDays = scheduled.length ? scheduled : [...WEEKDAYS];
+    const weekDaysOff = await daysOffBetween(db, row.schoolId, row.weekStart, addDays(row.weekStart, 6));
+    const classDays = scheduled.length ? scheduled : jornada;
     const openDays = openClassDays(row.weekStart, classDays, weekDaysOff);
     // Tema de la semana anterior en la misma clase, para dar continuidad.
     const topicField = row.fields.find((f) => f.key === "tema") ?? row.fields.find((f) => f.type === "texto");
@@ -328,6 +335,7 @@ export async function planRoutes(app: FastifyInstance, { db, today, planDrafter 
         sectionLabel: assignment.sectionLabel,
         weekStart: row.weekStart,
         classDays: openDays.length ? openDays : classDays,
+        meetings: isMeetingSchedule(assignment.classDays),
         language: assignment.subjectLanguage,
         topic: input.topic,
         notes: input.notes,
@@ -457,7 +465,11 @@ export async function planRoutes(app: FastifyInstance, { db, today, planDrafter 
         toPlanDto(
           r,
           assignment as NonNullable<typeof assignment>,
-          deadlineOf(r.weekStart, template.deadlineDaysBefore),
+          deadlineOf(
+            r.weekStart,
+            template.deadlineDaysBefore,
+            (assignment as NonNullable<typeof assignment>).classDays,
+          ),
         ),
       );
   });

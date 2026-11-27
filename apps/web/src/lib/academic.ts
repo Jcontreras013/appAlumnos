@@ -8,6 +8,7 @@ import type {
   AttendanceInput,
   AttendanceSheetDto,
   AuditEventDto,
+  BalanceRowDto,
   ChangeRequestDto,
   ChangeRequestKind,
   ClassChatDto,
@@ -41,6 +42,8 @@ import type {
   EnrollmentSettingsDto,
   FamilyChildDto,
   FamilyChildSummaryDto,
+  FeeDto,
+  FeeRequest,
   FollowUpDto,
   FollowUpInput,
   GradebookDto,
@@ -57,6 +60,10 @@ import type {
   LibraryItemDto,
   LibraryLinkInput,
   MeasureInput,
+  OfficePaymentInput,
+  PaymentDto,
+  PaymentSettingsDto,
+  PaymentSettingsInput,
   PeriodsInput,
   PilotIndicatorsDto,
   PlanAssistantStatusDto,
@@ -92,12 +99,16 @@ import type {
   SchoolYearInput,
   ScoresInput,
   SectionDto,
+  SectionFamilyAccessDto,
   SectionFinalsDto,
   SectionInput,
   SectionScheduleInput,
   SectionStudentAccessDto,
   SectionUpdate,
+  ShiftDto,
+  ShiftInput,
   StudentAccessDto,
+  StudentAccountDto,
   StudentDetailDto,
   StudentFields,
   StudentListItemDto,
@@ -120,6 +131,8 @@ const call = <T>(path: string, init?: Parameters<typeof serviceCall>[2]) =>
 export interface StudentFilters {
   q?: string;
   sectionId?: string;
+  /** Una jornada, o "regular" (las secciones sin jornada). */
+  shiftId?: string;
   estado?: "todos" | "matriculados" | "sin_matricula" | "retirados";
   limit?: number;
   offset?: number;
@@ -146,6 +159,13 @@ export const academic = {
   updateSection: (token: string, id: string, input: SectionUpdate) =>
     call<SectionDto>(`/sections/${id}`, { method: "PUT", token, body: input }),
   deleteSection: (token: string, id: string) => call<void>(`/sections/${id}`, { method: "DELETE", token }),
+
+  listShifts: (token: string) => call<ShiftDto[]>("/shifts", { token }),
+  createShift: (token: string, input: ShiftInput) =>
+    call<ShiftDto>("/shifts", { method: "POST", token, body: input }),
+  updateShift: (token: string, id: string, input: ShiftInput) =>
+    call<ShiftDto>(`/shifts/${id}`, { method: "PUT", token, body: input }),
+  deleteShift: (token: string, id: string) => call<void>(`/shifts/${id}`, { method: "DELETE", token }),
 
   listSubjects: (token: string) => call<SubjectDto[]>("/subjects", { token }),
   createSubject: (token: string, input: SubjectInput) =>
@@ -444,6 +464,61 @@ export const academic = {
       body: input,
     }),
   // Chat de la clase
+  // Pagos de las familias
+  fees: (token: string) => call<FeeDto[]>("/fees", { token }),
+  createFee: (token: string, input: FeeRequest) =>
+    call<{ id: string; students: number; scopeLabel: string }>("/fees", {
+      method: "POST",
+      token,
+      body: input,
+    }),
+  cancelFee: (token: string, id: string) =>
+    call<void>(`/fees/${id}/cancel`, { method: "POST", token, body: {} }),
+  studentAccount: (token: string, studentId: string) =>
+    call<StudentAccountDto>(`/students/${studentId}/account`, { token }),
+  balances: (token: string, sectionId?: string) =>
+    call<BalanceRowDto[]>(`/payments/balances${sectionId ? `?sectionId=${sectionId}` : ""}`, { token }),
+  recentPayments: (token: string) => call<PaymentDto[]>("/payments", { token }),
+  recordPayment: (token: string, input: OfficePaymentInput) =>
+    call<PaymentDto>("/payments", { method: "POST", token, body: input }),
+  payment: (token: string, id: string) => call<PaymentDto>(`/payments/${id}`, { token }),
+  voidPayment: (token: string, id: string, reason: string) =>
+    call<PaymentDto>(`/payments/${id}/void`, { method: "POST", token, body: { reason } }),
+  childAccount: (token: string, studentId: string) =>
+    call<StudentAccountDto>(`/family/children/${studentId}/account`, { token }),
+  /** El alumno que responde por sí mismo: sus cobros (404 si sus pagos los ve su familia). */
+  myAccount: (token: string) => call<StudentAccountDto>("/student/me/account", { token }),
+  payMine: (token: string, input: { chargeIds: string[]; email: string; returnBase: string }) =>
+    call<{ action: string; fields: Record<string, string>; orderId: string }>("/student/me/pay", {
+      method: "POST",
+      token,
+      body: input,
+    }),
+  payOnline: (
+    token: string,
+    studentId: string,
+    input: { chargeIds: string[]; email: string; returnBase: string },
+  ) =>
+    call<{ action: string; fields: Record<string, string>; orderId: string }>(
+      `/family/children/${studentId}/pay`,
+      {
+        method: "POST",
+        token,
+        body: input,
+      },
+    ),
+  completeOnline: (token: string, input: { orderId: string; paymentHash?: string; cancelled?: boolean }) =>
+    call<{ status: string; paymentId: string; studentId: string }>("/payments/online/complete", {
+      method: "POST",
+      token,
+      body: input,
+    }),
+  /** Aviso de PixelPay: llega sin sesión; lo valida academic con el hash de la llave secreta. */
+  pixelpayCallback: (schoolId: string, body: unknown) =>
+    call<{ ok: boolean }>(`/payments/pixelpay/callback/${schoolId}`, { method: "POST", body }),
+  paymentSettings: (token: string) => call<PaymentSettingsDto>("/payment-settings", { token }),
+  savePaymentSettings: (token: string, input: PaymentSettingsInput) =>
+    call<PaymentSettingsDto>("/payment-settings", { method: "PUT", token, body: input }),
   // Solicitudes de la secretaría que confirma la dirección
   createChangeRequest: (token: string, kind: ChangeRequestKind, payload: Record<string, unknown>) =>
     call<ChangeRequestDto>("/change-requests", { method: "POST", token, body: { kind, payload } }),
@@ -490,6 +565,12 @@ export const academic = {
     call<void>(`/students/${studentId}/student-access`, { method: "DELETE", token }),
   sectionStudentAccess: (token: string, sectionId: string) =>
     call<SectionStudentAccessDto>(`/sections/${sectionId}/student-access`, { method: "POST", token }),
+  sectionFamilyAccess: (token: string, sectionId: string, allGuardians: boolean) =>
+    call<SectionFamilyAccessDto>(`/sections/${sectionId}/portal-access`, {
+      method: "POST",
+      token,
+      body: { allGuardians },
+    }),
   studentMe: (token: string) => call<FamilyChildDto>("/student/me", { token }),
   studentSchedule: (token: string) => call<ScheduleDto>("/student/me/schedule", { token }),
   reportCard: (token: string, studentId: string) =>

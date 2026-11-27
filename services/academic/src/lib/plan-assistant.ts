@@ -2,12 +2,12 @@ import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import {
   type DaysValue,
+  describeClassDays,
   formatWeekRange,
   type PlanContent,
   type PlanField,
   parsePlanContent,
   type SubjectLanguage,
-  WEEKDAY_LABELS,
   WEEKDAYS,
   type Weekday,
 } from "@escolar/shared";
@@ -29,8 +29,13 @@ export interface PlanDraftRequest {
   /** "Cuarto grado A" */
   sectionLabel: string;
   weekStart: string;
-  /** Días en que la sección tiene esta clase según el horario (los cinco si no hay horario). */
+  /** Días en que la sección tiene esta clase según el horario (los de la jornada si no hay horario). */
   classDays: Weekday[];
+  /**
+   * La jornada se ve una o dos veces por semana (fin de semana, dominical): cada día es un encuentro
+   * largo y lo demás se trabaja en casa durante la semana.
+   */
+  meetings?: boolean;
   topic: string;
   notes?: string;
   /** Tema de la semana anterior en la misma clase, para dar continuidad. */
@@ -177,22 +182,23 @@ function schemaFor(fields: PlanField[]) {
 const FIELD_KINDS: Record<PlanField["type"], string> = {
   texto: "una línea",
   parrafo: "uno o varios párrafos",
-  dias: "un texto por día, de lunes a viernes",
+  dias: "un texto por cada día de clase",
 };
 
 export function draftPrompt(request: PlanDraftRequest): string {
-  const days =
-    request.classDays.length === WEEKDAYS.length
-      ? "de lunes a viernes"
-      : request.classDays.map((d) => WEEKDAY_LABELS[d].toLowerCase()).join(", ");
+  const numbers = request.classDays.map((d) => WEEKDAYS.indexOf(d) + 1);
+  const days = describeClassDays(numbers);
   const fields = request.fields
     .map((f) => `- ${f.key}: ${f.label} (${FIELD_KINDS[f.type]})${f.help ? `. ${f.help}` : ""}`)
     .join("\n");
   return [
     `Asignatura: ${request.subjectName}`,
     `Grado y sección: ${request.sectionLabel}`,
-    `Semana: ${formatWeekRange(request.weekStart)}`,
+    `Semana: ${formatWeekRange(request.weekStart, numbers)}`,
     `Días con clase de esta asignatura: ${days}`,
+    request.meetings
+      ? "Modalidad de fin de semana: cada día de clase es un encuentro largo (varias horas) con alumnos que trabajan o estudian a distancia entre semana. Planifica cada encuentro completo (inicio, desarrollo, cierre) y deja claro el trabajo que harán en casa hasta el próximo encuentro."
+      : null,
     request.previousTopic ? `Tema de la semana anterior: ${request.previousTopic}` : null,
     `Tema de esta semana: ${request.topic}`,
     request.notes ? `Indicaciones del docente:\n${request.notes}` : null,

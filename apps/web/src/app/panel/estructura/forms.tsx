@@ -8,12 +8,13 @@ import {
   createAssignmentAction,
   createGradeAction,
   createSectionAction,
+  createShiftAction,
   createSubjectAction,
   createYearAction,
   setPassingGradeAction,
   updatePeriodsAction,
 } from "./actions";
-import { LANGUAGE_OPTIONS } from "./editors";
+import { ClassDaysField, LANGUAGE_OPTIONS } from "./editors";
 
 type Option = { value: string; label: string };
 
@@ -58,6 +59,7 @@ export function SectionForm({
   schoolYearId,
   grades,
   years,
+  shifts = [],
   request = false,
 }: {
   request?: boolean;
@@ -65,6 +67,8 @@ export function SectionForm({
   grades: Option[];
   /** Si hay más de un año, se puede preparar las secciones del año siguiente. */
   years: Option[];
+  /** Jornadas del centro (vacío = todas de lunes a viernes). */
+  shifts?: Option[];
 }) {
   const [state, action] = useActionState(createSectionAction, initialFormState);
   return (
@@ -86,6 +90,15 @@ export function SectionForm({
         <Field name="name" label="Sección" placeholder="A" required state={state} />
         <Field name="capacity" label="Cupo" type="number" min={1} placeholder="Sin límite" state={state} />
       </div>
+      {shifts.length > 0 && (
+        <SelectField
+          name="shiftId"
+          label="Jornada"
+          options={shifts}
+          placeholder="Regular (lunes a viernes)"
+          state={state}
+        />
+      )}
       {request && (
         <p className="text-xs text-slate-500">
           La dirección recibe un mensaje y lo confirma antes de que se cree.
@@ -248,6 +261,23 @@ export function PassingGradeForm({ passingGrade }: { passingGrade: number }) {
         state={state}
       />
       <SubmitButton pendingText="Guardando…">Guardar</SubmitButton>
+    </form>
+  );
+}
+
+/** Nueva jornada: nombre y días de clase (las horas se ponen en Horario). */
+export function ShiftForm() {
+  const [state, action] = useActionState(createShiftAction, initialFormState);
+  return (
+    <form action={action} className="space-y-3" noValidate>
+      <FormAlert state={state} />
+      <Field name="name" label="Jornada" placeholder="Fin de semana" required state={state} />
+      <ClassDaysField key={state.ok ? "ok" : "form"} selected={[6, 7]} idPrefix="nueva-jornada" />
+      <p className="text-xs text-slate-500">
+        Matutina, vespertina o nocturna: lunes a viernes. Fin de semana: sábado y domingo. Las horas de clase
+        de cada jornada se ponen en «Horario».
+      </p>
+      <SubmitButton pendingText="Guardando…">Agregar jornada</SubmitButton>
     </form>
   );
 }

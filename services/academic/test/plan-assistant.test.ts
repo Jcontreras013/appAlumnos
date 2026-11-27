@@ -227,7 +227,7 @@ describe("asistente con Claude", () => {
     const prompt = draftPrompt(request);
     expect(prompt).toContain("Ciencias Naturales");
     expect(prompt).toContain("Cuarto grado A");
-    expect(prompt).toContain("lunes, miércoles");
+    expect(prompt).toContain("lunes y miércoles");
     expect(prompt).toContain("El arrecife de coral");
     expect(prompt).toContain("actividades: Actividades por día");
   });
@@ -246,6 +246,8 @@ describe("asistente con Claude", () => {
       miercoles: "Desarrollo",
       jueves: "",
       viernes: "",
+      sabado: "",
+      domingo: "",
     });
   });
 

@@ -18,6 +18,7 @@ export * from "./messages";
 export * from "./money";
 export * from "./onboarding";
 export * from "./passwords";
+export * from "./payments";
 export * from "./pilot";
 export * from "./plan-assistant";
 export * from "./roles";
