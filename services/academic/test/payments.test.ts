@@ -252,7 +252,7 @@ describe("pago con tarjeta (PixelPay)", () => {
       _email: "maria@correo.hn",
       _first_name: "María",
       _last_name: "López",
-      _complete: `https://conecta.test/panel/pagos/volver?orden=${orderId}`,
+      _complete: `https://conecta.test/pagos/volver/${schoolId}?orden=${orderId}`,
       _callback: `https://conecta.test/api/pagos/pixelpay/${schoolId}`,
       _client_signature: clientSignature(PIXELPAY_SANDBOX, orderId),
     });
@@ -332,6 +332,114 @@ describe("pago con tarjeta (PixelPay)", () => {
     });
     expect(res.body.status).toBe("cancelado");
     expect((await account(secretary, luis.id)).body.pendingCents).toBe(35000);
+  });
+});
+
+describe("pago con tarjeta: sin cobrar dos veces y sin sesión al volver", () => {
+  const start = async (chargeIds: string[]) =>
+    (
+      await ctx.call<{ orderId: string }>(mother, "POST", `/family/children/${luis.id}/pay`, {
+        chargeIds,
+        email: "maria@correo.hn",
+        returnBase: "https://conecta.test",
+      })
+    ).body.orderId;
+  const pending = async () =>
+    (
+      await ctx.call<StudentAccountDto>(mother, "GET", `/family/children/${luis.id}/account`)
+    ).body.charges.filter((c) => c.status === "pendiente");
+  const back = (orderId: string, body: Record<string, unknown>) =>
+    ctx.app.inject({
+      method: "POST",
+      url: `/payments/online/return/${schoolId}`,
+      payload: { orderId, ...body },
+    });
+  const sandbox = { keyId: PIXELPAY_SANDBOX.keyId, secretKey: PIXELPAY_SANDBOX.secretKey };
+
+  it("mientras la familia paga con tarjeta, la oficina no puede cobrar lo mismo", async () => {
+    await ctx.call(secretary, "POST", "/fees", {
+      name: "Excursión",
+      amount: "500",
+      dueOn: "2026-12-12",
+      scope: "alumno",
+      targetId: luis.id,
+    });
+    const excursion = (await pending()).find((c) => c.name === "Excursión");
+    if (!excursion) throw new Error("falta el cobro");
+    const orderId = await start([excursion.id]);
+    const office = await ctx.call(secretary, "POST", "/payments", {
+      studentId: luis.id,
+      chargeIds: [excursion.id],
+      method: "efectivo",
+    });
+    expect(office.status).toBe(409);
+    // Vuelve sin sesión (en la app, el pago se hace en el navegador del teléfono): se confirma con el hash.
+    const res = await back(orderId, { paymentHash: paymentHash(sandbox, orderId) });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ status: "confirmado", duplicate: false });
+    expect(res.json().receiptNumber).toBeGreaterThan(0);
+    expect((await back(orderId, { paymentHash: "falso" })).statusCode).toBe(403);
+  });
+
+  it("un segundo intento cierra el anterior; si los dos se pagan, el último queda marcado como pago doble", async () => {
+    await ctx.call(secretary, "POST", "/fees", {
+      name: "Libro de inglés",
+      amount: "420",
+      dueOn: "2026-12-15",
+      scope: "alumno",
+      targetId: luis.id,
+    });
+    const libro = (await pending()).find((c) => c.name === "Libro de inglés");
+    if (!libro) throw new Error("falta el cobro");
+    const first = await start([libro.id]);
+    const second = await start([libro.id]);
+    expect(first).not.toBe(second);
+    // Paga el segundo: el cobro queda pagado.
+    await ctx.app.inject({
+      method: "POST",
+      url: `/payments/pixelpay/callback/${schoolId}`,
+      payload: {
+        order: second,
+        payment_hash: paymentHash(sandbox, second),
+        status: "paid",
+        amount: 420,
+        currency: "HNL",
+      },
+    });
+    // PixelPay avisa tarde que el primero también se pagó: se registra (el banco cobró) y se marca.
+    const late = await back(first, { paymentHash: paymentHash(sandbox, first) });
+    expect(late.json()).toMatchObject({ status: "confirmado", duplicate: true });
+    const receipt = await ctx.call<PaymentDto>(secretary, "GET", `/payments/${late.json().paymentId}`);
+    expect(receipt.body.reference).toMatch(/PAGO DOBLE/);
+  });
+
+  it("cancelar sin sesión deja el intento como cancelado; lo debido sigue pendiente", async () => {
+    await ctx.call(secretary, "POST", "/fees", {
+      name: "Graduación",
+      amount: "800",
+      dueOn: "2026-12-20",
+      scope: "alumno",
+      targetId: luis.id,
+    });
+    const grad = (await pending()).find((c) => c.name === "Graduación");
+    if (!grad) throw new Error("falta el cobro");
+    const orderId = await start([grad.id]);
+    const res = await back(orderId, { cancelled: true });
+    expect(res.json().status).toBe("cancelado");
+    expect((await pending()).some((c) => c.id === grad.id)).toBe(true);
+  });
+
+  it("en producción sin llave secreta no se ofrece la tarjeta", async () => {
+    await ctx.app.inject({ method: "GET", url: "/health" });
+    const { db } = ctx;
+    const { paymentSettings } = await import("../src/db/schema");
+    const { eq } = await import("drizzle-orm");
+    await db
+      .update(paymentSettings)
+      .set({ mode: "produccion", keyId: "otra-llave", secretEncrypted: null })
+      .where(eq(paymentSettings.schoolId, schoolId));
+    const mine = await ctx.call<StudentAccountDto>(mother, "GET", `/family/children/${luis.id}/account`);
+    expect(mine.body.onlinePayments).toBe(false);
   });
 });
 

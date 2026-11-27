@@ -75,6 +75,11 @@ export default async function StudentAccountPage({ params }: PageProps<"/panel/p
                       {PAYMENT_METHOD_LABELS[p.method]} · {p.items.map((i) => i.name).join(", ")} · {p.byName}
                       {p.status === "anulado" && ` · ANULADO: ${p.voidReason}`}
                     </p>
+                    {p.reference?.startsWith("PAGO DOBLE") && p.status !== "anulado" && (
+                      <p className="text-xs font-semibold text-amber-700">
+                        {p.reference} Si se devuelve el dinero, anula este pago.
+                      </p>
+                    )}
                     {session.user.role === "admin" && p.status === "confirmado" && (
                       <VoidPaymentForm id={p.id} />
                     )}

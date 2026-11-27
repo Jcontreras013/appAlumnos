@@ -74,6 +74,8 @@ const callbackSchema = z.object({
 });
 
 const todayIso = (today: () => string) => today();
+/** Minutos que un pago con tarjeta abierto «aparta» sus cobros (la persona está en la página de pago). */
+const ONLINE_HOLD_MINUTES = 30;
 
 /**
  * Pagos de las familias al centro: cobros (por centro, grado, sección o alumno), estado de cuenta, pagos
@@ -198,7 +200,8 @@ export async function paymentRoutes(app: FastifyInstance, deps: AcademicDeps) {
         .orderBy(desc(payments.createdAt))
         .limit(50),
       currentSections(tx, schoolId, [studentId]),
-      settingsOf(tx, schoolId),
+      // Solo se ofrece la tarjeta si la cuenta de PixelPay del centro sirve de verdad (con su llave).
+      gatewayAccount(tx, schoolId).catch(() => null),
     ]);
     const chargeDtos: ChargeDto[] = charges.map(({ charge, name }) => ({
       id: charge.id,
@@ -220,8 +223,29 @@ export async function paymentRoutes(app: FastifyInstance, deps: AcademicDeps) {
       payments: await paymentDtos(tx, schoolId, paymentRows),
       pendingCents: pending.reduce((sum, c) => sum + c.amountCents, 0),
       overdueCents: pending.filter((c) => c.overdue).reduce((sum, c) => sum + c.amountCents, 0),
-      onlinePayments: Boolean(gateway?.enabled),
+      onlinePayments: gateway !== null,
     };
+  }
+
+  /**
+   * Pagos con tarjeta todavía abiertos (la persona está en la página de PixelPay) que incluyen alguno de
+   * esos cobros. Pasada media hora se dan por abandonados.
+   */
+  async function onlineInFlight(tx: DbOrTx, schoolId: string, chargeIds: string[]) {
+    if (!chargeIds.length) return [];
+    return tx
+      .select({ id: payments.id, byUserId: payments.byUserId, byName: payments.byName })
+      .from(payments)
+      .innerJoin(paymentItems, eq(paymentItems.paymentId, payments.id))
+      .where(
+        and(
+          eq(payments.schoolId, schoolId),
+          eq(payments.status, "pendiente"),
+          eq(payments.method, "tarjeta"),
+          inArray(paymentItems.chargeId, chargeIds),
+          sql`${payments.createdAt} > now() - interval '${sql.raw(String(ONLINE_HOLD_MINUTES))} minutes'`,
+        ),
+      );
   }
 
   /** Cargos pendientes del alumno (todos los pedidos deben serlo). */
@@ -473,6 +497,12 @@ export async function paymentRoutes(app: FastifyInstance, deps: AcademicDeps) {
     await studentOrThrow(db, schoolId, input.studentId);
     const payment = await db.transaction(async (tx) => {
       const charges = await pendingCharges(tx, schoolId, input.studentId, input.chargeIds);
+      const inFlight = await onlineInFlight(tx, schoolId, input.chargeIds);
+      if (inFlight.length) {
+        throw conflict(
+          `${inFlight[0]?.byName ?? "La familia"} está pagando ese cobro con tarjeta en este momento. Espera unos minutos y vuelve a abrir el estado de cuenta para no cobrarlo dos veces.`,
+        );
+      }
       const receiptNumber = await nextReceipt(tx, schoolId);
       const [created] = await tx
         .insert(payments)
@@ -625,6 +655,23 @@ export async function paymentRoutes(app: FastifyInstance, deps: AcademicDeps) {
     const orderId = `CN${Date.now().toString(36)}${randomBytes(3).toString("hex")}`.toUpperCase();
     const { payment, items } = await db.transaction(async (tx) => {
       const charges = await pendingCharges(tx, schoolId, id, input.chargeIds);
+      // Un intento anterior que quedó abierto (cerró la página de pago sin terminar) se da por
+      // abandonado. Si aun así se pagara, al confirmarse se marca como pago doble.
+      const previous = await onlineInFlight(tx, schoolId, input.chargeIds);
+      if (previous.length) {
+        await tx
+          .update(payments)
+          .set({ status: "fallido" })
+          .where(
+            and(
+              inArray(
+                payments.id,
+                previous.map((p) => p.id),
+              ),
+              eq(payments.status, "pendiente"),
+            ),
+          );
+      }
       const [created] = await tx
         .insert(payments)
         .values({
@@ -659,8 +706,10 @@ export async function paymentRoutes(app: FastifyInstance, deps: AcademicDeps) {
       firstName: first,
       lastName: last.length >= 2 ? last : "Familia",
       email: input.email,
-      completeUrl: `${base}/panel/pagos/volver?orden=${orderId}`,
-      cancelUrl: `${base}/panel/pagos/volver?orden=${orderId}&cancelado=1`,
+      // Regreso a una página pública: en la app, el pago se hace en el navegador del teléfono (sin la
+      // sesión de CONECTA) y el pago se confirma igual con el paymentHash.
+      completeUrl: `${base}/pagos/volver/${schoolId}?orden=${orderId}`,
+      cancelUrl: `${base}/pagos/volver/${schoolId}?orden=${orderId}&cancelado=1`,
       callbackUrl: `${base}/api/pagos/pixelpay/${schoolId}`,
     });
     await audit(db, request, {
@@ -682,10 +731,35 @@ export async function paymentRoutes(app: FastifyInstance, deps: AcademicDeps) {
         .for("update");
       if (!row) throw notFound("Pago no encontrado");
       if (row.status === "confirmado" || row.status === "anulado") return row;
+      // El banco ya cobró: el pago se confirma siempre. Si alguno de sus cobros ya estaba pagado (en la
+      // oficina o con otro intento) o se anuló mientras tanto, queda marcado para devolver el dinero.
+      const items = await tx.select().from(paymentItems).where(eq(paymentItems.paymentId, row.id));
+      const charges = items.length
+        ? await tx
+            .select({ id: studentCharges.id, status: studentCharges.status })
+            .from(studentCharges)
+            .where(
+              inArray(
+                studentCharges.id,
+                items.map((i) => i.chargeId),
+              ),
+            )
+            .for("update")
+        : [];
+      const taken = charges.filter((c) => c.status !== "pendiente");
+      const duplicate = taken.length > 0;
       const receiptNumber = await nextReceipt(tx, schoolId);
       const [confirmed] = await tx
         .update(payments)
-        .set({ status: "confirmado", receiptNumber, confirmedAt: new Date(), gatewayUuid })
+        .set({
+          status: "confirmado",
+          receiptNumber,
+          confirmedAt: new Date(),
+          gatewayUuid,
+          reference: duplicate
+            ? `PAGO DOBLE: ${taken.length === items.length ? "todo" : "parte de"} lo cobrado ya estaba pagado o anulado. Revisar devolución.`
+            : row.reference,
+        })
         .where(eq(payments.id, row.id))
         .returning();
       if (!confirmed) throw new Error("No se confirmó el pago");
@@ -693,10 +767,10 @@ export async function paymentRoutes(app: FastifyInstance, deps: AcademicDeps) {
       // Lo confirma la pasarela (no hay una persona en sesión): queda en la bitácora sin autor.
       await tx.insert(auditEvents).values({
         schoolId,
-        action: "payment.online_confirmed",
+        action: duplicate ? "payment.online_duplicate" : "payment.online_confirmed",
         entityType: "payment",
         entityId: confirmed.id,
-        data: { orderId, receiptNumber, amountCents: confirmed.amountCents },
+        data: { orderId, receiptNumber, amountCents: confirmed.amountCents, alreadyPaid: taken.length },
       });
       return confirmed;
     });
@@ -731,6 +805,43 @@ export async function paymentRoutes(app: FastifyInstance, deps: AcademicDeps) {
     }
     const confirmed = await confirmOnline(schoolId, input.orderId, null);
     return { status: confirmed.status, paymentId: confirmed.id, studentId: confirmed.studentId };
+  });
+
+  /**
+   * Regreso desde PixelPay a la página pública de CONECTA (`_complete` / `_cancel`). No pide sesión:
+   * en la app el pago se hace en el navegador del teléfono, donde la persona no tiene sesión. Lo que lo
+   * hace confiable es el `paymentHash` (solo se arma con la llave secreta); sin él solo se puede marcar
+   * como cancelado un intento todavía abierto, y si después PixelPay avisa que se pagó, se confirma igual.
+   */
+  app.post("/payments/online/return/:schoolId", async (request) => {
+    const { schoolId } = parseOrThrow(schoolParams, request.params);
+    const input = parseOrThrow(completeSchema, request.body);
+    const [row] = await db
+      .select()
+      .from(payments)
+      .where(and(eq(payments.schoolId, schoolId), eq(payments.orderId, input.orderId)));
+    if (!row) throw notFound("Pago no encontrado");
+    const summary = (p: Payment, status: "confirmado" | "cancelado" | "pendiente") => ({
+      status,
+      paymentId: p.id,
+      receiptNumber: p.receiptNumber,
+      amountCents: p.amountCents,
+      duplicate: Boolean(p.reference?.startsWith("PAGO DOBLE")),
+    });
+    if (input.cancelled || !input.paymentHash) {
+      if (row.status === "pendiente")
+        await db
+          .update(payments)
+          .set({ status: "fallido" })
+          .where(and(eq(payments.id, row.id), eq(payments.status, "pendiente")));
+      return summary(row, row.status === "confirmado" ? "confirmado" : "cancelado");
+    }
+    const gateway = await gatewayAccount(db, schoolId);
+    if (!gateway || !verifyPaymentHash(gateway, input.orderId, input.paymentHash)) {
+      throw forbidden("No se pudo verificar el pago con PixelPay");
+    }
+    const confirmed = await confirmOnline(schoolId, input.orderId, null);
+    return summary(confirmed, confirmed.status === "confirmado" ? "confirmado" : "pendiente");
   });
 
   /**

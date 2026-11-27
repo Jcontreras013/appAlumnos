@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { activityHeaders } from "../activity";
 import { newId } from "./ids";
 import {
   clearFailures,
@@ -233,7 +234,8 @@ export async function flush(): Promise<void> {
       try {
         response = await fetch(SYNC_URL, {
           method: "POST",
-          headers: { "content-type": "application/json" },
+          // Con la última actividad real: quien trabajó sin señal no pierde la sesión al reconectarse.
+          headers: { "content-type": "application/json", "x-conecta-latido": "1", ...activityHeaders() },
           body: JSON.stringify({ ops: groups.map((g) => g.op) }),
           // Si la sesión venció, el panel redirige al login: eso no es una respuesta del servidor.
           redirect: "manual",

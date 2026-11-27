@@ -513,6 +513,15 @@ export const academic = {
       token,
       body: input,
     }),
+  /** Regreso desde PixelPay a la página pública: sin sesión, se confirma con el paymentHash. */
+  returnOnline: (schoolId: string, input: { orderId: string; paymentHash?: string; cancelled?: boolean }) =>
+    call<{
+      status: "confirmado" | "cancelado" | "pendiente";
+      paymentId: string;
+      receiptNumber: number | null;
+      amountCents: number;
+      duplicate: boolean;
+    }>(`/payments/online/return/${schoolId}`, { method: "POST", body: input }),
   /** Aviso de PixelPay: llega sin sesión; lo valida academic con el hash de la llave secreta. */
   pixelpayCallback: (schoolId: string, body: unknown) =>
     call<{ ok: boolean }>(`/payments/pixelpay/callback/${schoolId}`, { method: "POST", body }),

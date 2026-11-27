@@ -1,4 +1,4 @@
-import { isPortalRole, isRegionalRole, MESSAGING_ROLES, ROLE_LABELS, type Role } from "@escolar/shared";
+import { isRegionalRole, MESSAGING_ROLES, ROLE_LABELS, type Role } from "@escolar/shared";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { BiometricOffer } from "@/components/biometric-offer";
@@ -17,6 +17,7 @@ import { getSession } from "@/lib/dal";
 import { identity } from "@/lib/identity";
 import { currentLicense } from "@/lib/license";
 import { MODULES } from "@/lib/modules";
+import { idleMinutes } from "@/lib/session-cookies";
 import { logoutAction, switchMembershipAction } from "./actions";
 
 export default async function PanelLayout({ children }: { children: ReactNode }) {
@@ -126,10 +127,8 @@ export default async function PanelLayout({ children }: { children: ReactNode })
   return (
     <div className="min-h-dvh md:grid md:grid-cols-[15rem_1fr] print:block">
       <OfflineAgent owner={current.id} />
-      {/* El personal maneja datos de los alumnos: la sesión se cierra si queda sin usar. */}
-      {!isPortalRole(user.role) && (
-        <IdleLogout minutes={Number(process.env.SESSION_IDLE_MINUTES ?? 30) || 30} />
-      )}
+      {/* Todos manejan datos de alumnos: la sesión se cierra si queda sin usar (también lo cuida el proxy). */}
+      <IdleLogout minutes={idleMinutes()} />
       <NativeAppBridge messaging={messaging} />
       {/* En el celular la barra va escondida (botón ☰ del encabezado); en la computadora, siempre a la vista. */}
       <aside className="hidden border-r border-slate-200 bg-white px-4 py-6 md:block md:min-h-dvh print:hidden">
