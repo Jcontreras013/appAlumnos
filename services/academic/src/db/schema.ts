@@ -109,6 +109,25 @@ export const grades = pgTable(
   ],
 );
 
+/**
+ * Jornadas del centro (matutina, nocturna, fin de semana…): sus días de clase (1 = lunes … 7 =
+ * domingo). Las secciones sin jornada trabajan de lunes a viernes.
+ */
+export const shifts = pgTable(
+  "shifts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    schoolId: schoolId(),
+    name: text("name").notNull(),
+    classDays: integer("class_days").array().notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique("shifts_tenant_key").on(t.schoolId, t.id),
+    unique("shifts_name_unique").on(t.schoolId, t.name),
+  ],
+);
+
 export const sections = pgTable(
   "sections",
   {
@@ -119,10 +138,17 @@ export const sections = pgTable(
     name: text("name").notNull(),
     /** Cupo máximo de alumnos. null = sin límite. */
     capacity: integer("capacity"),
+    /** Jornada (null = la de siempre, lunes a viernes). */
+    shiftId: uuid("shift_id"),
     createdAt: createdAt(),
   },
   (t) => [
     unique("sections_tenant_key").on(t.schoolId, t.id),
+    foreignKey({
+      name: "sections_shift_fk",
+      columns: [t.schoolId, t.shiftId],
+      foreignColumns: [shifts.schoolId, shifts.id],
+    }),
     unique("sections_year_key").on(t.schoolYearId, t.id),
     unique("sections_name_unique").on(t.schoolYearId, t.gradeId, t.name),
     foreignKey({
@@ -204,6 +230,11 @@ export const students = pgTable(
     email: text("email"),
     /** Cuenta del alumno en el aula virtual (identity), cuando se le cree una. */
     userId: uuid("user_id"),
+    /**
+     * Responde por sí mismo (mayor de edad, o paga él su colegiatura): no necesita responsables y desde
+     * su cuenta ve sus cobros y paga.
+     */
+    selfResponsible: boolean("self_responsible").notNull().default(false),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -723,12 +754,26 @@ export const announcements = pgTable(
 export const scheduleBlocks = pgTable(
   "schedule_blocks",
   {
+    id: uuid("id").primaryKey().defaultRandom(),
     schoolId: schoolId(),
+    /** Las horas de esa jornada (null = las de las secciones sin jornada). */
+    shiftId: uuid("shift_id"),
     number: integer("number").notNull(),
     startsAt: text("starts_at").notNull(),
     endsAt: text("ends_at").notNull(),
   },
-  (t) => [primaryKey({ name: "schedule_blocks_pk", columns: [t.schoolId, t.number] })],
+  (t) => [
+    uniqueIndex("schedule_blocks_number_unique").on(
+      t.schoolId,
+      sql`coalesce(${t.shiftId}, '00000000-0000-0000-0000-000000000000'::uuid)`,
+      t.number,
+    ),
+    foreignKey({
+      name: "schedule_blocks_shift_fk",
+      columns: [t.schoolId, t.shiftId],
+      foreignColumns: [shifts.schoolId, shifts.id],
+    }).onDelete("cascade"),
+  ],
 );
 
 /** Qué clase tiene cada sección en cada día (1 = lunes) y bloque. */
@@ -744,7 +789,7 @@ export const scheduleSlots = pgTable(
   (t) => [
     primaryKey({ name: "schedule_slots_pk", columns: [t.sectionId, t.weekday, t.block] }),
     index("schedule_slots_assignment_idx").on(t.assignmentId),
-    check("schedule_slots_weekday", sql`${t.weekday} between 1 and 5`),
+    check("schedule_slots_weekday", sql`${t.weekday} between 1 and 7`),
     foreignKey({
       name: "schedule_slots_section_fk",
       columns: [t.schoolId, t.sectionId],

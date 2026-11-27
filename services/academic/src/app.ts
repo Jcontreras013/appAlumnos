@@ -33,6 +33,7 @@ import { planRoutes } from "./routes/plans";
 import { quizRoutes } from "./routes/quizzes";
 import { regionalRoutes } from "./routes/regional";
 import { scheduleRoutes } from "./routes/schedule";
+import { shiftRoutes } from "./routes/shifts";
 import { staffRoutes } from "./routes/staff";
 import { structureRoutes } from "./routes/structure";
 import { studentAccessRoutes } from "./routes/student-access";
@@ -92,6 +93,7 @@ export async function buildApp(options: BuildAppOptions) {
     await classChatRoutes(scope, deps);
     await changeRequestRoutes(scope, deps);
     await paymentRoutes(scope, deps);
+    await shiftRoutes(scope, deps);
     await exportRoutes(scope, deps);
     await followUpRoutes(scope, deps);
     await announcementRoutes(scope, deps);

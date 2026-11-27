@@ -104,6 +104,8 @@ describe("Groq: la respuesta", () => {
       miercoles: "Desarrollo",
       jueves: "",
       viernes: "Cierre",
+      sabado: "",
+      domingo: "",
     });
   });
 

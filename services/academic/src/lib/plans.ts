@@ -2,6 +2,7 @@ import { type AccessClaims, notFound } from "@escolar/service-kit";
 import {
   type AssignmentDto,
   addDays,
+  DEFAULT_CLASS_DAYS,
   DEFAULT_PLAN_TEMPLATE,
   type LessonPlanDto,
   type PlanBoardDto,
@@ -40,7 +41,15 @@ export async function templateOf(db: DbOrTx, schoolId: string): Promise<PlanTemp
 }
 
 /** Fecha límite para entregar la planificación de una semana (p. ej. el viernes anterior). */
-export const deadlineOf = (weekStart: string, daysBefore: number) => addDays(weekStart, -daysBefore);
+/**
+ * Fecha límite para entregar la planificación: tantos días antes del primer día de clase de la semana
+ * (el lunes; el sábado en una jornada de fin de semana).
+ */
+export const deadlineOf = (
+  weekStart: string,
+  daysBefore: number,
+  classDays: readonly number[] = DEFAULT_CLASS_DAYS,
+) => addDays(weekStart, Math.min(...(classDays.length ? classDays : DEFAULT_CLASS_DAYS)) - 1 - daysBefore);
 
 export async function assignmentById(db: DbOrTx, schoolId: string, id: string): Promise<AssignmentDto> {
   const [row] = await db
@@ -55,7 +64,7 @@ export async function assignmentById(db: DbOrTx, schoolId: string, id: string): 
   return assignment;
 }
 
-/** Clases que alguien cubre como sustituto en algún día (lunes a viernes) de esa semana. */
+/** Clases que alguien cubre como sustituto en algún día de esa semana (de lunes a domingo). */
 export async function coveredDuringWeek(db: DbOrTx, schoolId: string, userId: string, weekStart: string) {
   const rows = await db
     .select({ assignmentId: substitutions.assignmentId })
@@ -67,7 +76,7 @@ export async function coveredDuringWeek(db: DbOrTx, schoolId: string, userId: st
         eq(substitutions.substituteUserId, userId),
         isNull(substitutions.cancelledAt),
         isNull(teacherLeaves.cancelledAt),
-        lte(substitutions.startsOn, addDays(weekStart, 4)),
+        lte(substitutions.startsOn, addDays(weekStart, 6)),
         gte(substitutions.endsOn, weekStart),
       ),
     );
@@ -161,8 +170,11 @@ export async function weekBoard(
 ): Promise<PlanBoardDto> {
   const template = await templateOf(db, schoolId);
   const deadline = deadlineOf(weekStart, template.deadlineDaysBefore);
-  // Una semana entera de vacaciones o feriados no pide planificación: nada queda atrasado.
-  const dayOff = weekOff(weekStart, await daysOffBetween(db, schoolId, weekStart, addDays(weekStart, 4)));
+  // Una semana entera de vacaciones o feriados no pide planificación: nada queda atrasado. Cuenta con
+  // los días de clase de cada jornada (unas vacaciones de lunes a viernes no paran el fin de semana).
+  const daysOff = await daysOffBetween(db, schoolId, weekStart, addDays(weekStart, 6));
+  const allDays = [...new Set(assignments.flatMap((a) => a.classDays))];
+  const dayOff = weekOff(weekStart, daysOff, allDays.length ? allDays : DEFAULT_CLASS_DAYS);
   const plans = assignments.length
     ? await db
         .select({
@@ -194,7 +206,11 @@ export async function weekBoard(
   const rows: PlanBoardRowDto[] = assignments.map((assignment) => {
     const plan = plans.find((p) => p.assignmentId === assignment.id);
     const status: PlanStatus | "sin_iniciar" = plan?.status ?? "sin_iniciar";
-    const overdue = !dayOff && !plan?.submittedAt && today > deadline;
+    const rowOff = weekOff(weekStart, daysOff, assignment.classDays);
+    const overdue =
+      !rowOff &&
+      !plan?.submittedAt &&
+      today > deadlineOf(weekStart, template.deadlineDaysBefore, assignment.classDays);
     totals[status]++;
     if (overdue) totals.atrasadas++;
     return {

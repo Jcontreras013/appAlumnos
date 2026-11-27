@@ -4,9 +4,12 @@ import {
   type AssignmentDto,
   type GradeDto,
   type SectionDto,
+  type ShiftDto,
   SUBJECT_LANGUAGE_LABELS,
   SUBJECT_LANGUAGES,
   type SubjectDto,
+  WEEKDAY_LABELS,
+  WEEKDAYS,
 } from "@escolar/shared";
 import { Field, SelectField } from "@/components/form-controls";
 import { InlineEditor } from "@/components/inline-editor";
@@ -15,9 +18,11 @@ import {
   deleteAssignmentAction,
   deleteGradeAction,
   deleteSectionAction,
+  deleteShiftAction,
   deleteSubjectAction,
   updateGradeAction,
   updateSectionAction,
+  updateShiftAction,
   updateSubjectAction,
 } from "./actions";
 
@@ -62,7 +67,7 @@ export function GradeEditor({ grade }: { grade: GradeDto }) {
   );
 }
 
-export function SectionEditor({ section }: { section: SectionDto }) {
+export function SectionEditor({ section, shifts = [] }: { section: SectionDto; shifts?: Option[] }) {
   return (
     <InlineEditor
       what={`sección ${section.label}`}
@@ -92,6 +97,52 @@ export function SectionEditor({ section }: { section: SectionDto }) {
               state.values?.capacity ?? (section.capacity === null ? "" : String(section.capacity))
             }
           />
+          {shifts.length > 0 ? (
+            <div className="col-span-2 space-y-1">
+              <SelectField
+                idPrefix={idPrefix}
+                name="shiftId"
+                label="Jornada"
+                options={shifts}
+                placeholder="Regular (lunes a viernes)"
+                state={state}
+                defaultValue={state.values?.shiftId ?? section.shiftId ?? ""}
+              />
+              <p className="text-xs text-slate-500">
+                Al cambiar de jornada, el horario de la sección se vuelve a armar (otros días y otras horas).
+              </p>
+            </div>
+          ) : (
+            <input type="hidden" name="shiftId" value={section.shiftId ?? ""} />
+          )}
+        </div>
+      )}
+    />
+  );
+}
+
+export function ShiftEditor({ shift }: { shift: ShiftDto }) {
+  return (
+    <InlineEditor
+      what={`jornada ${shift.name}`}
+      id={shift.id}
+      update={updateShiftAction}
+      remove={deleteShiftAction}
+      removeLabel="Eliminar jornada"
+      fields={(state, idPrefix) => (
+        <div className="space-y-3">
+          <Field
+            idPrefix={idPrefix}
+            name="name"
+            label="Jornada"
+            required
+            state={state}
+            defaultValue={state.values?.name ?? shift.name}
+          />
+          <ClassDaysField selected={shift.classDays} idPrefix={idPrefix} />
+          <p className="text-xs text-slate-500">
+            Si quitas un día, las clases de ese día se quitan del horario de sus secciones.
+          </p>
         </div>
       )}
     />
@@ -162,5 +213,33 @@ export function AssignmentEditor({
         </>
       )}
     />
+  );
+}
+
+/** Casillas de los siete días (1 = lunes … 7 = domingo) para los días de clase de una jornada. */
+export function ClassDaysField({ selected, idPrefix }: { selected: readonly number[]; idPrefix: string }) {
+  return (
+    <fieldset>
+      <legend className="label">Días de clase</legend>
+      <div className="flex flex-wrap gap-2">
+        {WEEKDAYS.map((day, i) => (
+          <label
+            key={day}
+            htmlFor={`${idPrefix}-dia-${i + 1}`}
+            className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-2 py-1 text-sm"
+          >
+            <input
+              id={`${idPrefix}-dia-${i + 1}`}
+              type="checkbox"
+              name="classDays"
+              value={i + 1}
+              defaultChecked={selected.includes(i + 1)}
+              className="rounded border-slate-300"
+            />
+            {WEEKDAY_LABELS[day].slice(0, 3)}
+          </label>
+        ))}
+      </div>
+    </fieldset>
   );
 }

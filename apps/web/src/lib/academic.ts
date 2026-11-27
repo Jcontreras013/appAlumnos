@@ -105,6 +105,8 @@ import type {
   SectionScheduleInput,
   SectionStudentAccessDto,
   SectionUpdate,
+  ShiftDto,
+  ShiftInput,
   StudentAccessDto,
   StudentAccountDto,
   StudentDetailDto,
@@ -129,6 +131,8 @@ const call = <T>(path: string, init?: Parameters<typeof serviceCall>[2]) =>
 export interface StudentFilters {
   q?: string;
   sectionId?: string;
+  /** Una jornada, o "regular" (las secciones sin jornada). */
+  shiftId?: string;
   estado?: "todos" | "matriculados" | "sin_matricula" | "retirados";
   limit?: number;
   offset?: number;
@@ -155,6 +159,13 @@ export const academic = {
   updateSection: (token: string, id: string, input: SectionUpdate) =>
     call<SectionDto>(`/sections/${id}`, { method: "PUT", token, body: input }),
   deleteSection: (token: string, id: string) => call<void>(`/sections/${id}`, { method: "DELETE", token }),
+
+  listShifts: (token: string) => call<ShiftDto[]>("/shifts", { token }),
+  createShift: (token: string, input: ShiftInput) =>
+    call<ShiftDto>("/shifts", { method: "POST", token, body: input }),
+  updateShift: (token: string, id: string, input: ShiftInput) =>
+    call<ShiftDto>(`/shifts/${id}`, { method: "PUT", token, body: input }),
+  deleteShift: (token: string, id: string) => call<void>(`/shifts/${id}`, { method: "DELETE", token }),
 
   listSubjects: (token: string) => call<SubjectDto[]>("/subjects", { token }),
   createSubject: (token: string, input: SubjectInput) =>
@@ -475,6 +486,14 @@ export const academic = {
     call<PaymentDto>(`/payments/${id}/void`, { method: "POST", token, body: { reason } }),
   childAccount: (token: string, studentId: string) =>
     call<StudentAccountDto>(`/family/children/${studentId}/account`, { token }),
+  /** El alumno que responde por sí mismo: sus cobros (404 si sus pagos los ve su familia). */
+  myAccount: (token: string) => call<StudentAccountDto>("/student/me/account", { token }),
+  payMine: (token: string, input: { chargeIds: string[]; email: string; returnBase: string }) =>
+    call<{ action: string; fields: Record<string, string>; orderId: string }>("/student/me/pay", {
+      method: "POST",
+      token,
+      body: input,
+    }),
   payOnline: (
     token: string,
     studentId: string,

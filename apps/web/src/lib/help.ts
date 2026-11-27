@@ -91,7 +91,7 @@ const MESSAGES: HelpSection = {
     "El número junto a «Mensajes» en el menú te dice cuántas conversaciones tienen algo sin leer.",
     "Para que el teléfono te avise, toca «Activar avisos» arriba de tus conversaciones (en la app de Android, el teléfono te pide permiso). En iPhone, primero toca Compartir → «Agregar a inicio» y abre CONECTA desde ese ícono.",
   ],
-  tip: "Los avisos llegan de lunes a viernes de 6:00 a. m. a 7:00 p. m.; lo que te escriban de noche te lo avisamos al empezar la jornada. Los mensajes y lo que se adjunta no se borran: quedan como registro del centro. Los videos pueden durar hasta un minuto; las fotos se achican solas para gastar menos datos.",
+  tip: "Los avisos llegan de lunes a viernes de 6:00 a. m. a 7:00 p. m. (y también sábado y domingo si el centro tiene jornada de fin de semana); lo que te escriban de noche te lo avisamos al empezar la jornada. Los mensajes y lo que se adjunta no se borran: quedan como registro del centro. Los videos pueden durar hasta un minuto; las fotos se achican solas para gastar menos datos.",
 };
 
 export const HELP_GUIDES: HelpGuide[] = [
@@ -137,6 +137,7 @@ export const HELP_GUIDES: HelpGuide[] = [
           "Guarda las veces que quieras. Cuando esté lista, toca «Enviar a revisión» antes del plazo de la semana.",
           "Si te la devuelven, verás las observaciones: corrígela y vuelve a enviarla.",
           "Puedes copiar la planificación de una semana anterior para no empezar de cero.",
+          "En jornada de fin de semana planificas por encuentro: cada día de clase es una sesión larga, con lo que harán en casa hasta el próximo. Las tareas nuevas proponen como entrega el próximo encuentro.",
           "Si la materia se imparte en inglés (colegios bilingües), el asistente escribe el borrador en inglés.",
         ],
       },
@@ -243,6 +244,17 @@ export const HELP_GUIDES: HelpGuide[] = [
           "Si un docente se va, usa «Cambiar docente»: la clase pasa a la persona nueva con sus notas y planificaciones.",
           "Todo se puede corregir con «Editar». Lo que ya tiene alumnos o notas no se puede eliminar: el sistema te dice qué hacer.",
         ],
+      },
+      {
+        title: "Jornadas: matutina, nocturna, fin de semana",
+        steps: [
+          "Si el centro tiene más de una jornada, en «Año, grados y materias» → «Jornadas» agrega cada una con sus días de clase (por ejemplo, «Fin de semana»: sábado y domingo; «Dominical»: solo domingo).",
+          "Al crear o editar una sección, elige su jornada. Las secciones sin jornada siguen de lunes a viernes.",
+          "En «Horario», cada jornada tiene sus propias horas de clase (la nocturna no empieza a las 7). Un docente que da clases en dos jornadas no puede quedar a la misma hora el mismo día.",
+          "Con eso se ajustan solos la planificación (un texto por cada día de clase; en fin de semana, por encuentro), la asistencia, el calendario y la alerta de inasistencia, que en fin de semana salta desde la primera falta.",
+          "Si alguna jornada tiene clases sábado o domingo, los avisos en el celular también llegan esos días.",
+        ],
+        tip: "En «Alumnos y familias» puedes filtrar por jornada.",
       },
       {
         title: "Licencias y sustitutos",
@@ -387,6 +399,7 @@ export const HELP_GUIDES: HelpGuide[] = [
         steps: [
           "Para muchos alumnos a la vez: en «Alumnos y familias», «Importar alumnos desde Excel». Revisa la vista previa y confirma.",
           "Para un alumno: «Nuevo alumno», con su responsable principal y la sección.",
+          "Si el alumno es mayor de edad o paga él su colegiatura (común en jornada de fin de semana), marca «El alumno responde por sí mismo»: no necesita responsable y, con su cuenta del aula virtual, ve sus cobros y paga. Al poner una fecha de nacimiento de 18 años o más se marca solo.",
           "En la ficha del alumno puedes «Cambiar de sección», «Registrar retiro» o volver a «Matricular».",
         ],
       },
@@ -521,6 +534,7 @@ export const HELP_GUIDES: HelpGuide[] = [
         steps: [
           "En «Mis notas» ves tus notas por materia y parcial, tu asistencia, las tareas de la semana y tu horario.",
           "Si aparece «Pide apoyo a tus maestros», todavía hay tiempo de mejorar: habla con ellos.",
+          "Si respondes por ti mismo (eres mayor de edad o pagas tu colegiatura), en «Mis pagos» ves lo que debes, pagas con tarjeta y descargas tus recibos.",
           "En «Biblioteca» están los libros y guías de tu grado; los puedes guardar para leer sin internet.",
         ],
       },

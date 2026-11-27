@@ -109,6 +109,7 @@ export function StudentDataForm({ student }: { student: StudentDetailDto }) {
       sex: student.sex ?? "",
       medicalNotes: student.medicalNotes ?? "",
       notes: student.notes ?? "",
+      selfResponsible: student.selfResponsible ? "on" : "",
     },
   };
   return (
@@ -129,6 +130,24 @@ export function StudentDataForm({ student }: { student: StudentDetailDto }) {
       </div>
       <TextAreaField name="medicalNotes" label="Alergias o condiciones de salud" rows={2} state={current} />
       <TextAreaField name="notes" label="Observaciones" rows={2} state={current} />
+      <label className="flex items-start gap-2 text-sm">
+        <input
+          type="checkbox"
+          name="selfResponsible"
+          defaultChecked={current.values?.selfResponsible === "on"}
+          className="mt-0.5 rounded border-slate-300"
+        />
+        <span>
+          <span className="font-medium text-slate-900">Responde por sí mismo</span>
+          <span className="block text-xs text-slate-500">
+            Mayor de edad, o paga él su colegiatura: no necesita responsable y ve sus cobros y paga desde su
+            cuenta del aula virtual.
+          </span>
+          {current.fields?.selfResponsible && (
+            <span className="block text-xs text-red-600">{current.fields.selfResponsible}</span>
+          )}
+        </span>
+      </label>
       <SubmitButton pendingText="Guardando…">Guardar cambios</SubmitButton>
     </form>
   );

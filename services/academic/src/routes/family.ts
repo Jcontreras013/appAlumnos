@@ -143,6 +143,7 @@ export async function familyRoutes(app: FastifyInstance, { db, identity, today }
         studentId: students.id,
         firstNames: students.firstNames,
         lastNames: students.lastNames,
+        selfResponsible: students.selfResponsible,
         guardian: guardians,
       })
       .from(enrollments)
@@ -164,11 +165,21 @@ export async function familyRoutes(app: FastifyInstance, { db, identity, today }
       )
       .orderBy(asc(students.lastNames), asc(students.firstNames), desc(studentGuardians.isPrimary));
 
-    const result: SectionFamilyAccessDto = { created: [], alreadyActive: 0, skipped: [], interrupted: null };
+    const result: SectionFamilyAccessDto = {
+      created: [],
+      alreadyActive: 0,
+      selfResponsible: 0,
+      skipped: [],
+      interrupted: null,
+    };
     const seen = new Set<string>();
     for (const row of rows) {
       const studentName = `${row.firstNames} ${row.lastNames}`;
       const guardian = row.guardian;
+      if (!guardian && row.selfResponsible) {
+        result.selfResponsible++;
+        continue;
+      }
       if (!guardian) {
         result.skipped.push({
           studentId: row.studentId,

@@ -11,7 +11,9 @@ export const metadata: Metadata = { title: "Pago" };
  * con `cancelado` se avisa que no se cobró. Si el aviso de PixelPay llegó antes, ya estaba confirmado.
  */
 export default async function PaymentReturnPage({ searchParams }: PageProps<"/panel/pagos/volver">) {
-  const session = await requireRole("padre", "admin", "secretaria");
+  const session = await requireRole("padre", "estudiante", "admin", "secretaria");
+  // El alumno que responde por sí mismo vuelve a «Mis pagos»; la familia, a «Pagos».
+  const home = session.user.role === "estudiante" ? "/panel/pagos/mis-pagos" : "/panel/pagos/familia";
   const q = await searchParams;
   const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) ?? "";
   const orderId = one(q.orden);
@@ -22,7 +24,7 @@ export default async function PaymentReturnPage({ searchParams }: PageProps<"/pa
     .completeOnline(session.accessToken, { orderId, paymentHash: paymentHash || undefined, cancelled })
     .catch(() => null);
   if (result?.status === "confirmado") redirect(`/panel/pagos/recibo/${result.paymentId}?nuevo=1`);
-  if (result?.status === "cancelado") redirect("/panel/pagos/familia?cancelado=1");
+  if (result?.status === "cancelado") redirect(`${home}?cancelado=1`);
 
   return (
     <div className="mx-auto max-w-lg space-y-4">
@@ -31,7 +33,7 @@ export default async function PaymentReturnPage({ searchParams }: PageProps<"/pa
         Si PixelPay te mostró el pago como aprobado, se confirmará solo en unos minutos (te llegará también el
         comprobante al correo). Si no, no se hizo ningún cobro.
       </p>
-      <Link href="/panel/pagos/familia" className="btn-primary">
+      <Link href={home} className="btn-primary">
         Volver a Pagos
       </Link>
     </div>

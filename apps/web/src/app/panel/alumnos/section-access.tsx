@@ -76,6 +76,8 @@ function FamiliesBlock({ sectionId }: { sectionId: string }) {
               : `Se crearon ${fresh.length} ${fresh.length === 1 ? "acceso" : "accesos"}.`}
             {linked > 0 &&
               ` ${linked} ya tenían cuenta en CONECTA (por otro centro): entran con su contraseña de siempre.`}
+            {result.selfResponsible > 0 &&
+              ` ${result.selfResponsible === 1 ? "1 alumno responde por sí mismo" : `${result.selfResponsible} alumnos responden por sí mismos`}: usan su cuenta de alumno (abajo).`}
             {result.alreadyActive > 0 &&
               ` ${result.alreadyActive} ya ${result.alreadyActive === 1 ? "tenía" : "tenían"} acceso.`}
             {fresh.length > 0 &&

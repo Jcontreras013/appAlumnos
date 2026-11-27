@@ -46,6 +46,9 @@ export default async function PanelLayout({ children }: { children: ReactNode })
     !gated && is("admin")
       ? ((await academic.pendingChangeRequests(accessToken).catch(() => null))?.count ?? 0)
       : 0;
+  // El alumno que responde por sí mismo ve «Mis pagos» (a los demás, los pagos los ve su familia).
+  const ownPayments =
+    !gated && is("estudiante") ? Boolean(await academic.myAccount(accessToken).catch(() => null)) : false;
   const items: NavItem[] = [];
   if (isRegionalRole(user.role)) {
     items.push({ href: "/panel/region", label: "Tablero de centros" });
@@ -59,6 +62,7 @@ export default async function PanelLayout({ children }: { children: ReactNode })
     items.push({ href: "/panel/aula", label: "Mis clases" });
     items.push({ href: "/panel/chats", label: "Chats" });
     items.push({ href: "/panel/mis-notas", label: "Mis notas" });
+    if (ownPayments) items.push({ href: "/panel/pagos/mis-pagos", label: "Mis pagos" });
     items.push({ href: "/panel/biblioteca", label: "Biblioteca" });
   } else {
     items.push({ href: "/panel", label: "Inicio" });

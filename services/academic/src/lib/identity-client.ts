@@ -32,6 +32,11 @@ export interface IdentityClient {
   createStudentAccount(bearerToken: string, input: FamilyAccountInput): Promise<FamilyAccountDto>;
   resetStudentPassword(bearerToken: string, userId: string): Promise<FamilyAccountDto>;
   revokeStudentAccount(bearerToken: string, userId: string): Promise<void>;
+  /**
+   * El centro tiene clases sábado o domingo (alguna jornada): los avisos en el celular también
+   * llegan esos días. Lo pide la dirección al guardar las jornadas.
+   */
+  setWeekendNotices(bearerToken: string, enabled: boolean): Promise<void>;
 }
 
 export const bearerOf = (request: FastifyRequest) =>
@@ -66,7 +71,7 @@ async function get<T>(url: string, bearerToken: string): Promise<T | null> {
 async function send<T>(
   url: string,
   bearerToken: string,
-  method: "POST" | "DELETE",
+  method: "POST" | "PUT" | "DELETE",
   body?: unknown,
 ): Promise<T> {
   let response: Response;
@@ -132,5 +137,7 @@ export function httpIdentityClient(baseUrl: string): IdentityClient {
       send<FamilyAccountDto>(`${baseUrl}/student-accounts/${userId}/reset-password`, bearerToken, "POST"),
     revokeStudentAccount: (bearerToken, userId) =>
       send<void>(`${baseUrl}/student-accounts/${userId}`, bearerToken, "DELETE"),
+    setWeekendNotices: (bearerToken, enabled) =>
+      send<void>(`${baseUrl}/schools/current/weekend-notices`, bearerToken, "PUT", { enabled }),
   };
 }

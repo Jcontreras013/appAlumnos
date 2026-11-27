@@ -1,11 +1,13 @@
 import {
+  classDayKeys,
   type DaysValue,
   formatDay,
   formatWeekRange,
+  isMeetingSchedule,
   type PlanHistoryDto,
   todayInHonduras,
   WEEKDAY_LABELS,
-  WEEKDAYS,
+  type Weekday,
 } from "@escolar/shared";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -15,6 +17,20 @@ import { academic } from "@/lib/academic";
 import { ServiceError } from "@/lib/api";
 import { requireRole } from "@/lib/dal";
 import { PlanEditor, ReviewForm } from "./plan-forms";
+
+/** Columnas de la cuadrícula de días (Tailwind necesita las clases escritas completas). */
+const DAY_COLUMNS: Record<number, string> = {
+  1: "md:grid-cols-1",
+  2: "md:grid-cols-2",
+  3: "md:grid-cols-3",
+  4: "md:grid-cols-4",
+  5: "md:grid-cols-5",
+  6: "md:grid-cols-3",
+  7: "md:grid-cols-4",
+};
+/** «Lunes» o, en una jornada de fin de semana, «Encuentro del sábado». */
+const dayTitle = (day: Weekday, meetings: boolean) =>
+  meetings ? `Encuentro del ${WEEKDAY_LABELS[day].toLowerCase()}` : WEEKDAY_LABELS[day];
 
 export const metadata: Metadata = { title: "Planificación" };
 
@@ -69,8 +85,8 @@ export default async function PlanPage({ params }: PageProps<"/panel/planificaci
           <PlanStatusBadge status={plan.status} overdue={overdue} long />
         </div>
         <p className="mt-1 text-sm text-slate-500">
-          {plan.assignment.teacherName} · Semana del {formatWeekRange(plan.weekStart)} · Entrega:{" "}
-          {formatDay(plan.deadline)}
+          {plan.assignment.teacherName} · Semana del{" "}
+          {formatWeekRange(plan.weekStart, plan.assignment.classDays)} · Entrega: {formatDay(plan.deadline)}
         </p>
       </div>
 
@@ -103,16 +119,18 @@ export default async function PlanPage({ params }: PageProps<"/panel/planificaci
           )}
           {plan.fields.map((field) => {
             const value = plan.content[field.key];
+            const days = classDayKeys(plan.assignment.classDays);
+            const meetings = isMeetingSchedule(plan.assignment.classDays);
             return (
               <div key={field.key} className="card p-4">
                 <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
                   {field.label}
                 </h2>
                 {field.type === "dias" ? (
-                  <div className="mt-2 grid gap-3 md:grid-cols-5">
-                    {WEEKDAYS.map((day) => (
+                  <div className={`mt-2 grid gap-3 ${DAY_COLUMNS[days.length] ?? "md:grid-cols-5"}`}>
+                    {days.map((day) => (
                       <div key={day}>
-                        <p className="text-xs font-semibold text-slate-700">{WEEKDAY_LABELS[day]}</p>
+                        <p className="text-xs font-semibold text-slate-700">{dayTitle(day, meetings)}</p>
                         <p className="mt-0.5 whitespace-pre-wrap text-sm text-slate-800">
                           {(value as DaysValue | undefined)?.[day] || (
                             <span className="text-slate-400">—</span>

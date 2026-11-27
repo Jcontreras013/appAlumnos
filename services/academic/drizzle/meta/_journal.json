@@ -176,6 +176,13 @@
       "when": 1795731175287,
       "tag": "0024_pagos_de_familias",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1795742860137,
+      "tag": "0025_jornadas_y_alumno_responsable",
+      "breakpoints": true
     }
   ]
 }

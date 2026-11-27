@@ -1,6 +1,6 @@
 "use client";
 
-import { type ScheduleDto, WEEKDAY_LABELS, WEEKDAYS } from "@escolar/shared";
+import { DEFAULT_CLASS_DAYS, type ScheduleDto, WEEKDAY_LABELS, weekdayOf } from "@escolar/shared";
 import { useActionState, useState, useTransition } from "react";
 import { FormAlert, SubmitButton } from "@/components/form-controls";
 import { initialFormState } from "@/lib/form-state";
@@ -8,8 +8,11 @@ import { saveBlocksAction, saveSectionScheduleAction } from "./actions";
 
 type Option = { value: string; label: string };
 
-/** Las horas de clase del centro (iguales para todas las secciones). Controlado: guardar no lo vacía. */
-export function BlocksForm({ blocks }: { blocks: ScheduleDto["blocks"] }) {
+/**
+ * Las horas de clase de una jornada (iguales para todas sus secciones; la nocturna o la de fin de
+ * semana tienen las suyas). Controlado: guardar no lo vacía.
+ */
+export function BlocksForm({ blocks, shiftId }: { blocks: ScheduleDto["blocks"]; shiftId: string | null }) {
   const [state, action] = useActionState(saveBlocksAction, initialFormState);
   const [rows, setRows] = useState(
     blocks.length
@@ -20,6 +23,7 @@ export function BlocksForm({ blocks }: { blocks: ScheduleDto["blocks"] }) {
     setRows((prev) => prev.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   return (
     <form action={action} className="space-y-3" noValidate>
+      <input type="hidden" name="shiftId" value={shiftId ?? ""} />
       <FormAlert state={state} />
       <ol className="space-y-2">
         {rows.map((r, i) => (
@@ -96,6 +100,7 @@ export function SectionScheduleForm({
     Object.fromEntries(schedule.slots.map((s) => [`${s.weekday}-${s.block}`, s.assignmentId])),
   );
   const [pending, startTransition] = useTransition();
+  const days = schedule.classDays?.length ? schedule.classDays : [...DEFAULT_CLASS_DAYS];
   return (
     <form
       // Se envía a mano (y no con action=) para que React no reinicie los selects al guardar.
@@ -110,13 +115,13 @@ export function SectionScheduleForm({
       <input type="hidden" name="sectionId" value={sectionId} />
       <FormAlert state={state} />
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[44rem] text-sm">
+        <table className={`w-full text-sm ${days.length > 3 ? "min-w-[44rem]" : ""}`}>
           <thead>
             <tr className="text-left text-xs uppercase tracking-wide text-slate-500">
               <th className="w-24 py-1 pr-2 font-semibold">Hora</th>
-              {WEEKDAYS.map((d) => (
+              {days.map((d) => (
                 <th key={d} className="px-1 py-1 font-semibold">
-                  {WEEKDAY_LABELS[d]}
+                  {WEEKDAY_LABELS[weekdayOf(d)]}
                 </th>
               ))}
             </tr>
@@ -127,15 +132,15 @@ export function SectionScheduleForm({
                 <td className="whitespace-nowrap py-1 pr-2 tabular-nums text-slate-500">
                   {b.startsAt}–{b.endsAt}
                 </td>
-                {WEEKDAYS.map((d, i) => (
+                {days.map((d) => (
                   <td key={d} className="px-1 py-1">
                     <select
-                      name={`c-${i + 1}-${b.number}`}
-                      value={cells[`${i + 1}-${b.number}`] ?? ""}
+                      name={`c-${d}-${b.number}`}
+                      value={cells[`${d}-${b.number}`] ?? ""}
                       onChange={(e) =>
-                        setCells((prev) => ({ ...prev, [`${i + 1}-${b.number}`]: e.target.value }))
+                        setCells((prev) => ({ ...prev, [`${d}-${b.number}`]: e.target.value }))
                       }
-                      aria-label={`${WEEKDAY_LABELS[d]}, ${b.number}.ª hora`}
+                      aria-label={`${WEEKDAY_LABELS[weekdayOf(d)]}, ${b.number}.ª hora`}
                       className="input w-full py-1.5 text-sm"
                     >
                       <option value="">—</option>

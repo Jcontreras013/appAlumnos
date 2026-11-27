@@ -1,5 +1,12 @@
 import { conflict, notFound } from "@escolar/service-kit";
-import type { AssignmentDto, GradeDto, SchoolYearDto, SectionDto, SubjectDto } from "@escolar/shared";
+import {
+  type AssignmentDto,
+  DEFAULT_CLASS_DAYS,
+  type GradeDto,
+  type SchoolYearDto,
+  type SectionDto,
+  type SubjectDto,
+} from "@escolar/shared";
 import { and, asc, count, eq, sql } from "drizzle-orm";
 import type { DbOrTx } from "../db/client";
 import {
@@ -10,11 +17,16 @@ import {
   type Subject,
   schoolYears,
   sections,
+  shifts,
   subjects,
   teachingAssignments,
 } from "../db/schema";
 
 export const sectionLabel = (gradeName: string, sectionName: string) => `${gradeName} ${sectionName}`;
+
+/** Días de clase de una sección: los de su jornada, o lunes a viernes si no tiene. */
+export const classDaysOf = (days: number[] | null | undefined): number[] =>
+  days?.length ? days : [...DEFAULT_CLASS_DAYS];
 
 export const toSchoolYearDto = (y: SchoolYear): SchoolYearDto => ({
   id: y.id,
@@ -56,13 +68,20 @@ export async function listSections(
 ): Promise<SectionDto[]> {
   const counts = activeCounts(db);
   const rows = await db
-    .select({ section: sections, gradeName: grades.name, enrolled: counts.enrolled })
+    .select({
+      section: sections,
+      gradeName: grades.name,
+      enrolled: counts.enrolled,
+      shiftName: shifts.name,
+      classDays: shifts.classDays,
+    })
     .from(sections)
     .innerJoin(grades, eq(grades.id, sections.gradeId))
     .leftJoin(counts, eq(counts.sectionId, sections.id))
+    .leftJoin(shifts, eq(shifts.id, sections.shiftId))
     .where(and(eq(sections.schoolId, schoolId), eq(sections.schoolYearId, schoolYearId)))
     .orderBy(asc(grades.sortOrder), asc(grades.name), asc(sections.name));
-  return rows.map(({ section, gradeName, enrolled }) => ({
+  return rows.map(({ section, gradeName, enrolled, shiftName, classDays }) => ({
     id: section.id,
     schoolYearId: section.schoolYearId,
     gradeId: section.gradeId,
@@ -71,16 +90,26 @@ export async function listSections(
     label: sectionLabel(gradeName, section.name),
     capacity: section.capacity,
     enrolledCount: Number(enrolled ?? 0),
+    shiftId: section.shiftId,
+    shiftName,
+    classDays: classDaysOf(classDays),
   }));
 }
 
 export async function getSection(db: DbOrTx, schoolId: string, sectionId: string): Promise<SectionDto> {
   const counts = activeCounts(db);
   const [row] = await db
-    .select({ section: sections, gradeName: grades.name, enrolled: counts.enrolled })
+    .select({
+      section: sections,
+      gradeName: grades.name,
+      enrolled: counts.enrolled,
+      shiftName: shifts.name,
+      classDays: shifts.classDays,
+    })
     .from(sections)
     .innerJoin(grades, eq(grades.id, sections.gradeId))
     .leftJoin(counts, eq(counts.sectionId, sections.id))
+    .leftJoin(shifts, eq(shifts.id, sections.shiftId))
     .where(and(eq(sections.schoolId, schoolId), eq(sections.id, sectionId)));
   if (!row) throw notFound("Sección no encontrada");
   return {
@@ -92,6 +121,9 @@ export async function getSection(db: DbOrTx, schoolId: string, sectionId: string
     label: sectionLabel(row.gradeName, row.section.name),
     capacity: row.section.capacity,
     enrolledCount: Number(row.enrolled ?? 0),
+    shiftId: row.section.shiftId,
+    shiftName: row.shiftName,
+    classDays: classDaysOf(row.classDays),
   };
 }
 
@@ -108,9 +140,11 @@ export async function listAssignments(
       gradeName: grades.name,
       subjectName: subjects.name,
       subjectLanguage: subjects.language,
+      classDays: shifts.classDays,
     })
     .from(teachingAssignments)
     .innerJoin(sections, eq(sections.id, teachingAssignments.sectionId))
+    .leftJoin(shifts, eq(shifts.id, sections.shiftId))
     .innerJoin(grades, eq(grades.id, sections.gradeId))
     .innerJoin(subjects, eq(subjects.id, teachingAssignments.subjectId))
     .where(
@@ -132,6 +166,7 @@ export async function listAssignments(
     subjectLanguage: r.subjectLanguage,
     teacherUserId: r.assignment.teacherUserId,
     teacherName: r.assignment.teacherName,
+    classDays: classDaysOf(r.classDays),
   }));
 }
 

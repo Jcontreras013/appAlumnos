@@ -29,6 +29,7 @@ export const studentValues = (input: StudentFields) => ({
   sex: input.sex ?? null,
   medicalNotes: input.medicalNotes ?? null,
   notes: input.notes ?? null,
+  ...(input.selfResponsible === undefined ? {} : { selfResponsible: input.selfResponsible }),
 });
 
 export async function insertStudent(db: DbOrTx, schoolId: string, input: StudentFields): Promise<Student> {
@@ -143,6 +144,7 @@ export async function getStudentDetail(
     notes: student.notes,
     email: student.email,
     hasStudentAccess: student.userId !== null,
+    selfResponsible: student.selfResponsible,
     guardians: links.map(
       ({ link, guardian }): GuardianLinkDto => ({
         id: guardian.id,

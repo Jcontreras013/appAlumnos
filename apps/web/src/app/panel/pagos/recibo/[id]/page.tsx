@@ -9,9 +9,9 @@ import { requireRole } from "@/lib/dal";
 
 export const metadata: Metadata = { title: "Recibo" };
 
-/** Recibo de pago, listo para imprimir. La oficina, o la familia del alumno. */
+/** Recibo de pago, listo para imprimir. La oficina, la familia del alumno o el alumno que paga lo suyo. */
 export default async function ReceiptPage({ params, searchParams }: PageProps<"/panel/pagos/recibo/[id]">) {
-  const session = await requireRole("admin", "secretaria", "padre");
+  const session = await requireRole("admin", "secretaria", "padre", "estudiante");
   const { id } = await params;
   const { nuevo } = await searchParams;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
@@ -26,10 +26,16 @@ export default async function ReceiptPage({ params, searchParams }: PageProps<"/
     <div className="mx-auto max-w-xl space-y-4">
       <div className="flex items-center justify-between gap-3 print:hidden">
         <Link
-          href={family ? "/panel/pagos/familia" : `/panel/pagos/alumno/${p.studentId}`}
+          href={
+            session.user.role === "estudiante"
+              ? "/panel/pagos/mis-pagos"
+              : family
+                ? "/panel/pagos/familia"
+                : `/panel/pagos/alumno/${p.studentId}`
+          }
           className="text-sm text-slate-500 hover:text-slate-900"
         >
-          ← {family ? "Pagos" : "Estado de cuenta"}
+          ← {family ? "Pagos" : session.user.role === "estudiante" ? "Mis pagos" : "Estado de cuenta"}
         </Link>
         <PrintButton />
       </div>

@@ -233,6 +233,12 @@ export default async function StudentPage({ params, searchParams }: PageProps<"/
         </Card>
 
         <Card title="Responsables">
+          {student.selfResponsible && (
+            <p className="mb-3 rounded-lg bg-brand-50 px-3 py-2 text-sm text-brand-900">
+              <strong>Responde por sí mismo.</strong> Con su cuenta del aula virtual ve sus cobros, paga y
+              descarga sus recibos.{student.guardians.length === 0 && " No necesita responsable registrado."}
+            </p>
+          )}
           <ul className="divide-y divide-slate-100">
             {student.guardians.map((g) => (
               <li key={g.id} className="py-3 first:pt-0">

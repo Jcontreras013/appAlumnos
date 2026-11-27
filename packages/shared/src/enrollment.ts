@@ -78,8 +78,20 @@ export const studentFieldsSchema = z.object({
   sex: optional(z.enum(SEXES)),
   medicalNotes: optional(z.string().trim().max(1000)),
   notes: optional(z.string().trim().max(2000)),
+  /**
+   * Responde por sí mismo (mayor de edad, o paga él su colegiatura): no necesita responsables y desde
+   * su cuenta ve sus cobros y paga. Sin el dato (p. ej. al corregir desde otra pantalla) no cambia.
+   */
+  selfResponsible: z.boolean().optional(),
 });
 export type StudentFields = z.infer<typeof studentFieldsSchema>;
+
+/** Edad cumplida en una fecha (para sugerir «responde por sí mismo» a los mayores de edad). */
+export function ageOn(birthDate: string, today: string): number {
+  const [by, bm, bd] = birthDate.split("-").map(Number) as [number, number, number];
+  const [ty, tm, td] = today.split("-").map(Number) as [number, number, number];
+  return ty - by - (tm < bm || (tm === bm && td < bd) ? 1 : 0);
+}
 
 export const guardianInputSchema = z
   .object({
@@ -126,17 +138,21 @@ export const guardianUpdateSchema = z
   });
 export type GuardianUpdate = z.infer<typeof guardianUpdateSchema>;
 
-export const createStudentInputSchema = studentFieldsSchema.extend({
-  guardians: z
-    .array(guardianInputSchema)
-    .min(1, { error: "Agrega al menos un responsable" })
-    .max(4)
-    .refine((list) => list.filter((g) => g.isPrimary).length <= 1, {
-      error: "Solo puede haber un responsable principal",
-    }),
-  /** Si viene, el alumno queda matriculado de una vez en esa sección (del año vigente). */
-  sectionId: optional(z.uuid()),
-});
+export const createStudentInputSchema = studentFieldsSchema
+  .extend({
+    guardians: z
+      .array(guardianInputSchema)
+      .max(4)
+      .refine((list) => list.filter((g) => g.isPrimary).length <= 1, {
+        error: "Solo puede haber un responsable principal",
+      }),
+    /** Si viene, el alumno queda matriculado de una vez en esa sección (del año vigente). */
+    sectionId: optional(z.uuid()),
+  })
+  .refine((v) => v.selfResponsible || v.guardians.length > 0, {
+    error: "Agrega al menos un responsable (o marca que el alumno responde por sí mismo)",
+    path: ["guardians"],
+  });
 export type CreateStudentInput = z.infer<typeof createStudentInputSchema>;
 
 export const enrollInputSchema = z.object({
@@ -290,6 +306,8 @@ export interface StudentDetailDto {
   email: string | null;
   /** Ya tiene su cuenta del aula virtual. */
   hasStudentAccess: boolean;
+  /** Responde por sí mismo: sin responsables obligatorios; ve sus cobros y paga desde su cuenta. */
+  selfResponsible: boolean;
   guardians: GuardianLinkDto[];
   enrollments: EnrollmentDto[];
   /** Hermanos: otros alumnos que comparten algún responsable. */

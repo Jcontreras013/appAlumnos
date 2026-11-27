@@ -214,15 +214,16 @@ export function PushToggle({
     setState("apagados");
   }
 
-  const hours = "de lunes a viernes, de 6:00 a. m. a 7:00 p. m.";
+  const hours =
+    "de 6:00 a. m. a 7:00 p. m., de lunes a viernes (y también sábado y domingo si tu centro tiene jornada de fin de semana)";
   return (
     <div className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0 text-sm">
         <p className="font-medium text-slate-900">Avisos en este teléfono</p>
         {state === "encendidos" ? (
           <p className="mt-0.5 text-slate-500">
-            Activados. Te avisamos cuando te escriban, {hours}. Lo que llegue de noche o el fin de semana te
-            lo avisamos al empezar la jornada.
+            Activados. Te avisamos cuando te escriban, {hours}. Lo que llegue fuera de ese horario te lo
+            avisamos al empezar la jornada.
           </p>
         ) : state === "iphone" ? (
           <p className="mt-0.5 text-slate-500">

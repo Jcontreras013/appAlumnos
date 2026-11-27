@@ -105,7 +105,7 @@ export type CheckoutState = FormState & { checkout?: { action: string; fields: R
  * hace el envío, como pide Hosted Payment).
  */
 export async function payOnlineAction(_prev: CheckoutState, formData: FormData): Promise<CheckoutState> {
-  const { accessToken } = await requireRole("padre");
+  const { accessToken, user } = await requireRole("padre", "estudiante");
   const studentId = z.uuid().parse(formData.get("studentId"));
   const chargeIds = formData.getAll("chargeIds").map(String);
   const email = String(formData.get("email") ?? "").trim();
@@ -118,11 +118,12 @@ export async function payOnlineAction(_prev: CheckoutState, formData: FormData):
     };
   }
   try {
-    const { action, fields } = await academic.payOnline(accessToken, studentId, {
-      chargeIds,
-      email,
-      returnBase: await publicBase(),
-    });
+    const input = { chargeIds, email, returnBase: await publicBase() };
+    // El alumno que responde por sí mismo paga lo suyo; la familia, lo de su hijo.
+    const { action, fields } =
+      user.role === "estudiante"
+        ? await academic.payMine(accessToken, input)
+        : await academic.payOnline(accessToken, studentId, input);
     return { checkout: { action, fields }, values: { email } };
   } catch (err) {
     return { ...fromServiceError(err), values: { email } };

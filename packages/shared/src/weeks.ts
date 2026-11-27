@@ -52,17 +52,28 @@ export function currentWeek(now: Date = new Date()): string {
 
 const MONTHS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
 
-/** "9 al 13 de nov de 2026" (de lunes a viernes). */
-export function formatWeekRange(weekStart: string): string {
-  const start = parse(weekStart);
-  const end = parse(addDays(weekStart, 4));
+/**
+ * "9 al 13 de nov de 2026": del primer al último día de clase de la semana (de lunes a viernes si no
+ * se dice otra cosa; "14 al 15 de nov de 2026" en una jornada de fin de semana).
+ */
+export function formatWeekRange(
+  weekStart: string,
+  classDays: readonly number[] = DEFAULT_CLASS_DAYS,
+): string {
+  const days = classDays.length ? [...classDays].sort((a, b) => a - b) : [...DEFAULT_CLASS_DAYS];
+  const start = parse(addDays(weekStart, (days[0] ?? 1) - 1));
+  const end = parse(addDays(weekStart, (days[days.length - 1] ?? 5) - 1));
   const month = (d: Date) => MONTHS[d.getUTCMonth()];
+  if (start.getTime() === end.getTime()) {
+    return `${start.getUTCDate()} de ${month(start)} de ${start.getUTCFullYear()}`;
+  }
   const sameMonth = start.getUTCMonth() === end.getUTCMonth();
   const startText = sameMonth ? `${start.getUTCDate()}` : `${start.getUTCDate()} de ${month(start)}`;
   return `${startText} al ${end.getUTCDate()} de ${month(end)} de ${end.getUTCFullYear()}`;
 }
 
-export const WEEKDAYS = ["lunes", "martes", "miercoles", "jueves", "viernes"] as const;
+/** Los siete días; el número de cada uno es su posición + 1 (1 = lunes … 7 = domingo). */
+export const WEEKDAYS = ["lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo"] as const;
 export type Weekday = (typeof WEEKDAYS)[number];
 
 export const WEEKDAY_LABELS: Record<Weekday, string> = {
@@ -71,4 +82,41 @@ export const WEEKDAY_LABELS: Record<Weekday, string> = {
   miercoles: "Miércoles",
   jueves: "Jueves",
   viernes: "Viernes",
+  sabado: "Sábado",
+  domingo: "Domingo",
 };
+
+/** Días de clase de un centro (o jornada) que no ha dicho otra cosa: lunes a viernes. */
+export const DEFAULT_CLASS_DAYS: readonly number[] = [1, 2, 3, 4, 5];
+
+/** 1 = lunes … 7 = domingo. */
+export const weekdayOf = (day: number): Weekday => WEEKDAYS[day - 1] ?? "lunes";
+
+/** Los días de clase (números) como claves, en orden de la semana. */
+export const classDayKeys = (days: readonly number[]): Weekday[] =>
+  [...days].sort((a, b) => a - b).map(weekdayOf);
+
+/** «lunes a viernes», «sábado y domingo», «lunes, miércoles y viernes», «domingo». */
+export function describeClassDays(days: readonly number[]): string {
+  const sorted = [...new Set(days)].sort((a, b) => a - b);
+  const names = sorted.map((d) => WEEKDAY_LABELS[weekdayOf(d)].toLowerCase());
+  if (!names.length) return "";
+  const consecutive = sorted.every((d, i) => i === 0 || d === (sorted[i - 1] ?? 0) + 1);
+  if (consecutive && names.length >= 3) return `${names[0]} a ${names[names.length - 1]}`;
+  if (names.length === 1) return names[0] ?? "";
+  return `${names.slice(0, -1).join(", ")} y ${names[names.length - 1]}`;
+}
+
+/** Jornada que se ve una o dos veces por semana (fin de semana, dominical): «encuentros» largos. */
+export const isMeetingSchedule = (days: readonly number[]) => days.length > 0 && days.length <= 2;
+
+/** El próximo día de clase desde `date` (sin contarlo), dentro de los días de la jornada. */
+export function nextClassDay(date: string, classDays: readonly number[]): string {
+  const days = classDays.length ? classDays : DEFAULT_CLASS_DAYS;
+  for (let i = 1; i <= 7; i++) {
+    const candidate = addDays(date, i);
+    const weekday = parse(candidate).getUTCDay() || 7;
+    if (days.includes(weekday)) return candidate;
+  }
+  return addDays(date, 7);
+}

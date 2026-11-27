@@ -55,6 +55,8 @@ export async function setupAcademic(
   const familyAccounts = new Map<string, { userId: string; password: string; active: boolean }>();
   /** Cuentas de alumnos del aula virtual, igual. */
   const studentAccounts = new Map<string, { userId: string; password: string; active: boolean }>();
+  /** Lo que academic le pidió a identity sobre los avisos de fin de semana (en orden). */
+  const weekendNotices: boolean[] = [];
   const identity: IdentityClient = {
     async getUser(_token, userId) {
       return directory.get(userId) ?? null;
@@ -132,6 +134,9 @@ export async function setupAcademic(
     },
     async revokeStudentAccount(_token, userId) {
       for (const account of studentAccounts.values()) if (account.userId === userId) account.active = false;
+    },
+    async setWeekendNotices(_token, enabled) {
+      weekendNotices.push(enabled);
     },
   };
 
@@ -280,6 +285,7 @@ export async function setupAcademic(
     call,
     familyAccounts,
     studentAccounts,
+    weekendNotices,
     activity,
     scopes,
     transferTargets,

@@ -34,11 +34,13 @@ export const sectionInputSchema = z.object({
     (v) => (v === "" || v === null || v === undefined ? null : v),
     z.coerce.number().int().min(1, { error: "El cupo debe ser al menos 1" }).max(200).nullable(),
   ),
+  /** Jornada (matutina, nocturna, fin de semana…). Vacío = la de siempre, de lunes a viernes. */
+  shiftId: z.preprocess((v) => (v === "" ? null : v), z.uuid().nullable().optional()),
 });
 export type SectionInput = z.infer<typeof sectionInputSchema>;
 
-/** Corregir una sección: nombre y cupo (el grado y el año no cambian: tiene alumnos de ese grado). */
-export const sectionUpdateSchema = sectionInputSchema.pick({ name: true, capacity: true });
+/** Corregir una sección: nombre, cupo y jornada (el grado y el año no cambian: tiene alumnos de ese grado). */
+export const sectionUpdateSchema = sectionInputSchema.pick({ name: true, capacity: true, shiftId: true });
 export type SectionUpdate = z.infer<typeof sectionUpdateSchema>;
 
 /**
@@ -266,6 +268,11 @@ export interface SectionDto {
   capacity: number | null;
   /** Alumnos con matrícula activa. */
   enrolledCount: number;
+  /** Jornada de la sección (null = la de siempre). */
+  shiftId: string | null;
+  shiftName: string | null;
+  /** Días de clase: 1 = lunes … 7 = domingo (lunes a viernes si no tiene jornada). */
+  classDays: number[];
 }
 
 export interface SubjectDto {
@@ -285,6 +292,8 @@ export interface AssignmentDto {
   subjectLanguage: SubjectLanguage;
   teacherUserId: string;
   teacherName: string;
+  /** Días de clase de la jornada de la sección (1 = lunes … 7 = domingo). */
+  classDays: number[];
 }
 
 export interface PlanTemplateDto extends PlanTemplateInput {
@@ -347,8 +356,29 @@ export interface PlanBoardDto {
 
 // ───────────────────────────── Horario de clases ─────────────────────────────
 
-/** Días de clase del horario: 1 = lunes … 5 = viernes (el nombre está en WEEKDAY_LABELS de weeks.ts). */
-export const SCHOOL_DAYS = [1, 2, 3, 4, 5] as const;
+// ───────────────────────────── Jornadas ─────────────────────────────
+
+/**
+ * Jornadas del centro (matutina, vespertina, nocturna, fin de semana, dominical…): cada una con sus
+ * días de clase y sus horas. Cada sección pertenece a una; un centro sin jornadas trabaja de lunes a
+ * viernes como siempre.
+ */
+export const shiftInputSchema = z.object({
+  name: nameSchema(40),
+  classDays: z
+    .array(z.coerce.number().int().min(1).max(7))
+    .min(1, { error: "Marca al menos un día de clase" })
+    .transform((days) => [...new Set(days)].sort((a, b) => a - b)),
+});
+export type ShiftInput = z.infer<typeof shiftInputSchema>;
+
+export interface ShiftDto {
+  id: string;
+  name: string;
+  classDays: number[];
+  /** Secciones del año vigente en esta jornada. */
+  sections: number;
+}
 
 const timeSchema = z
   .string({ error: "Escribe la hora" })
@@ -356,6 +386,8 @@ const timeSchema = z
 
 /** Los bloques (horas de clase) del centro, en orden. */
 export const scheduleBlocksInputSchema = z.object({
+  /** Las horas de esa jornada (vacío = las de las secciones sin jornada). */
+  shiftId: z.preprocess((v) => (v === "" ? null : v), z.uuid().nullable().optional()),
   blocks: z
     .array(z.object({ startsAt: timeSchema, endsAt: timeSchema }))
     .max(12, { error: "Máximo 12 bloques" })
@@ -373,7 +405,7 @@ export const sectionScheduleInputSchema = z.object({
   slots: z
     .array(
       z.object({
-        weekday: z.number().int().min(1).max(5),
+        weekday: z.number().int().min(1).max(7),
         block: z.number().int().min(1).max(12),
         assignmentId: z.uuid(),
       }),
@@ -401,4 +433,13 @@ export interface ScheduleSlotDto {
 export interface ScheduleDto {
   blocks: ScheduleBlockDto[];
   slots: ScheduleSlotDto[];
+  /** Días que se muestran (los de la jornada; en el horario de un docente, todos los que tiene clase). */
+  classDays: number[];
+  /** El de un docente con clases en varias jornadas: un horario por jornada (con sus horas). */
+  shifts?: Array<{
+    shiftName: string | null;
+    blocks: ScheduleBlockDto[];
+    slots: ScheduleSlotDto[];
+    classDays: number[];
+  }>;
 }

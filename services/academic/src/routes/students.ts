@@ -18,7 +18,7 @@ import {
   studentFieldsSchema,
   withdrawInputSchema,
 } from "@escolar/shared";
-import { and, asc, eq, ilike, inArray, isNull, ne, or, type SQL, sql } from "drizzle-orm";
+import { and, asc, eq, ilike, inArray, isNotNull, isNull, ne, or, type SQL, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
@@ -49,6 +49,8 @@ const guardianParams = z.object({ id: z.uuid(), guardianId: z.uuid() });
 const listQuery = z.object({
   q: z.string().trim().max(100).optional(),
   sectionId: z.uuid().optional(),
+  /** Jornada de la sección (o "regular": las secciones sin jornada). */
+  shiftId: z.union([z.uuid(), z.literal("regular")]).optional(),
   estado: z.enum(["todos", "matriculados", "sin_matricula", "retirados"]).default("todos"),
   limit: z.coerce.number().int().min(1).max(500).default(100),
   offset: z.coerce.number().int().min(0).default(0),
@@ -96,6 +98,8 @@ export async function studentRoutes(app: FastifyInstance, { db, today }: Academi
       );
     }
     if (query.sectionId) filters.push(eq(enrollments.sectionId, query.sectionId));
+    if (query.shiftId === "regular") filters.push(and(isNotNull(enrollments.id), isNull(sections.shiftId)));
+    else if (query.shiftId) filters.push(eq(sections.shiftId, query.shiftId));
     if (query.estado === "matriculados") filters.push(eq(enrollments.status, "activa"));
     if (query.estado === "retirados") filters.push(eq(enrollments.status, "retirada"));
     if (query.estado === "sin_matricula") filters.push(isNull(enrollments.id));
@@ -216,6 +220,14 @@ export async function studentRoutes(app: FastifyInstance, { db, today }: Academi
     const { id } = parseOrThrow(idParams, request.params);
     await checkStudent(request, id, true);
     const input = parseOrThrow(studentFieldsSchema, request.body);
+    if (input.selfResponsible === false) {
+      const current = await getStudentDetail(db, schoolId, id);
+      if (current.guardians.length === 0) {
+        throw badRequest("Para quitar «responde por sí mismo», primero agrega un responsable", {
+          fields: [{ path: "selfResponsible", message: "Agrega un responsable primero" }],
+        });
+      }
+    }
     try {
       await db.transaction(async (tx) => {
         const [updated] = await tx
@@ -348,8 +360,14 @@ export async function studentRoutes(app: FastifyInstance, { db, today }: Academi
     const detail = await getStudentDetail(db, schoolId, id);
     const link = detail.guardians.find((g) => g.id === guardianId);
     if (!link) throw notFound("Responsable no encontrado");
-    if (detail.guardians.length === 1) throw badRequest("El alumno debe tener al menos un responsable");
-    if (link.isPrimary) throw badRequest("Primero marca a otro responsable como principal");
+    if (detail.guardians.length === 1 && !detail.selfResponsible) {
+      throw badRequest(
+        "El alumno debe tener al menos un responsable (o marca en su ficha que responde por sí mismo)",
+      );
+    }
+    if (link.isPrimary && detail.guardians.length > 1) {
+      throw badRequest("Primero marca a otro responsable como principal");
+    }
     await db.transaction(async (tx) => {
       await tx
         .delete(studentGuardians)

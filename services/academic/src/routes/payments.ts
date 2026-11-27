@@ -43,7 +43,7 @@ import {
 } from "../db/schema";
 import type { AcademicDeps } from "../deps";
 import { audit } from "../lib/audit";
-import { childrenOf } from "../lib/family";
+import { childrenOf, studentOf } from "../lib/family";
 import {
   type GatewayAccount,
   type HostedForm,
@@ -84,7 +84,10 @@ export async function paymentRoutes(app: FastifyInstance, deps: AcademicDeps) {
   const office = { preHandler: [app.authenticate, requireRole("admin", "secretaria")] };
   const director = { preHandler: [app.authenticate, requireRole("admin")] };
   const family = { preHandler: [app.authenticate, requireRole("padre")] };
-  const anyone = { preHandler: [app.authenticate, requireRole("padre", "admin", "secretaria")] };
+  const anyone = {
+    preHandler: [app.authenticate, requireRole("padre", "estudiante", "admin", "secretaria")],
+  };
+  const student = { preHandler: [app.authenticate, requireRole("estudiante")] };
 
   // ── Ayudantes ──
   const studentName = (s: { firstNames: string; lastNames: string }) => `${s.firstNames} ${s.lastNames}`;
@@ -524,6 +527,12 @@ export async function paymentRoutes(app: FastifyInstance, deps: AcademicDeps) {
     ) {
       throw notFound("Recibo no encontrado");
     }
+    if (
+      request.auth.role === "estudiante" &&
+      (await studentOf(db, schoolId, request.auth.userId)) !== row.studentId
+    ) {
+      throw notFound("Recibo no encontrado");
+    }
     const [dto] = await paymentDtos(db, schoolId, [row]);
     if (!dto) throw notFound("Recibo no encontrado");
     return dto;
@@ -574,11 +583,42 @@ export async function paymentRoutes(app: FastifyInstance, deps: AcademicDeps) {
 
   /**
    * Pagar con tarjeta: se guarda el pago «pendiente» con su número de orden y se pide a PixelPay la
-   * página de pago. La familia vuelve a `_complete`; PixelPay además avisa a `_callback`.
+   * página de pago. La familia (o el alumno que responde por sí mismo) vuelve a `_complete`; PixelPay
+   * además avisa a `_callback`.
    */
   app.post("/family/children/:id/pay", family, async (request): Promise<HostedForm & { orderId: string }> => {
     const { id } = parseOrThrow(idParams, request.params);
-    const schoolId = await childOrThrow(request, id);
+    return startOnline(request, await childOrThrow(request, id), id);
+  });
+
+  // ── Alumno que responde por sí mismo (mayor de edad, o paga él su colegiatura) ──
+  async function selfOrThrow(request: FastifyRequest) {
+    const schoolId = tenantOf(request);
+    const studentId = await studentOf(db, schoolId, request.auth.userId);
+    if (!studentId) throw notFound("Tu cuenta no está ligada a un alumno del centro");
+    const [row] = await db
+      .select({ selfResponsible: students.selfResponsible })
+      .from(students)
+      .where(eq(students.id, studentId));
+    if (!row?.selfResponsible) throw notFound("Tus pagos los ve tu familia desde su cuenta");
+    return { schoolId, studentId };
+  }
+
+  app.get("/student/me/account", student, async (request): Promise<StudentAccountDto> => {
+    const { schoolId, studentId } = await selfOrThrow(request);
+    return account(db, schoolId, studentId);
+  });
+
+  app.post("/student/me/pay", student, async (request): Promise<HostedForm & { orderId: string }> => {
+    const { schoolId, studentId } = await selfOrThrow(request);
+    return startOnline(request, schoolId, studentId);
+  });
+
+  async function startOnline(
+    request: FastifyRequest,
+    schoolId: string,
+    id: string,
+  ): Promise<HostedForm & { orderId: string }> {
     const input = parseOrThrow(onlinePaymentInputSchema, request.body);
     const gateway = await gatewayAccount(db, schoolId);
     if (!gateway) throw conflict("El centro todavía no recibe pagos con tarjeta");
@@ -630,7 +670,7 @@ export async function paymentRoutes(app: FastifyInstance, deps: AcademicDeps) {
       data: { orderId, amountCents: payment.amountCents },
     });
     return { ...form, orderId };
-  });
+  }
 
   /** Confirma un pago en línea (idempotente: el regreso y el aviso pueden llegar los dos). */
   async function confirmOnline(schoolId: string, orderId: string, gatewayUuid: string | null) {
@@ -671,7 +711,10 @@ export async function paymentRoutes(app: FastifyInstance, deps: AcademicDeps) {
       .from(payments)
       .where(and(eq(payments.schoolId, schoolId), eq(payments.orderId, input.orderId)));
     if (!row) throw notFound("Pago no encontrado");
-    if (request.auth.role === "padre" && row.byUserId !== request.auth.userId)
+    if (
+      (request.auth.role === "padre" || request.auth.role === "estudiante") &&
+      row.byUserId !== request.auth.userId
+    )
       throw notFound("Pago no encontrado");
     if (input.cancelled || !input.paymentHash) {
       if (row.status === "pendiente")

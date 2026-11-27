@@ -61,6 +61,8 @@ export const schools = pgTable(
     active: boolean("active").notNull().default(true),
     /** Cuándo se cambió el logo por última vez (null = sin logo). Sirve para invalidar la caché del navegador. */
     logoUpdatedAt: timestamp("logo_updated_at", { withTimezone: true }),
+    /** Tiene clases sábado o domingo (alguna jornada): los avisos en el celular llegan también esos días. */
+    weekendNotices: boolean("weekend_notices").notNull().default(false),
     createdAt: createdAt(),
   },
   (t) => [

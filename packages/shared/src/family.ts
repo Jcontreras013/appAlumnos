@@ -54,6 +54,8 @@ export interface SectionFamilyAccessDto {
   created: PortalAccessDto[];
   /** Ya tenían acceso en este centro: siguen con su contraseña. */
   alreadyActive: number;
+  /** Alumnos que responden por sí mismos sin responsable registrado: usan su cuenta de alumno. */
+  selfResponsible: number;
   /** No se pudo: sin encargado, sin identidad ni correo, o identity no lo aceptó (con el motivo). */
   skipped: Array<{ studentId: string; studentName: string; guardianName: string | null; reason: string }>;
   /** Se cortó a medias (identity no respondió): lo creado hasta ahí sí quedó y se muestra. */

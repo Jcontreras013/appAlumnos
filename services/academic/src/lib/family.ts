@@ -3,6 +3,7 @@ import {
   type AttendanceStatus,
   addDays,
   attendanceRate,
+  attendanceRiskRules,
   currentPeriod,
   type FamilyChildDto,
   type FamilyChildSummaryDto,
@@ -194,11 +195,11 @@ export async function familyChild(
   const count = (status: AttendanceStatus) => last30.filter((r) => r.status === status).length;
   const rate30d = attendanceRate(last30.map((r) => r.status as AttendanceStatus));
   const absences30d = count("ausente");
+  // En fin de semana (uno o dos encuentros por semana) cuenta desde la primera falta.
+  const rules = attendanceRiskRules(section?.classDays ?? []);
   const attendanceRisk =
-    absences30d >= RISK_RULES.maxAbsences ||
-    (rate30d !== null &&
-      last30.length >= RISK_RULES.minAttendanceDays &&
-      rate30d < RISK_RULES.minAttendanceRate);
+    absences30d >= rules.maxAbsences ||
+    (rate30d !== null && last30.length >= rules.minAttendanceDays && rate30d < rules.minAttendanceRate);
 
   // ── Tareas de la planificación (esta semana y la próxima) ──
   const week = mondayOf(today);

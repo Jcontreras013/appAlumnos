@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { addDays, isIsoDate, WEEKDAYS, type Weekday } from "./weeks";
+import { addDays, classDayKeys, DEFAULT_CLASS_DAYS, isIsoDate, WEEKDAYS, type Weekday } from "./weeks";
 
 /*
  * Calendario escolar: los días sin clases del centro (feriados, vacaciones, días libres). Los marca
@@ -85,12 +85,18 @@ export function openClassDays(
   return classDays.filter((day) => !dayOffOn(dateOfWeekday(weekStart, day), daysOff));
 }
 
-/** Si toda la semana (lunes a viernes) es sin clases, el motivo (el del lunes). */
+/**
+ * Si todos los días de clase de la semana (lunes a viernes, o los de la jornada) son sin clases, el
+ * motivo (el del primer día de clase).
+ */
 export function weekOff<T extends Pick<DayOffDto, "startsOn" | "endsOn">>(
   weekStart: string,
   daysOff: T[],
+  classDays: readonly number[] = DEFAULT_CLASS_DAYS,
 ): T | null {
-  return openClassDays(weekStart, WEEKDAYS, daysOff).length === 0 ? dayOffOn(weekStart, daysOff) : null;
+  const days = classDayKeys(classDays.length ? classDays : DEFAULT_CLASS_DAYS);
+  if (openClassDays(weekStart, days, daysOff).length) return null;
+  return dayOffOn(dateOfWeekday(weekStart, days[0] ?? "lunes"), daysOff);
 }
 
 /** «15 de septiembre» o «del 21 de diciembre al 8 de enero». */
