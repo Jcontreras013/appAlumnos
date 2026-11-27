@@ -44,6 +44,7 @@ const app = await buildApp({
   identity: httpIdentityClient(config.identityUrl),
   identityUrl: config.identityUrl,
   planDrafter,
+  paymentsKey: config.paymentsKey,
 });
 if (assistant) {
   app.log.info(

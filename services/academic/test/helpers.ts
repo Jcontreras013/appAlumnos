@@ -32,7 +32,12 @@ export interface TestUser {
  * y identity se reemplaza por un doble que responde con los usuarios registrados en el test.
  */
 export async function setupAcademic(
-  options: { today?: string; planDrafter?: PlanDrafter | null; files?: FileStore } = {},
+  options: {
+    today?: string;
+    planDrafter?: PlanDrafter | null;
+    files?: FileStore;
+    paymentsKey?: string | null;
+  } = {},
 ) {
   const client = new PGlite();
   await migrate(drizzle(client, { schema }), { migrationsFolder: migrationsFolder() });
@@ -140,6 +145,8 @@ export async function setupAcademic(
     planDrafter: options.planDrafter ?? null,
     // Los archivos (la biblioteca) quedan en memoria: las pruebas no escriben en disco.
     files: options.files ?? memoryFileStore(),
+    paymentsKey:
+      options.paymentsKey === undefined ? "llave-de-prueba-de-la-instalacion" : options.paymentsKey,
   });
 
   async function sign(claims: Record<string, unknown>, id: string) {

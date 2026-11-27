@@ -21,7 +21,8 @@ export function contentSecurityPolicy(nonce?: string, { wasm = false }: { wasm?:
     // Videos de los temas del aula virtual.
     "frame-src https://www.youtube-nocookie.com",
     "frame-ancestors 'none'",
-    "form-action 'self'",
+    // El pago con tarjeta: el formulario firmado va a la página segura de PixelPay (y nada más).
+    `form-action 'self' ${process.env.PAYMENTS_FORM_ACTION ?? "https://pixelpay.app https://*.pixelpay.app"}`,
     "base-uri 'self'",
     "object-src 'none'",
   ].join("; ");

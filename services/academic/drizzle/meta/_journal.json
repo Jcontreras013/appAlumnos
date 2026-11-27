@@ -169,6 +169,13 @@
       "when": 1795723748685,
       "tag": "0023_solicitudes_de_secretaria",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1795731175287,
+      "tag": "0024_pagos_de_familias",
+      "breakpoints": true
     }
   ]
 }

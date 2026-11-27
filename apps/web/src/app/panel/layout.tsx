@@ -53,6 +53,7 @@ export default async function PanelLayout({ children }: { children: ReactNode })
   } else if (is("padre")) {
     items.push({ href: "/panel/familia", label: "Mis hijos" });
     items.push({ href: "/panel/aula", label: "Clases" });
+    items.push({ href: "/panel/pagos/familia", label: "Pagos" });
     items.push({ href: "/panel/biblioteca", label: "Biblioteca" });
   } else if (is("estudiante")) {
     items.push({ href: "/panel/aula", label: "Mis clases" });
@@ -82,6 +83,7 @@ export default async function PanelLayout({ children }: { children: ReactNode })
   }
   if (is("admin", "secretaria", "coordinador")) add("Alumnos", "/panel/alumnos", "Alumnos y familias");
   if (teachersEnroll) add("Alumnos", "/panel/alumnos", "Matrícula");
+  if (is("admin", "secretaria")) add("Alumnos", "/panel/pagos", "Pagos");
   if (is("admin", "secretaria")) add("Alumnos", "/panel/traslados", "Traslados");
   if (is("admin", "coordinador", "secretaria"))
     add("Alumnos", "/panel/seguimiento", "Seguimiento del centro");

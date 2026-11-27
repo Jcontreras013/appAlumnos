@@ -12,4 +12,6 @@ export interface AcademicDeps {
   planDrafter: PlanDrafter | null;
   /** Dónde se guardan los libros y documentos de la biblioteca (S3 en AWS, una carpeta en la demo). */
   files: FileStore;
+  /** Llave de la instalación para cifrar las llaves secretas de la pasarela de cada centro. */
+  paymentsKey: string | null;
 }

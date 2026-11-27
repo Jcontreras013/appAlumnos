@@ -210,6 +210,14 @@ export const HELP_GUIDES: HelpGuide[] = [
         ],
       },
       {
+        title: "Pago con tarjeta (PixelPay)",
+        steps: [
+          "En «Pagos» → «Pago con tarjeta (PixelPay)», escribe el dominio, el Key ID y la Secret Key de la cuenta PixelPay del centro (Preferencias → Opciones del API). El dinero llega directo al centro.",
+          "Empieza en modo «Prueba» para ver cómo funciona sin cobros reales; cuando todo esté bien, cambia a «Producción».",
+          "Solo la dirección anula un pago mal registrado (los cobros vuelven a quedar pendientes). Si fue con tarjeta, la devolución del dinero se hace en PixelPay.",
+        ],
+      },
+      {
         title: "Solicitudes de la secretaría",
         steps: [
           "La secretaría pide crear grados, secciones y materias, o registrar el permiso de un maestro. Te llega un mensaje.",
@@ -383,6 +391,15 @@ export const HELP_GUIDES: HelpGuide[] = [
         ],
       },
       {
+        title: "Cobros y pagos",
+        steps: [
+          "En «Pagos», «Nuevo cobro»: concepto, monto, vencimiento y a quiénes (todo el centro, un grado o una sección). Se crea un cobro para cada alumno.",
+          "«Quién debe» muestra el saldo de cada alumno por sección. Toca un alumno para ver su estado de cuenta.",
+          "Cuando una familia paga en la oficina: marca los cobros, elige efectivo, depósito o transferencia y toca «Registrar pago y ver recibo». El recibo se numera solo y se puede imprimir.",
+          "Los pagos con tarjeta de las familias llegan solos, con su recibo.",
+        ],
+      },
+      {
         title: "Pedir grados, materias y permisos de maestros",
         steps: [
           "En «Año, grados y materias» llena «Grado», «Sección» o «Materia» y toca «Pedir a la dirección».",
@@ -519,6 +536,14 @@ export const HELP_GUIDES: HelpGuide[] = [
           "El centro te entrega una carta con tu usuario (tu número de identidad o tu correo) y una contraseña temporal.",
           "Al entrar por primera vez eliges tu propia contraseña.",
           "Si la olvidas, pídele una nueva a la secretaría del centro.",
+        ],
+      },
+      {
+        title: "Pagos",
+        steps: [
+          "En «Pagos» ves lo que debe cada hijo (mensualidades, matrícula…) y cuándo vence.",
+          "Si el centro recibe tarjeta: marca lo que quieres pagar y toca «Pagar con tarjeta». Pagas en la página segura de PixelPay; CONECTA no ve los datos de tu tarjeta.",
+          "Al terminar vuelves a CONECTA con tu recibo. También quedan todos tus recibos en «Pagos».",
         ],
       },
       {
