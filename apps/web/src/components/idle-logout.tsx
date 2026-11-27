@@ -85,7 +85,7 @@ export function IdleLogout({ minutes }: { minutes: number }) {
   return (
     <div
       role="alert"
-      className="fixed inset-x-4 bottom-4 z-50 mx-auto flex max-w-md flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 shadow-lg print:hidden"
+      className="fixed inset-x-4 bottom-24 z-50 md:bottom-4 mx-auto flex max-w-md flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 shadow-lg print:hidden"
     >
       <span>Por seguridad, tu sesión se cerrará en unos minutos por inactividad.</span>
       <button type="button" className="btn-primary px-3 py-1.5" onClick={() => setWarning(false)}>

@@ -32,10 +32,26 @@ export function SchoolLogo({
     .join("");
   return (
     <span
-      className={`${className} grid shrink-0 place-items-center rounded-lg bg-slate-100 text-sm font-semibold text-slate-600`}
+      className={`${className} grid shrink-0 place-items-center rounded-lg text-sm font-bold ${colorOf(school.id)}`}
       aria-hidden="true"
     >
       {initials || "C"}
     </span>
   );
+}
+
+/** Un color propio de cada centro (siempre el mismo), para que sus iniciales no se vean grises. */
+const COLORS = [
+  "bg-emerald-100 text-emerald-800",
+  "bg-sky-100 text-sky-800",
+  "bg-indigo-100 text-indigo-800",
+  "bg-amber-100 text-amber-800",
+  "bg-rose-100 text-rose-800",
+  "bg-violet-100 text-violet-800",
+  "bg-teal-100 text-teal-800",
+];
+function colorOf(id: string) {
+  let hash = 0;
+  for (const ch of id) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  return COLORS[hash % COLORS.length];
 }

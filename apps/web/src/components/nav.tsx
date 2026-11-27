@@ -5,6 +5,7 @@ import type { Route } from "next";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Fragment, useState } from "react";
+import { Icon, iconForHref } from "@/components/icons";
 import { fetchPanelJson, usePoll } from "@/components/messages/use-poll";
 
 export interface NavItem {
@@ -19,7 +20,7 @@ export interface NavItem {
 }
 
 /** Contador de mensajes sin leer: se consulta cada medio minuto mientras el panel está a la vista. */
-function useUnreadMessages(initial: number, enabled: boolean) {
+export function useUnreadMessages(initial: number, enabled: boolean) {
   const [count, setCount] = useState(initial);
   usePoll(async () => {
     if (!enabled) return;
@@ -86,7 +87,13 @@ export function Nav({
                   : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
               }`}
             >
-              {item.label}
+              <span className="flex min-w-0 items-center gap-2.5">
+                <Icon
+                  name={iconForHref(item.href as string)}
+                  className={`size-[18px] ${active ? "text-brand-600" : "text-slate-400"}`}
+                />
+                <span className="truncate">{item.label}</span>
+              </span>
               {Boolean(item.badge) && (
                 <span className="grid h-5 min-w-5 place-items-center rounded-full bg-amber-500 px-1.5 text-xs font-semibold text-white">
                   {item.badge}

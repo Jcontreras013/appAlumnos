@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { type ReactNode, useEffect, useState } from "react";
+import { OPEN_MENU_EVENT } from "@/components/bottom-nav";
 import { Nav, type NavItem, type UpcomingItem } from "@/components/nav";
 
 /**
@@ -32,6 +33,13 @@ export function MobileMenu({
   // Al cambiar de página, el menú se cierra solo.
   // biome-ignore lint/correctness/useExhaustiveDependencies: se cierra cada vez que cambia la página
   useEffect(() => setOpen(false), [pathname]);
+
+  // «Más» en la barra de abajo también abre el menú.
+  useEffect(() => {
+    const show = () => setOpen(true);
+    window.addEventListener(OPEN_MENU_EVENT, show);
+    return () => window.removeEventListener(OPEN_MENU_EVENT, show);
+  }, []);
 
   useEffect(() => {
     if (!open) return;

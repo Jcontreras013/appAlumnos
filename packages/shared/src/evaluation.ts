@@ -272,6 +272,26 @@ export interface TeacherClassDto {
   students: number;
 }
 
+/** El día del maestro, para su inicio: sus clases de hoy, la asistencia que falta y lo que hay que calificar. */
+export interface TeacherTodayDto {
+  date: string;
+  /** Hoy es feriado o vacaciones: no se espera asistencia. */
+  dayOff: import("./calendar").DayOffDto | null;
+  /** Clases de hoy en el orden del horario (sin hora si el centro no armó el horario). */
+  classes: Array<{
+    assignmentId: string;
+    subjectName: string;
+    sectionId: string;
+    sectionLabel: string;
+    startsAt: string | null;
+    endsAt: string | null;
+    substituting: boolean;
+    attendanceTaken: boolean;
+  }>;
+  /** Tareas con nota que tienen entregas sin calificar. */
+  toGrade: Array<{ taskId: string; assignmentId: string; title: string; label: string; pending: number }>;
+}
+
 export interface StudentRiskDto {
   studentId: string;
   name: string;

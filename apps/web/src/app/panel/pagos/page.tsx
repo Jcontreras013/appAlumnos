@@ -1,4 +1,4 @@
-import { formatDay, formatLempiras, PAYMENT_METHOD_LABELS } from "@escolar/shared";
+import { formatDay, formatLempiras, PAYMENT_METHOD_LABELS, todayInHonduras } from "@escolar/shared";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Fold, FoldTag } from "@/components/fold";
@@ -24,8 +24,14 @@ export default async function PaymentsPage() {
   ]);
   const pending = balances.reduce((sum, b) => sum + b.pendingCents, 0);
   const overdue = balances.reduce((sum, b) => sum + b.overdueCents, 0);
+  // Lo recibido este mes (hora de Honduras).
+  const month = todayInHonduras().slice(0, 7);
   const collected = recent
-    .filter((p) => p.status === "confirmado")
+    .filter(
+      (p) =>
+        p.status === "confirmado" &&
+        todayInHonduras(new Date(p.confirmedAt ?? p.createdAt)).startsWith(month),
+    )
     .reduce((sum, p) => sum + p.amountCents, 0);
   // Quién debe, una sección por desplegable (en el orden del centro).
   const bySection = new Map<string, typeof balances>(sections.map((s) => [s.label, []]));
@@ -63,7 +69,7 @@ export default async function PaymentsPage() {
           tone={overdue > 0 ? "alert" : "ok"}
           hint="ya pasó la fecha"
         />
-        <Kpi label="Recibido" value={formatLempiras(collected)} hint="en los últimos 100 pagos" />
+        <Kpi label="Recibido este mes" value={formatLempiras(collected)} hint="pagos confirmados" />
       </section>
 
       <div className="grid items-start gap-6 lg:grid-cols-[1fr_22rem]">
