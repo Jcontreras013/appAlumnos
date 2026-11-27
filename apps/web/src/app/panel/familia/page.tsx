@@ -66,7 +66,7 @@ export default async function FamilyHomePage() {
                 <Stat
                   label="Asistencia"
                   value={pct(c.attendanceRate30d)}
-                  hint={`${c.absences30d} ${c.absences30d === 1 ? "falta" : "faltas"} (30 días)`}
+                  hint={`${c.absences30d} ${c.absences30d === 1 ? "falta" : "faltas"} en 30 d`}
                 />
                 <Stat label="Tareas" value={c.homeworkThisWeek} hint="esta semana" />
               </dl>

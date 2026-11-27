@@ -39,6 +39,7 @@ import { structureRoutes } from "./routes/structure";
 import { studentAccessRoutes } from "./routes/student-access";
 import { studentRoutes } from "./routes/students";
 import { taskRoutes } from "./routes/tasks";
+import { teacherTodayRoutes } from "./routes/teacher-today";
 import { transferRoutes } from "./routes/transfers";
 
 export interface BuildAppOptions {
@@ -94,6 +95,7 @@ export async function buildApp(options: BuildAppOptions) {
     await changeRequestRoutes(scope, deps);
     await paymentRoutes(scope, deps);
     await shiftRoutes(scope, deps);
+    await teacherTodayRoutes(scope, deps);
     await exportRoutes(scope, deps);
     await followUpRoutes(scope, deps);
     await announcementRoutes(scope, deps);

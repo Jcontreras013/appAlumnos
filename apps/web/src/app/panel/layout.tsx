@@ -2,6 +2,7 @@ import { isRegionalRole, MESSAGING_ROLES, ROLE_LABELS, type Role } from "@escola
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { BiometricOffer } from "@/components/biometric-offer";
+import { BottomNav } from "@/components/bottom-nav";
 import { ChangePasswordForm } from "@/components/change-password-form";
 import { IdleLogout } from "@/components/idle-logout";
 import { LogoutButton } from "@/components/logout-button";
@@ -118,6 +119,25 @@ export default async function PanelLayout({ children }: { children: ReactNode })
     add("El centro", "/panel/colegio", "Datos del centro");
   }
   items.push({ href: "/panel/ayuda", label: "Ayuda" });
+  // La barra de abajo del celular: lo que cada rol más usa (el resto, en «Más»).
+  const BOTTOM: Partial<Record<Role, string[]>> = {
+    padre: ["/panel/familia", "/panel/aula", "/panel/pagos/familia", "/panel/biblioteca"],
+    estudiante: [
+      "/panel/aula",
+      "/panel/mis-notas",
+      "/panel/chats",
+      "/panel/pagos/mis-pagos",
+      "/panel/biblioteca",
+    ],
+    docente: ["/panel", "/panel/cuaderno", "/panel/aula", "/panel/mensajes"],
+    admin: ["/panel", "/panel/alumnos", "/panel/pagos", "/panel/mensajes"],
+    secretaria: ["/panel", "/panel/alumnos", "/panel/pagos", "/panel/mensajes"],
+    coordinador: ["/panel", "/panel/planificacion", "/panel/seguimiento", "/panel/cuaderno"],
+  };
+  const bottom = (BOTTOM[user.role] ?? [])
+    .map((href) => items.find((i) => i.href === href))
+    .filter((i): i is NavItem => Boolean(i))
+    .slice(0, 4);
   const upcoming = MODULES.filter((m) => !m.href && m.roles.includes(user.role)).map((m) => ({
     label: m.label,
     phase: m.phase,
@@ -236,7 +256,11 @@ export default async function PanelLayout({ children }: { children: ReactNode })
             </div>
           </div>
         </header>
-        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-8 print:max-w-none print:p-0">
+        <main
+          className={`mx-auto w-full max-w-6xl flex-1 px-4 py-8 sm:px-8 print:max-w-none print:p-0 ${
+            !gated && bottom.length ? "pb-28 md:pb-8" : ""
+          }`}
+        >
           {!gated && <BiometricOffer />}
           {unlicensed ? (
             <div className="max-w-2xl space-y-4" role="alert">
@@ -289,6 +313,7 @@ export default async function PanelLayout({ children }: { children: ReactNode })
             children
           )}
         </main>
+        {!gated && bottom.length > 0 && <BottomNav items={bottom} unreadMessages={unreadMessages} />}
       </div>
     </div>
   );

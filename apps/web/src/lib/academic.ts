@@ -119,6 +119,7 @@ import type {
   TaskSubmissionDto,
   TaskSubmissionInput,
   TeacherClassDto,
+  TeacherTodayDto,
   TransferDto,
   TransferInput,
 } from "@escolar/shared";
@@ -260,6 +261,8 @@ export const academic = {
   setPassingGrade: (token: string, passingGrade: number) =>
     call<{ passingGrade: number }>("/evaluation-settings", { method: "PUT", token, body: { passingGrade } }),
   teacherClasses: (token: string) => call<TeacherClassDto[]>("/teacher/classes", { token }),
+  /** El día del maestro: clases de hoy, asistencia que falta y tareas por calificar. */
+  teacherToday: (token: string) => call<TeacherTodayDto>("/teacher/today", { token }),
   gradebook: (token: string, assignmentId: string, periodId?: string) =>
     call<GradebookDto>(`/gradebook/${assignmentId}${periodId ? `?periodId=${periodId}` : ""}`, { token }),
   putActivity: (token: string, input: ActivityInput) =>
