@@ -56,25 +56,27 @@ for (const tarjeta of document.querySelectorAll(".tarjeta")) {
   });
 }
 
-// Pestañas de CONECTA (maestros, alumnos, dirección).
-const pestanas = [...document.querySelectorAll("[data-vista]")];
-const elegir = (boton) => {
-  for (const p of pestanas) {
-    const activa = p === boton;
-    p.setAttribute("aria-selected", String(activa));
-    p.tabIndex = activa ? 0 : -1;
-    document.querySelector(`[data-panel="${p.dataset.vista}"]`).hidden = !activa;
+// Pestañas de CONECTA (maestros, alumnos, dirección) y de JC POS: cada grupo cambia solo sus paneles.
+for (const lista of document.querySelectorAll(".vistas__pestanas")) {
+  const pestanas = [...lista.querySelectorAll("[data-vista]")];
+  const elegir = (boton) => {
+    for (const p of pestanas) {
+      const activa = p === boton;
+      p.setAttribute("aria-selected", String(activa));
+      p.tabIndex = activa ? 0 : -1;
+      document.querySelector(`[data-panel="${p.dataset.vista}"]`).hidden = !activa;
+    }
+  };
+  for (const boton of pestanas) {
+    boton.addEventListener("click", () => elegir(boton));
+    boton.addEventListener("keydown", (e) => {
+      if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+      const i = pestanas.indexOf(boton) + (e.key === "ArrowRight" ? 1 : -1);
+      const siguiente = pestanas[(i + pestanas.length) % pestanas.length];
+      elegir(siguiente);
+      siguiente.focus();
+    });
   }
-};
-for (const boton of pestanas) {
-  boton.addEventListener("click", () => elegir(boton));
-  boton.addEventListener("keydown", (e) => {
-    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
-    const i = pestanas.indexOf(boton) + (e.key === "ArrowRight" ? 1 : -1);
-    const siguiente = pestanas[(i + pestanas.length) % pestanas.length];
-    elegir(siguiente);
-    siguiente.focus();
-  });
 }
 
 // Video de CONECTA: se carga solo cuando lo piden; al tocarlo, se oye.

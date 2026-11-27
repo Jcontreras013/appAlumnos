@@ -845,162 +845,14 @@ p {
   margin: 22px 0 12px;
 }
 
-.pos__texto > p:not(.pos__lema) {
+.pos__texto > p:not(.pos__lema):not(.pos__nota) {
   color: #c3d2e6;
 }
 
-.pos__nota {
+.pos .pos__nota {
   margin: 18px 0 0;
-  text-align: center;
-  font-size: 13px;
-  color: var(--suave);
-}
-
-/* La pantalla del equipo es el contenedor: así las medidas cqw de la maqueta siguen su ancho. */
-.pos .laptop__tapa {
-  container-type: inline-size;
-}
-
-.pantalla-pos {
-  aspect-ratio: 16 / 10;
-  border-radius: 4px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  background: #eef2f7;
-  color: #1b2533;
-  font-size: 1.6cqw;
-  line-height: 1.25;
-}
-
-.pp__barra {
-  display: flex;
-  align-items: center;
-  gap: 2.4cqw;
-  padding: 1.4cqw 2cqw;
-  background: #0a2147;
-  color: #dfe8f5;
-}
-
-.pp__barra b {
-  font-size: 2cqw;
-  letter-spacing: 0.04em;
-  color: #fff;
-}
-
-.pp__linea {
-  margin-left: auto;
-  color: #7ee0bf;
-}
-
-.pp__cuerpo {
-  flex: 1;
-  display: grid;
-  grid-template-columns: 1.5fr 1fr;
-  gap: 1.6cqw;
-  padding: 1.6cqw;
-  min-height: 0;
-}
-
-.pp__productos {
-  display: flex;
-  flex-direction: column;
-  gap: 1.2cqw;
-  min-height: 0;
-}
-
-.pp__buscar {
-  padding: 1cqw 1.4cqw;
-  border-radius: 1cqw;
-  background: #fff;
-  border: 1px solid #d5dde8;
-  color: #8592a3;
-}
-
-.pp__chips {
-  display: flex;
-  gap: 0.8cqw;
-}
-
-.pp__chips span {
-  padding: 0.5cqw 1.2cqw;
-  border-radius: 99px;
-  background: #dfe6ef;
-  color: #3b4a5e;
-}
-
-.pp__chips .activo {
-  background: #1f8fe0;
-  color: #fff;
-}
-
-.pp__rejilla {
-  flex: 1;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1cqw;
-}
-
-.pp__rejilla div {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  padding: 1cqw 1.2cqw;
-  border-radius: 1cqw;
-  background: #fff;
-  border: 1px solid #dde4ee;
-}
-
-.pp__rejilla b,
-.pp__item b {
-  color: #0a2147;
-}
-
-.pp__cuenta {
-  display: flex;
-  flex-direction: column;
-  gap: 0.8cqw;
-  padding: 1.4cqw;
-  border-radius: 1.2cqw;
-  background: #fff;
-  border: 1px solid #dde4ee;
-}
-
-.pp__titulo {
-  margin: 0 0 0.4cqw;
-  font-weight: 700;
-  font-size: 1.8cqw;
-}
-
-.pp__item {
-  display: flex;
-  justify-content: space-between;
-  gap: 1cqw;
-  padding-bottom: 0.8cqw;
-  border-bottom: 1px dashed #dde4ee;
-}
-
-.pp__item i {
-  font-style: normal;
-  color: #8592a3;
-}
-
-.pp__total {
-  margin-top: auto;
-  display: flex;
-  justify-content: space-between;
-  font-size: 2.2cqw;
-  font-weight: 800;
-}
-
-.pp__cobrar {
-  padding: 1.2cqw;
-  border-radius: 1cqw;
-  text-align: center;
-  font-weight: 800;
-  font-size: 2cqw;
-  color: #fff;
-  background: linear-gradient(135deg, #10a37f, #0c8a6b);
+  font-size: 14px;
+  color: #9fb3cf;
 }
 
 /* CONECTA */
@@ -1203,6 +1055,20 @@ p {
 .vistas__nota p {
   color: #c7e6dc;
   font-size: 18px;
+}
+
+/* Pestañas de JC POS: en azul, no en el verde de CONECTA. */
+.pos .vistas__pestanas {
+  border-color: rgba(76, 195, 255, 0.25);
+}
+
+.pos .vistas__pestanas button {
+  color: #c3d2e6;
+}
+
+.pos .vistas__pestanas button[aria-selected="true"] {
+  background: var(--acento);
+  color: #04213a;
 }
 
 @keyframes entra {

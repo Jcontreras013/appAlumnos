@@ -157,7 +157,7 @@
               </div>
               <h3>Puntos de venta (JC POS)</h3>
               <p class="tarjeta__para">Venda más, gestione mejor.</p>
-              <p>Ventas rápidas, facturación, caja diaria e inventario al día, aun sin internet y en la nube.</p>
+              <p>Facturación con CAI, caja con arqueo e inventario al día; sigue cobrando aunque se vaya el internet.</p>
               <a class="tarjeta__enlace" href="#jc-pos">Conocer JC POS →</a>
             </article>
             <article class="tarjeta aparece">
@@ -286,19 +286,19 @@
               </div>
               <p class="pos__lema">Venda más, gestione mejor.</p>
               <p>
-                El punto de venta para tiendas, pulperías, ferreterías, farmacias y todo comercio de Honduras. Se
-                instala en la computadora y sigue vendiendo aunque se vaya el internet; cuando vuelve, todo se
-                sincroniza con la nube para que usted vea sus ventas desde donde esté.
+                El sistema de facturación y punto de venta para mini markets, pulperías y comercios de Honduras,
+                hecho para el régimen del SAR. Cobra rápido aunque haya fila y sigue vendiendo si se va el internet:
+                la venta se guarda y se envía sola cuando vuelve.
               </p>
               <ul class="funciones">
-                <li>Ventas rápidas y facturación</li>
-                <li>Inventario al día, con alerta de mínimos</li>
-                <li>Entradas de mercadería</li>
-                <li>Apertura, cierre y corte de caja</li>
-                <li>Cuadre por cajero</li>
-                <li>Reportes por día, producto y vendedor</li>
-                <li>Varias sucursales y cajas</li>
-                <li>Funciona sin internet y en la nube</li>
+                <li>Facturas con CAI y rango autorizado</li>
+                <li>ISV de 15&nbsp;% y 18&nbsp;% por producto</li>
+                <li>Código de barras y teclas F1–F12</li>
+                <li>Apertura y cierre de caja con arqueo</li>
+                <li>Inventario con alertas de mínimo y vencimiento</li>
+                <li>Crédito a clientes (fiado) y abonos</li>
+                <li>Reportes en Excel e ISV para el SAR</li>
+                <li>Sigue cobrando sin internet</li>
               </ul>
               <div class="portada__botones">
                 <a
@@ -310,47 +310,65 @@
                 >
                 <a class="boton boton--borde" href="#contacto">Hablar con un asesor</a>
               </div>
+              <p class="pos__nota">En la nube o instalado en la computadora con Windows.</p>
             </div>
             <div class="pos__equipo aparece">
               <div class="laptop">
                 <div class="laptop__tapa">
-                  <div class="pantalla-pos" role="img" aria-label="Ejemplo de la pantalla de venta de JC POS: productos a la izquierda y la cuenta del cliente a la derecha, con el total y el botón Cobrar.">
-                    <div class="pp__barra">
-                      <b>JC POS</b>
-                      <span>Caja 1 · Sucursal Centro</span>
-                      <span class="pp__linea">● En línea</span>
-                    </div>
-                    <div class="pp__cuerpo">
-                      <div class="pp__productos">
-                        <div class="pp__buscar">Buscar producto o código…</div>
-                        <div class="pp__chips"><span class="activo">Todos</span><span>Granos</span><span>Lácteos</span><span>Limpieza</span></div>
-                        <div class="pp__rejilla">
-                          <div><span>Café molido 1 lb</span><b>L 95.00</b></div>
-                          <div><span>Arroz 5 lb</span><b>L 110.00</b></div>
-                          <div><span>Frijoles 2 lb</span><b>L 64.00</b></div>
-                          <div><span>Aceite 1 L</span><b>L 78.00</b></div>
-                          <div><span>Azúcar 5 lb</span><b>L 85.00</b></div>
-                          <div><span>Leche 1 L</span><b>L 36.00</b></div>
-                          <div><span>Huevos (cartón)</span><b>L 120.00</b></div>
-                          <div><span>Jabón de baño</span><b>L 25.00</b></div>
-                          <div><span>Pan molde</span><b>L 52.00</b></div>
-                        </div>
-                      </div>
-                      <div class="pp__cuenta">
-                        <p class="pp__titulo">Venta actual</p>
-                        <div class="pp__item"><span>Café molido 1 lb <i>×2</i></span><b>L 190.00</b></div>
-                        <div class="pp__item"><span>Arroz 5 lb <i>×1</i></span><b>L 110.00</b></div>
-                        <div class="pp__item"><span>Huevos (cartón) <i>×1</i></span><b>L 120.00</b></div>
-                        <div class="pp__item"><span>Leche 1 L <i>×3</i></span><b>L 108.00</b></div>
-                        <div class="pp__total"><span>Total</span><b>L 528.00</b></div>
-                        <div class="pp__cobrar">Cobrar</div>
-                      </div>
-                    </div>
-                  </div>
+                  <img
+                    src="/img/jcpos-venta.webp"
+                    alt="Punto de venta de JC POS con productos en la cuenta, total con ISV y el cambio a devolver"
+                    width="1440"
+                    height="900"
+                    loading="lazy"
+                  />
                 </div>
                 <div class="laptop__base"></div>
               </div>
-              <p class="pos__nota">Pantalla de ejemplo.</p>
+            </div>
+          </div>
+
+          <div class="vistas aparece">
+            <div class="vistas__pestanas" role="tablist" aria-label="Pantallas de JC POS">
+              <button type="button" role="tab" aria-selected="true" data-vista="pos-panel">Panel</button>
+              <button type="button" role="tab" aria-selected="false" data-vista="pos-inventario">Inventario</button>
+              <button type="button" role="tab" aria-selected="false" data-vista="pos-impuestos">Impuestos</button>
+            </div>
+            <div class="vistas__panel" data-panel="pos-panel">
+              <div class="laptop laptop--grande">
+                <div class="laptop__tapa">
+                  <img src="/img/jcpos-panel.webp" alt="Panel principal de JC POS con las ventas del día y del mes" width="1440" height="900" loading="lazy" />
+                </div>
+                <div class="laptop__base"></div>
+              </div>
+              <div class="vistas__nota">
+                <h3>Su negocio, de un vistazo</h3>
+                <p>Ventas del día y del mes, últimas facturas y los productos que se están acabando.</p>
+              </div>
+            </div>
+            <div class="vistas__panel" data-panel="pos-inventario" hidden>
+              <div class="laptop laptop--grande">
+                <div class="laptop__tapa">
+                  <img src="/img/jcpos-inventario.webp" alt="Catálogo de productos de JC POS con precio y existencias" width="1440" height="900" loading="lazy" />
+                </div>
+                <div class="laptop__base"></div>
+              </div>
+              <div class="vistas__nota">
+                <h3>Inventario siempre al día</h3>
+                <p>Cada venta descuenta existencias. Importe su catálogo desde Excel, haga conteos y reciba mercadería.</p>
+              </div>
+            </div>
+            <div class="vistas__panel" data-panel="pos-impuestos" hidden>
+              <div class="laptop laptop--grande">
+                <div class="laptop__tapa">
+                  <img src="/img/jcpos-impuestos.webp" alt="Reporte de ISV cobrado por tasa en JC POS" width="1440" height="900" loading="lazy" />
+                </div>
+                <div class="laptop__base"></div>
+              </div>
+              <div class="vistas__nota">
+                <h3>El ISV del mes, listo</h3>
+                <p>El ISV cobrado por tasa, neto de notas de crédito, para preparar su declaración ante el SAR.</p>
+              </div>
             </div>
           </div>
         </div>
