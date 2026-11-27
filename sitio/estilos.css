@@ -1,8 +1,8 @@
-/* Sitio de Jc-System: oscuro, con el plateado del logo y un acento azul; la sección de CONECTA va en
-   su verde. Sin librerías: todo está aquí y en app.js. */
+/* Sitio de Jc-System: azul marino de la marca, con el plateado del logo y un acento cian; la sección
+   de CONECTA va en su verde. Sin librerías: todo está aquí y en app.js. */
 :root {
-  --fondo: #0a0e17;
-  --fondo-2: #0f1522;
+  --fondo: #071833;
+  --fondo-2: #0a2147;
   --superficie: rgba(255, 255, 255, 0.04);
   --borde: rgba(255, 255, 255, 0.09);
   --texto: #e6ebf2;
@@ -203,7 +203,7 @@ p {
 }
 
 .barra.con-fondo {
-  background: rgba(10, 14, 23, 0.78);
+  background: rgba(7, 24, 51, 0.82);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border-bottom-color: var(--borde);
@@ -624,12 +624,143 @@ p {
 }
 
 .tarjeta .tarjeta__para {
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: var(--acento);
-  margin-bottom: 6px;
+  margin: -2px 0 8px;
+}
+
+.tarjeta--cta {
+  justify-content: center;
+  align-items: flex-start;
+  gap: 10px;
+  background: linear-gradient(135deg, rgba(76, 195, 255, 0.16), rgba(109, 124, 255, 0.12));
+  border-color: rgba(76, 195, 255, 0.35);
+}
+
+.tarjeta--cta .boton {
+  margin-top: 8px;
+}
+
+/* Quiénes somos y nuestro enfoque */
+.nosotros {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+}
+
+.nosotros__bloque {
+  padding: 10px 48px;
+}
+
+.nosotros__bloque + .nosotros__bloque {
+  border-left: 1px solid var(--borde);
+}
+
+.nosotros__bloque h2 {
+  font-size: clamp(28px, 3.2vw, 38px);
+}
+
+.nosotros__bloque p:not(.etiqueta) {
+  color: var(--suave);
+  font-size: 18px;
+}
+
+/* La red de la portada: el logo al centro y las soluciones alrededor */
+.red {
+  position: relative;
+  aspect-ratio: 1;
+  width: min(100%, 520px);
+  margin: 0 auto;
+}
+
+.red__lineas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.red__lineas line {
+  stroke: rgba(76, 195, 255, 0.35);
+  stroke-width: 0.35;
+  stroke-dasharray: 1.5 1.2;
+  animation: flujo 6s linear infinite;
+}
+
+.red__lineas .red__arco {
+  stroke: rgba(76, 195, 255, 0.18);
+  stroke-dasharray: none;
+  animation: none;
+}
+
+@keyframes flujo {
+  to {
+    stroke-dashoffset: -27;
+  }
+}
+
+.red__centro {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 36%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(76, 195, 255, 0.22), rgba(7, 24, 51, 0.9) 70%);
+  border: 1px solid rgba(76, 195, 255, 0.4);
+  box-shadow:
+    0 0 60px rgba(76, 195, 255, 0.35),
+    inset 0 0 40px rgba(76, 195, 255, 0.15);
+}
+
+.red__centro img {
+  width: 62%;
+  filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.5));
+}
+
+.red__nodo {
+  position: absolute;
+  width: 15%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(10, 33, 71, 0.92);
+  border: 1px solid rgba(76, 195, 255, 0.55);
+  box-shadow: 0 0 24px rgba(76, 195, 255, 0.35);
+  animation: latido 4s ease-in-out infinite;
+}
+
+.red__nodo:nth-of-type(2n) {
+  animation-delay: -2s;
+}
+
+.red__nodo svg {
+  width: 46%;
+  fill: none;
+  stroke: #e6f6ff;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+@keyframes latido {
+  50% {
+    box-shadow: 0 0 36px rgba(76, 195, 255, 0.6);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .red__lineas line,
+  .red__nodo {
+    animation: none;
+  }
 }
 
 .tarjeta__enlace {
@@ -1184,7 +1315,7 @@ p {
     align-items: stretch;
     gap: 0;
     padding: 10px 20px 24px;
-    background: rgba(10, 14, 23, 0.97);
+    background: rgba(7, 24, 51, 0.97);
     border-bottom: 1px solid var(--borde);
     transform: translateY(-10px);
     opacity: 0;
@@ -1212,7 +1343,7 @@ p {
   }
 
   .menu-abierto .barra {
-    background: rgba(10, 14, 23, 0.97);
+    background: rgba(7, 24, 51, 0.97);
   }
 
   .menu-abierto .hamburguesa span:nth-child(1) {
@@ -1234,8 +1365,24 @@ p {
   .tarjetas,
   .razones,
   .pasos,
-  .funciones {
+  .funciones,
+  .nosotros {
     grid-template-columns: 1fr;
+  }
+
+  .nosotros__bloque {
+    padding: 10px 0;
+  }
+
+  .nosotros__bloque + .nosotros__bloque {
+    border-left: 0;
+    border-top: 1px solid var(--borde);
+    padding-top: 36px;
+    margin-top: 26px;
+  }
+
+  .red {
+    width: min(100%, 360px);
   }
 
   .portada__equipos {
