@@ -614,6 +614,41 @@ p {
   font-size: 16px;
 }
 
+.tarjetas--cuatro {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.tarjeta {
+  display: flex;
+  flex-direction: column;
+}
+
+.tarjeta .tarjeta__para {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--acento);
+  margin-bottom: 6px;
+}
+
+.tarjeta__enlace {
+  position: relative;
+  margin-top: auto;
+  padding-top: 18px;
+  font-weight: 600;
+  color: var(--menta);
+  text-decoration: none;
+}
+
+.tarjeta__enlace:hover {
+  text-decoration: underline;
+}
+
+.seccion--servicios {
+  background: linear-gradient(180deg, transparent, rgba(76, 195, 255, 0.04), transparent);
+}
+
 /* CONECTA */
 .conecta {
   overflow: hidden;
@@ -1113,7 +1148,8 @@ p {
     margin: 10px auto 0;
   }
 
-  .tarjetas {
+  .tarjetas,
+  .tarjetas--cuatro {
     grid-template-columns: 1fr 1fr;
   }
 
